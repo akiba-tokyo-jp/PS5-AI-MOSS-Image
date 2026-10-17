@@ -1,0 +1,47 @@
+{
+  "source_repositories": [
+    {
+      "directory": "stable-diffusion.cpp",
+      "url": "https://github.com/leejet/stable-diffusion.cpp.git",
+      "revision": "8cd731e7b4667eb8f40a153315b9a7125d09a58d"
+    },
+    {
+      "directory": "PS5_Mesa",
+      "url": "https://github.com/mihawk-99/PS5_Mesa.git",
+      "revision": "1ba9874f478657ccf6da72ce55f0260164cc0bd0"
+    },
+    {
+      "directory": "PS5_Vulkan",
+      "url": "https://github.com/mihawk-99/PS5_Vulkan.git",
+      "revision": "f410e67a0241b3e8edcdbcd2a9b285dfc4a412ed"
+    },
+    {
+      "directory": "PS5_PayloadSDK",
+      "url": "https://github.com/mihawk-99/PS5_PayloadSDK.git",
+      "revision": "b83202be73e930050e00de0f1b4d9ec46c0391bf"
+    },
+    {
+      "directory": "sdk",
+      "url": "https://github.com/ps5-payload-dev/sdk.git",
+      "revision": "f5d40f02770e9b0001dd9e18056eca70b3da8b40"
+    },
+    {
+      "directory": "Vulkan-Headers",
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+      "revision": "c46850864f4661461b0f6cb9922c058ffea4915e"
+    }
+  ],
+  "reference_repositories": [
+    {
+      "url": "https://github.com/cobanov/PS5LM",
+      "revision": "6323ecbf443e257932989a55cf535567697e2624"
+    },
+    {
+      "url": "https://github.com/mansanitizer/psllama"
+    }
+  ],
+  "native_sdk_release": {
+    "url": "https://github.com/ps5-payload-dev/sdk/releases/download/v0.42/ps5-payload-sdk.zip",
+    "sha256": "8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da"
+  }
+}

@@ -1,0 +1,211 @@
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -26,6 +26,8 @@
+ #include "util/u_debug.h"
+ #include "radv_cs.h"
+ #include "radv_entrypoints.h"
++#include "heap.h"
++#include "pool.h"
+ #include "radv_formats.h"
+ #include "radv_physical_device.h"
+ #include "radv_shader.h"
+@@ -71,14 +73,15 @@
+ 
+    switch (handleType) {
+    case VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT: {
+-      uint32_t memoryTypeBits = 0;
+-      for (int i = 0; i < pdev->memory_properties.memoryTypeCount; i++) {
+-         if (pdev->memory_domains[i] == RADEON_DOMAIN_GTT && !(pdev->memory_flags[i] & RADEON_FLAG_GTT_WC)) {
+-            memoryTypeBits = (1 << i);
+-            break;
+-         }
+-      }
+-      pMemoryHostPointerProperties->memoryTypeBits = memoryTypeBits;
++      /* Side-effect-free compatibility query. Exact owned pointer+extent is
++       * checked by the application's allowlist during actual BO import.
++       */
++      const uint32_t type = ps5_ai_radv_flex_type_index(pdev);
++      pMemoryHostPointerProperties->memoryTypeBits = 0;
++      if (!pHostPointer || !ps5_ai_flex_pool_bytes() || type == UINT32_MAX ||
++          type >= pdev->memory_properties.memoryTypeCount || type >= 32)
++         return VK_ERROR_INVALID_EXTERNAL_HANDLE;
++      pMemoryHostPointerProperties->memoryTypeBits = UINT32_C(1) << type;
+       return VK_SUCCESS;
+    }
+    default:
+--- a/src/amd/vulkan/radv_device_memory.c
++++ b/src/amd/vulkan/radv_device_memory.c
+@@ -14,6 +14,8 @@
+ #include "radv_android.h"
+ #include "radv_buffer.h"
+ #include "radv_entrypoints.h"
++#include "heap.h"
++#include "pool.h"
+ #include "radv_image.h"
+ 
+ #include "vk_debug_utils.h"
+@@ -97,6 +99,18 @@
+    const struct wsi_memory_allocate_info *wsi_info =
+       vk_find_struct_const(pAllocateInfo->pNext, WSI_MEMORY_ALLOCATE_INFO_MESA);
+ 
++
++   /* This type describes only application-owned host imports. Never let an
++    * ordinary allocation route consume the unrelated32MiB direct arena.
++    */
++   const struct radv_physical_device *flex_pdev = radv_device_physical(device);
++   const uint32_t flex_type = ps5_ai_radv_flex_type_index(flex_pdev);
++   if (flex_type != UINT32_MAX && pAllocateInfo->memoryTypeIndex == flex_type &&
++       (!host_ptr_info || host_ptr_info->handleType != VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT)) {
++      *pMem = VK_NULL_HANDLE;
++      return vk_error(device, VK_ERROR_INVALID_EXTERNAL_HANDLE);
++   }
++
+    if (pAllocateInfo->allocationSize == 0 && !ahb_import_info &&
+        !(export_info &&
+          (export_info->handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID))) {
+@@ -203,6 +217,11 @@
+          goto fail;
+       } else {
+          mem->user_ptr = host_ptr_info->pHostPointer;
++         /* Attribute import reports to the real extra heap. Keep alloc_size0:
++          * root pool claims account these bytes, not ordinary direct counters.
++          */
++         if (pAllocateInfo->memoryTypeIndex == flex_type)
++            mem->heap_index = ps5_ai_radv_flex_heap_index(flex_pdev);
+       }
+       mem->import_handle_type = host_ptr_info->handleType;
+    } else {
+--- a/src/amd/vulkan/radv_physical_device.c
++++ b/src/amd/vulkan/radv_physical_device.c
+@@ -28,6 +28,8 @@
+ #include "radv_android.h"
+ #include "radv_device.h"
+ #include "radv_entrypoints.h"
++#include "heap.h"
++#include "pool.h"
+ #include "radv_instance.h"
+ #include "radv_physical_device.h"
+ #include "radv_pipeline_rt.h"
+@@ -499,6 +501,70 @@
+ {
+    uint64_t total_size = radv_get_adjusted_vram_size(pdev);
+    return total_size - MIN2(total_size, (uint64_t)pdev->info.vram_vis_size_kb * 1024);
++}
++
++
++/* Immutable publication of the import-only heap/type for one PS5 device.
++ * Pool allocation and GPU permissions are owned by the application, not here.
++ * Sticky identity keeps ordinary allocations rejected even after a pool fault.
++ */
++#include <stdatomic.h>
++static atomic_uintptr_t ps5_ai_flex_pdev = ATOMIC_VAR_INIT(0);
++static atomic_uint ps5_ai_flex_type = ATOMIC_VAR_INIT(UINT32_MAX);
++static atomic_uint ps5_ai_flex_heap = ATOMIC_VAR_INIT(UINT32_MAX);
++
++uint32_t
++ps5_ai_radv_flex_type_index(const void *pdev)
++{
++   return pdev && atomic_load_explicit(&ps5_ai_flex_pdev, memory_order_acquire) == (uintptr_t)pdev
++             ? atomic_load_explicit(&ps5_ai_flex_type, memory_order_relaxed) : UINT32_MAX;
++}
++
++uint32_t
++ps5_ai_radv_flex_heap_index(const void *pdev)
++{
++   return pdev && atomic_load_explicit(&ps5_ai_flex_pdev, memory_order_acquire) == (uintptr_t)pdev
++             ? atomic_load_explicit(&ps5_ai_flex_heap, memory_order_relaxed) : UINT32_MAX;
++}
++
++static void
++ps5_ai_radv_retire_flex_heap(struct radv_physical_device *pdev)
++{
++   uintptr_t expected = (uintptr_t)pdev;
++   if (!atomic_compare_exchange_strong_explicit(&ps5_ai_flex_pdev, &expected, UINTPTR_MAX,
++                                                memory_order_acq_rel, memory_order_acquire))
++      return;
++   atomic_store_explicit(&ps5_ai_flex_type, UINT32_MAX, memory_order_relaxed);
++   atomic_store_explicit(&ps5_ai_flex_heap, UINT32_MAX, memory_order_relaxed);
++   atomic_store_explicit(&ps5_ai_flex_pdev, 0, memory_order_release);
++}
++
++static void
++ps5_ai_radv_append_owned_flex_heap(struct radv_physical_device *pdev, unsigned *type_count)
++{
++   const uint64_t bytes = ps5_ai_flex_pool_bytes();
++   if (!bytes || bytes % PS5_AI_FLEX_PAGE_BYTES ||
++       pdev->memory_properties.memoryHeapCount >= VK_MAX_MEMORY_HEAPS || *type_count >= VK_MAX_MEMORY_TYPES)
++      return;
++   uintptr_t expected = 0;
++   if (!atomic_compare_exchange_strong_explicit(&ps5_ai_flex_pdev, &expected, UINTPTR_MAX,
++                                                memory_order_acq_rel, memory_order_acquire))
++      return; /* No replacement/reassignment of an already published device. */
++   const uint32_t heap = pdev->memory_properties.memoryHeapCount;
++   const uint32_t type = *type_count;
++   pdev->memory_properties.memoryHeaps[heap] = (VkMemoryHeap){.size = bytes, .flags = 0};
++   pdev->memory_properties.memoryTypes[type] = (VkMemoryType){
++      .propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
++                       VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
++      .heapIndex = heap,
++   };
++   pdev->memory_domains[type] = RADEON_DOMAIN_GTT;
++   pdev->memory_flags[type] = RADEON_FLAG_CPU_ACCESS;
++   pdev->memory_properties.memoryHeapCount++;
++   pdev->memory_properties.memoryTypeCount = ++*type_count;
++   atomic_store_explicit(&ps5_ai_flex_type, type, memory_order_relaxed);
++   atomic_store_explicit(&ps5_ai_flex_heap, heap, memory_order_relaxed);
++   atomic_store_explicit(&ps5_ai_flex_pdev, (uintptr_t)pdev, memory_order_release);
+ }
+ 
+ static void
+@@ -704,6 +770,8 @@
+       }
+       pdev->memory_properties.memoryTypeCount = type_count;
+    }
++
++   ps5_ai_radv_append_owned_flex_heap(pdev, &type_count);
+ 
+    for (unsigned i = 0; i < type_count; ++i) {
+       if (pdev->memory_flags[i] & RADEON_FLAG_32BIT)
+@@ -2932,6 +3000,7 @@
+    if (pdev->addrlib)
+       ac_addrlib_destroy(pdev->addrlib);
+ fail_base:
++   ps5_ai_radv_retire_flex_heap(pdev); /* Normal destruction or failed construction. */
+    vk_physical_device_finish(&pdev->vk);
+ fail_alloc:
+    vk_free(&instance->vk.alloc, pdev);
+@@ -3009,6 +3078,7 @@
+    if (pdev->drm_device)
+       ac_drm_device_deinitialize(pdev->drm_device);
+ #endif
++   ps5_ai_radv_retire_flex_heap(pdev); /* Normal destruction or failed construction. */
+    vk_physical_device_finish(&pdev->vk);
+    vk_free(&instance->vk.alloc, pdev);
+ }
+@@ -3496,8 +3566,25 @@
+             ++heap;
+          }
+ 
+-         assert(heap == memory_properties->memoryHeapCount);
++         assert(heap + (ps5_ai_radv_flex_heap_index(pdev) != UINT32_MAX) == memory_properties->memoryHeapCount);
+       }
++   }
++
++
++   /* Preserve every original direct-heap result. Only the separate owned pool
++    * contributes to this additional entry; claimed bytes are conservative
++    * application usage, including uncommitted import claims.
++    */
++   const uint32_t flex_heap = ps5_ai_radv_flex_heap_index(pdev);
++   if (flex_heap != UINT32_MAX && flex_heap < memory_properties->memoryHeapCount) {
++      struct ps5_ai_flex_stats state;
++      ps5_ai_flex_snapshot(&state);
++      const uint64_t reserved = memory_properties->memoryHeaps[flex_heap].size;
++      const uint64_t used = MIN2(state.used_bytes, reserved);
++      const bool available = state.mapping_owned && state.gpu_access_granted && !state.fault_retained &&
++                             state.log_healthy && state.reserved_bytes == reserved && state.used_bytes <= reserved;
++      memoryBudget->heapUsage[flex_heap] = used;
++      memoryBudget->heapBudget[flex_heap] = available ? reserved : used;
+    }
+ 
+    /* The heapBudget value must be less than or equal to VkMemoryHeap::size for each heap. */

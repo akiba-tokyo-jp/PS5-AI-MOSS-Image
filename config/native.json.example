@@ -1,0 +1,24 @@
+{
+  "engine": {
+    "model": "/app0/models/waiIllustriousSDXL_v170.safetensors",
+    "taesd_path": "/app0/models/taesdxl-official-f32.safetensors",
+    "backend": "cpu,unet=Vulkan0,vae=Vulkan0",
+    "params_backend": "cpu,unet=Vulkan0",
+    "max_vram_gib": "Vulkan0=5.75",
+    "cpu_threads": 4,
+    "mmap": false,
+    "eager_load": false,
+    "auto_fit": false,
+    "disable_prefetch": true,
+    "tae_preview_only": false,
+    "vae_tiling": true,
+    "vae_tile_size": 256,
+    "vae_tile_overlap": 0.5,
+    "log": "/app0/ai-runtime/logs/engine.jsonl",
+    "flash_attn_mode": "auto,unet=on",
+    "batched_cfg": false,
+    "conditioning_cache_size": 2,
+    "gpu_pool_bytes": 6442450944,
+    "working_reserve_bytes": 1073741824
+  }
+}

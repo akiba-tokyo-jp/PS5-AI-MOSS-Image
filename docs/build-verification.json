@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-18 JST",
+  "native_source_units": 11,
+  "RADV_platform_source_units": 1,
+  "native_SELF_integrity": "valid",
+  "native_rebuilt_eboot_sha256": "b4b19aa3235ac9c61df0721abb69eb2a5e30191120fd4ecbb0961db7f10e49b5",
+  "native_rebuilt_binary_executed_on_PS5": false,
+  "existing_dependencies_sha256_verified": true,
+  "clean_environment_dependency_build_verified": false,
+  "gateway_PS5_ELF_built": true,
+  "host_protocol_checks_passed": 30,
+  "host_fault_rotation_checks_passed": 7,
+  "host_tests_perform_inference": false,
+  "public_PowerShell_model_discovery_on_PS5_verified": true,
+  "fresh_PS5_saved_PNG_download_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986"
+}

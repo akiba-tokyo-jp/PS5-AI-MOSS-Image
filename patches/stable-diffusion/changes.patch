@@ -1,0 +1,529 @@
+--- a/src/model_loader.cpp
++++ b/src/model_loader.cpp
+@@ -1362,7 +1362,7 @@
+                                       bytes_processed.load(),
+                                       elapsed_seconds);
+             }
+-            std::this_thread::sleep_for(std::chrono::milliseconds(total_tensors_to_process <= 4 ? 10 : 200));
++            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
+ 
+         for (auto& w : workers) {
+--- a/src/model_manager.cpp
++++ b/src/model_manager.cpp
+@@ -1600,6 +1600,16 @@
+         return;
+     }
+     finish_compute_backend_usage(required_states);
++    // Segment callers synchronize before unpinning. Disk-backed weights are
++    // reloadable; avoid retaining them as fragmented LRU blocks between cuts.
++    // The existing eviction path rechecks pins, staging, and block ownership.
++    std::vector<ggml_tensor*> retired_disk_tensors;
++    for (TensorState* state : required_states) {
++        if (state != nullptr && state->residency_mode == ResidencyMode::Disk && state->pin_count == 0) {
++            retired_disk_tensors.push_back(state->tensor);
++        }
++    }
++    evict_compute_backend_params(retired_disk_tensors);
+ }
+ 
+ void ModelManager::evict_compute_backend_params(const std::vector<ggml_tensor*>& tensors) {
+@@ -1732,7 +1742,7 @@
+     auto add             = [](size_t a, size_t b) { return b > SIZE_MAX - a ? SIZE_MAX : a + b; };
+     const size_t missing = compute_backend_alloc_size(states, true);
+     // Backend scratch buffers and pipelines are not included in graph measurements.
+-    constexpr size_t safety_margin = 512ULL * 1024ULL * 1024ULL;
++    constexpr size_t safety_margin = 8ULL * 1024ULL * 1024ULL;
+     result.required_device_bytes   = add(add(request.pending_allocation_bytes, missing), safety_margin);
+     result.required_budget_bytes   = add(request.runtime_peak_bytes(), missing);
+     auto available_device_bytes    = [&](ggml_backend_t backend) {
+--- a/src/model/common/block.hpp
++++ b/src/model/common/block.hpp
+@@ -530,7 +530,8 @@
+ 
+     virtual ggml_tensor* forward(GGMLRunnerContext* ctx,
+                                  ggml_tensor* x,
+-                                 ggml_tensor* context) {
++                                 ggml_tensor* context,
++                                 const std::string& graph_cut_prefix = {}) {
+         // x: [N, in_channels, h, w]
+         // context: [N, max_position(aka n_token), hidden_size(aka context_dim)]
+         auto norm     = std::dynamic_pointer_cast<GroupNorm32>(blocks["norm"]);
+@@ -538,6 +539,10 @@
+         auto proj_out = std::dynamic_pointer_cast<UnaryBlock>(blocks["proj_out"]);
+ 
+         auto x_in         = x;
++        // Annotation only: retain the exact spatial residual through all block cuts.
++        if (!graph_cut_prefix.empty() && !sd::ggml_graph_cut::is_graph_cut_tensor(x_in)) {
++            sd::ggml_graph_cut::mark_graph_cut(x_in, graph_cut_prefix + ".pre", "res");
++        }
+         int64_t n         = x->ne[3];
+         int64_t h         = x->ne[1];
+         int64_t w         = x->ne[0];
+@@ -554,11 +559,18 @@
+             x = ggml_reshape_3d(ctx->ggml_ctx, x, inner_dim, w * h, n);                // [N, h * w, inner_dim]
+         }
+ 
++        if (!graph_cut_prefix.empty()) {
++            sd::ggml_graph_cut::mark_graph_cut(x, graph_cut_prefix + ".pre", "in");
++        }
++
+         for (int i = 0; i < depth; i++) {
+             std::string name       = "transformer_blocks." + std::to_string(i);
+             auto transformer_block = std::dynamic_pointer_cast<BasicTransformerBlock>(blocks[name]);
+ 
+             x = transformer_block->forward(ctx, x, context);
++            if (!graph_cut_prefix.empty()) {
++                sd::ggml_graph_cut::mark_graph_cut(x, graph_cut_prefix + ".t" + std::to_string(i), "h");
++            }
+         }
+ 
+         if (use_linear) {
+--- a/src/model/diffusion/unet.hpp
++++ b/src/model/diffusion/unet.hpp
+@@ -520,7 +520,9 @@
+         } else {
+             auto block = std::dynamic_pointer_cast<SpatialTransformer>(blocks[name]);
+ 
+-            return block->forward(ctx, x, context);
++            // Only ordinary SDXL UNet receives stable, short, per-spatial cut names.
++            const std::string cut_prefix = sd_version_is_sdxl(config.version) ? "unet." + name : "";
++            return block->forward(ctx, x, context, cut_prefix);
+         }
+     }
+ 
+--- a/src/core/ggml_runner.cpp
++++ b/src/core/ggml_runner.cpp
+@@ -10,6 +10,7 @@
+ #include "core/layer_split_partition.h"
+ #include "core/segment_graph_bindings.h"
+ #include "core/segment_weight_pipeline.h"
++#include "runner_admission.hpp"
+ 
+ using namespace sd;
+ 
+@@ -925,6 +926,12 @@
+         } segment_cleanup{*this, weights, bindings, segment_context};
+ 
+         auto measurement = segmented ? measure(segment_graph, segment.compute_buffer_size) : full_measurement;
++        if (!is_multi_device() && !sd_backend_is_cpu(runtime_backend) &&
++            !native_graph_admission::admit(runtime_backend, segment_graph,
++                [&](ggml_tensor* tensor) { return canonical_param_tensor(tensor) != nullptr; }, get_desc().c_str(), workspace_.bytes(runtime_backend))) {
++            last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
++            return fail_segment("owned graph data admission before workspace preparation");
++        }
+         if (!workspace_.prepare(measurement)) {
+             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
+             return fail_segment("workspace preparation");
+@@ -954,6 +961,14 @@
+         if (!workspace_.measurement_matches(segment_graph, measurement)) {
+             measurement = measure(segment_graph, segment.compute_buffer_size);
+         }
++        // Weight preparation may have rebuilt bindings; recheck before any
++        // second workspace growth using the actual current graph and pool.
++        if (!is_multi_device() && !sd_backend_is_cpu(runtime_backend) &&
++            !native_graph_admission::admit(runtime_backend, segment_graph,
++                [&](ggml_tensor* tensor) { return canonical_param_tensor(tensor) != nullptr; }, get_desc().c_str(), workspace_.bytes(runtime_backend))) {
++            last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
++            return fail_segment("owned graph data/scratch admission after weight preparation");
++        }
+         if (!workspace_.prepare(measurement)) {
+             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
+             return fail_segment("workspace preparation");
+--- a/ggml/src/ggml-alloc.c
++++ b/ggml/src/ggml-alloc.c
+@@ -1,4 +1,5 @@
+ #include "ggml-alloc.h"
++#include "ggml-plan-admission.h"
+ #include "ggml-backend-impl.h"
+ #include "ggml.h"
+ #include "ggml-impl.h"
+@@ -959,6 +960,32 @@
+     }
+ }
+ 
++bool ggml_gallocr_get_plan_snapshot(
++        ggml_gallocr_t galloc, int buffer_index, struct ggml_gallocr_plan_snapshot * output) {
++    _Static_assert(GGML_VBUFFER_MAX_CHUNKS == GGML_PLAN_ADMISSION_MAX_CHUNKS,
++                   "The bounded plan snapshot must match the exact allocator");
++    if (galloc == NULL || output == NULL || buffer_index < 0 || buffer_index >= galloc->n_buffers) {
++        return false;
++    }
++    const struct ggml_dyn_tallocr * allocator = galloc->buf_tallocs[buffer_index];
++    if (allocator == NULL || allocator->n_chunks < 0 || allocator->n_chunks > GGML_VBUFFER_MAX_CHUNKS) {
++        return false;
++    }
++    memset(output, 0, sizeof(*output));
++    output->buffer_count = (uint32_t)galloc->n_buffers;
++    output->chunk_count = (uint32_t)allocator->n_chunks;
++    for (int i = 0; i < allocator->n_chunks; ++i) {
++        uint64_t bytes = (uint64_t)allocator->chunks[i]->max_size;
++        if (bytes > UINT64_MAX - output->total_bytes) {
++            return false;
++        }
++        output->chunk_bytes[i] = bytes;
++        output->total_bytes += bytes;
++        output->max_chunk_bytes = MAX(output->max_chunk_bytes, bytes);
++    }
++    return true;
++}
++
+ bool ggml_gallocr_reserve_n(ggml_gallocr_t galloc, struct ggml_cgraph * graph, const int * node_buffer_ids, const int * leaf_buffer_ids) {
+     return ggml_gallocr_reserve_n_impl(galloc, graph, node_buffer_ids, leaf_buffer_ids, /*no_alloc =*/ false);
+ }
+--- a/ggml/src/ggml-vulkan/ggml-vulkan.cpp
++++ b/ggml/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -12113,7 +12113,41 @@
+     if (subctx) {
+         // Submit and wait for any pending work before reallocating the buffers
+         ggml_vk_ctx_end(subctx);
+-        ggml_vk_submit(subctx, {});
++        if (ctx->device->serialize_submissions) {
++            // A scratch-resize flush must obey the same fenced ownership contract
++            // as normal serialized compute. No forward semaphore dependencies.
++            size_t submissions = 0;
++            for (const auto& sequence : subctx->seqs) {
++                for (const auto& submission : sequence) {
++                    if (!submission.wait_semaphores.empty())
++                        ps5_ai_ggml_retain("GGML_preallocate_forward_wait_rejected_before_submit");
++                    ++submissions;
++                }
++            }
++            vk::Fence owned_fence{}; // Non-RAII: uncertainty must not destroy it.
++            try {
++                ps5_ai_ggml_report("BEFORE GGML_preallocate_owned_fence sequences=%zu submissions=%zu wait_semaphores=0 requested_timeout_ns=10000000000 hard_timeout_guaranteed=0", subctx->seqs.size(), submissions);
++                if (!ps5_ai_ggml_log_healthy())
++                    ps5_ai_ggml_retain("GGML_preallocate_BEFORE_log_failed");
++                owned_fence = ctx->device->device.createFence({});
++                if (!owned_fence)
++                    ps5_ai_ggml_retain("GGML_preallocate_owned_fence_creation_failed");
++                ggml_vk_submit(subctx, owned_fence);
++                const auto result = ctx->device->device.waitForFences({owned_fence}, true, UINT64_C(10000000000));
++                if (result != vk::Result::eSuccess || !ps5_ai_ggml_log_healthy() ||
++                    !ps5_ai_ggml_wait_backend("GGML_preallocate_owned_fence_completed", 1))
++                    ps5_ai_ggml_retain("GGML_preallocate_owned_fence_completion_uncertain");
++                // Goes through the existing positive-fence/quiescence destroy guard.
++                ctx->device->device.destroyFence(owned_fence);
++                ps5_ai_ggml_report("PASS GGML_preallocate_owned_fence destroyed=1 previous_work_completed=1");
++                if (!ps5_ai_ggml_log_healthy())
++                    ps5_ai_ggml_retain("GGML_preallocate_completed_log_failed");
++            } catch (...) {
++                ps5_ai_ggml_retain("GGML_preallocate_owned_fence_exception_retained");
++            }
++        } else {
++            ggml_vk_submit(subctx, {}); // Other modes keep the pinned behavior.
++        }
+         ctx->submit_pending = true;
+         ggml_vk_synchronize(ctx);
+         GGML_ASSERT(ctx->compute_ctx.expired());
+@@ -15140,36 +15174,15 @@
+ }
+ 
+ void ggml_backend_vk_get_device_memory(int device, size_t * free, size_t * total) {
+-    GGML_ASSERT(device < (int) vk_instance.device_indices.size());
+-    GGML_ASSERT(device < (int) vk_instance.device_supports_membudget.size());
+-
+-    vk::PhysicalDevice vkdev = vk_instance.instance.enumeratePhysicalDevices()[vk_instance.device_indices[device]];
+-    vk::PhysicalDeviceMemoryBudgetPropertiesEXT budgetprops;
+-    vk::PhysicalDeviceMemoryProperties2 memprops = {};
+-    const bool membudget_supported = vk_instance.device_supports_membudget[device];
+-    const bool is_integrated_gpu = vkdev.getProperties().deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
+-
+-    if (membudget_supported) {
+-        memprops.pNext = &budgetprops;
+-    }
+-    vkdev.getMemoryProperties2(&memprops);
+-
+-    *total = 0;
+-    *free = 0;
+-
+-    for (uint32_t i = 0; i < memprops.memoryProperties.memoryHeapCount; ++i) {
+-        const vk::MemoryHeap & heap = memprops.memoryProperties.memoryHeaps[i];
+-
+-        if (is_integrated_gpu || (heap.flags & vk::MemoryHeapFlagBits::eDeviceLocal)) {
+-            *total += heap.size;
+-
+-            if (membudget_supported && i < budgetprops.heapUsage.size()) {
+-                *free += budgetprops.heapBudget[i] - budgetprops.heapUsage[i];
+-            } else {
+-                *free += heap.size;
+-            }
+-        }
+-    }
++    GGML_UNUSED(device);
++    ps5_ai_flex_stats pool = {};
++    ps5_ai_flex_snapshot(&pool);
++    *free = *total = 0;
++    if (!pool.mapping_owned || !pool.gpu_access_granted || pool.fault_retained ||
++        !pool.log_healthy || pool.free_bytes > pool.reserved_bytes || pool.reserved_bytes > SIZE_MAX) return;
++    // GGML data budget only; Vulkan direct32 heap report is not modified here.
++    *free = static_cast<size_t>(pool.free_bytes);
++    *total = static_cast<size_t>(pool.reserved_bytes);
+ }
+ 
+ static vk::PhysicalDeviceType ggml_backend_vk_get_device_type(int device_idx) {
+--- a/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp
++++ b/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp
+@@ -23,160 +23,78 @@
+     return indices;
+ }
+ 
+-static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size, const std::initializer_list<vk::MemoryPropertyFlags> & req_flags_list,
+-                                       void *import_ptr = nullptr) {
+-    VK_LOG_DEBUG("ggml_vk_create_buffer(" << device->name << ", " << size << ", " << to_string(req_flags_list.begin()[0]) << ", " << to_string(req_flags_list.begin()[req_flags_list.size()-1]) << ")");
+-    if (size > device->max_buffer_size) {
+-        throw vk::OutOfDeviceMemoryError("Requested buffer size exceeds device buffer size limit");
+-    }
+-
++static vk_buffer ggml_vk_create_buffer(vk_device& device, size_t size,
++        const std::initializer_list<vk::MemoryPropertyFlags>& req_flags_list, void *import_ptr = nullptr) {
++    GGML_UNUSED(req_flags_list); // All GGML data uses the explicit owned host pool.
++    if (import_ptr) throw vk::OutOfDeviceMemoryError("Unowned host-pointer imports are disabled");
++    if (size > device->max_buffer_size) throw vk::OutOfDeviceMemoryError("Buffer exceeds device limit");
+     vk_buffer buf = std::make_shared<vk_buffer_struct>();
+-
+-    if (size == 0) {
+-        buf->size = 0;
+-        return buf;
+-    }
+-
+-    vk::BufferUsageFlags usage_flags = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
+-    vk::MemoryAllocateFlags mem_flags {};
++    if (!size) return buf;
++    buf->device = device;
++    buf->size = size; // Partial failures are cleaned up by the same owned-buffer destructor.
++    ps5_ai_flex_stats pool = {};
++    ps5_ai_flex_snapshot(&pool);
++    if (!device->external_memory_host || !pool.mapping_owned || !pool.gpu_access_granted ||
++        pool.fault_retained || !pool.log_healthy || !pool.reserved_bytes)
++        throw vk::OutOfDeviceMemoryError("Owned flexible host-import pool unavailable");
++    vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eStorageBuffer |
++        vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
++    vk::MemoryAllocateFlags flags {};
+     if (device->buffer_device_address) {
+-        usage_flags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
+-        mem_flags |= vk::MemoryAllocateFlagBits::eDeviceAddress;
+-    }
+-
+-    vk::BufferCreateInfo buffer_create_info{
+-        vk::BufferCreateFlags(),
+-        size,
+-        usage_flags,
+-        vk::SharingMode::eExclusive,
+-        0,
+-        nullptr,
+-    };
+-
+-    vk::ExternalMemoryBufferCreateInfo external_memory_bci;
+-    if (import_ptr) {
+-        external_memory_bci.handleTypes = vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT;
+-        buffer_create_info.setPNext(&external_memory_bci);
+-    }
+-
+-    buf->buffer = device->device.createBuffer(buffer_create_info);
+-
+-    vk::MemoryRequirements mem_req = device->device.getBufferMemoryRequirements(buf->buffer);
+-
+-    vk::PhysicalDeviceMemoryProperties mem_props = device->physical_device.getMemoryProperties();
+-
+-    const vk::MemoryPriorityAllocateInfoEXT mem_priority_info { 1.0f };
+-
+-    vk::MemoryAllocateFlagsInfo mem_flags_info { mem_flags };
+-
+-    if (device->memory_priority) {
+-        mem_flags_info.setPNext(&mem_priority_info);
+-    }
+-
+-    if (import_ptr) {
+-        vk::MemoryHostPointerPropertiesEXT host_pointer_props;
+-        try {
+-            host_pointer_props = device->device.getMemoryHostPointerPropertiesEXT(vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT, import_ptr);
+-        } catch (vk::SystemError& e) {
+-            GGML_LOG_WARN("ggml_vulkan: Failed getMemoryHostPointerPropertiesEXT (%s)\n", e.what());
+-            device->device.destroyBuffer(buf->buffer);
+-            return {};
+-        }
+-        vk::PhysicalDeviceMemoryProperties mem_props = device->physical_device.getMemoryProperties();
+-
+-        uint32_t memory_type_idx;
+-        vk::MemoryPropertyFlags property_flags = *req_flags_list.begin();
+-        for (memory_type_idx = 0; memory_type_idx < 32; ++memory_type_idx) {
+-            if (!(host_pointer_props.memoryTypeBits & (1u << memory_type_idx))) {
+-                continue;
+-            }
+-            if (!(mem_req.memoryTypeBits & (1u << memory_type_idx))) {
+-                continue;
+-            }
+-
+-            vk::MemoryType memory_type = mem_props.memoryTypes[memory_type_idx];
+-            // check for visible+coherent+cached. Other flags (e.g. devicelocal) are allowed
+-            if ((memory_type.propertyFlags & property_flags) == property_flags) {
+-                property_flags = memory_type.propertyFlags;
+-                break;
+-            }
+-        }
+-        if (memory_type_idx == 32) {
+-            GGML_LOG_WARN("ggml_vulkan: Memory type for host allocation not found\n");
+-            device->device.destroyBuffer(buf->buffer);
+-            return {};
+-        }
+-
+-        buf->memory_property_flags = mem_props.memoryTypes[memory_type_idx].propertyFlags;
+-        try {
+-            vk::ImportMemoryHostPointerInfoEXT import_info;
+-            import_info.handleType = vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT;
+-            import_info.pHostPointer = import_ptr;
+-            import_info.setPNext(&mem_flags_info);
+-            buf->device_memory = device->device.allocateMemory({ size, memory_type_idx, &import_info });
+-        } catch (const vk::SystemError& e) {
+-        }
+-    } else {
+-        for (auto it = req_flags_list.begin(); it != req_flags_list.end(); it++) {
+-            const auto & req_flags = *it;
+-
+-            const std::vector<uint32_t> memory_type_indices = ggml_vk_find_memory_properties(&mem_props, &mem_req, req_flags);
+-
+-            if (memory_type_indices.empty()) {
+-                continue;
+-            }
+-
+-            bool done = false;
+-
+-            for (auto mtype_it = memory_type_indices.begin(); mtype_it != memory_type_indices.end(); mtype_it++) {
+-                try {
+-                    buf->device_memory = device->device.allocateMemory({ mem_req.size, *mtype_it, &mem_flags_info });
+-                    buf->memory_property_flags = mem_props.memoryTypes[*mtype_it].propertyFlags;
+-                    done = true;
+-                    break;
+-                } catch (const vk::SystemError& e) {
+-                    // loop and retry
+-                    // during last attempt throw the exception
+-                    if (it + 1 == req_flags_list.end() && mtype_it + 1 == memory_type_indices.end()) {
+-                        device->device.destroyBuffer(buf->buffer);
+-                        throw e;
+-                    }
+-                }
+-            }
+-
+-            if (done) {
+-                break;
+-            }
+-        }
+-    }
+-
+-    if (!buf->device_memory) {
+-        device->device.destroyBuffer(buf->buffer);
+-        throw vk::OutOfDeviceMemoryError("No suitable memory type found");
+-    }
+-
+-    buf->ptr = nullptr;
+-
+-    if (import_ptr) {
+-        buf->ptr = import_ptr;
+-    } else {
+-        if (buf->memory_property_flags & vk::MemoryPropertyFlagBits::eHostVisible) {
+-            buf->ptr = device->device.mapMemory(buf->device_memory, 0, VK_WHOLE_SIZE);
+-        }
+-    }
+-
++        usage |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
++        flags |= vk::MemoryAllocateFlagBits::eDeviceAddress;
++    }
++    vk::ExternalMemoryBufferCreateInfo external;
++    external.handleTypes = vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT;
++    vk::BufferCreateInfo create({}, size, usage, vk::SharingMode::eExclusive, 0, nullptr);
++    create.pNext = &external;
++    buf->buffer = device->device.createBuffer(create);
++    vk::MemoryRequirements requirements = device->device.getBufferMemoryRequirements(buf->buffer);
++    const uint64_t alignment = std::max<uint64_t>({requirements.alignment,
++        device->min_imported_host_pointer_alignment, PS5_AI_FLEX_PAGE_BYTES});
++    const uint64_t minimum = std::max<uint64_t>(size, requirements.size);
++    if (!alignment || (alignment & (alignment - 1)) || minimum > UINT64_MAX - (alignment - 1))
++        throw vk::OutOfDeviceMemoryError("Invalid owned import alignment or size");
++    buf->owned_flex_bytes = (minimum + alignment - 1) & ~(alignment - 1);
++    buf->owned_flex_ptr = ps5_ai_flex_alloc(buf->owned_flex_bytes, alignment);
++    if (!buf->owned_flex_ptr) throw vk::OutOfDeviceMemoryError("Owned flexible data pool exhausted");
++    const auto host = device->device.getMemoryHostPointerPropertiesEXT(
++        vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT, buf->owned_flex_ptr);
++    const auto properties = device->physical_device.getMemoryProperties();
++    const auto required = vk::MemoryPropertyFlagBits::eHostVisible |
++        vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached;
++    uint32_t selected = UINT32_MAX;
++    for (uint32_t type = 0; type < properties.memoryTypeCount; ++type) {
++        const auto& candidate = properties.memoryTypes[type];
++        if (!(host.memoryTypeBits & requirements.memoryTypeBits & (1u << type)) ||
++            (candidate.propertyFlags & required) != required ||
++            (candidate.propertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal) ||
++            candidate.heapIndex >= properties.memoryHeapCount) continue;
++        const auto& heap = properties.memoryHeaps[candidate.heapIndex];
++        if (heap.size != pool.reserved_bytes || buf->owned_flex_bytes > heap.size ||
++            (heap.flags & vk::MemoryHeapFlagBits::eDeviceLocal)) continue;
++        if (selected != UINT32_MAX) throw vk::OutOfDeviceMemoryError("Ambiguous owned flexible memory type");
++        selected = type;
++    }
++    if (selected == UINT32_MAX) throw vk::OutOfDeviceMemoryError("No truthful owned flexible memory type");
++    vk::MemoryDedicatedAllocateInfo dedicated({}, buf->buffer);
++    vk::MemoryAllocateFlagsInfo allocation_flags(flags);
++    allocation_flags.pNext = &dedicated;
++    vk::ImportMemoryHostPointerInfoEXT imported(vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT,
++                                               buf->owned_flex_ptr);
++    imported.pNext = &allocation_flags;
++    ps5_ai_ggml_report("GGML_owned_flex_import bytes=%llu requested=%llu type=%u physical_direct_heap_unchanged=1",
++        (unsigned long long)buf->owned_flex_bytes, (unsigned long long)size, selected);
++    if (!ps5_ai_ggml_log_healthy()) ps5_ai_ggml_retain("owned_flex_import_log_failed");
++    buf->device_memory = device->device.allocateMemory({buf->owned_flex_bytes, selected, &imported});
++    if (ps5_ai_flex_import_committed(buf->owned_flex_ptr, buf->owned_flex_bytes))
++        ps5_ai_ggml_retain("owned_flex_import_commit_uncertain");
++    buf->memory_property_flags = properties.memoryTypes[selected].propertyFlags;
++    buf->ptr = buf->owned_flex_ptr;
+     device->device.bindBufferMemory(buf->buffer, buf->device_memory, 0);
+-
+-    buf->device = device;
+-    buf->size = size;
+-
+-    if (device->buffer_device_address) {
+-        const vk::BufferDeviceAddressInfo addressInfo(buf->buffer);
+-        buf->bda_addr = device->device.getBufferAddress(addressInfo);
+-    }
+-
++    if (device->buffer_device_address)
++        buf->bda_addr = device->device.getBufferAddress(vk::BufferDeviceAddressInfo(buf->buffer));
+     device->memory_logger->log_allocation(buf, size);
+-
+     return buf;
+ }
+ 
+--- a/ggml/src/ggml-vulkan/ggml-vulkan-types.h
++++ b/ggml/src/ggml-vulkan/ggml-vulkan-types.h
+@@ -1,4 +1,6 @@
+ #pragma once
++#include "pool.h"
++#include "probe.h"
+ 
+ #include "ggml-vulkan.h"
+ 
+@@ -1047,7 +1049,9 @@
+     vk::Buffer buffer = VK_NULL_HANDLE;
+     vk::DeviceMemory device_memory = VK_NULL_HANDLE;
+     vk::MemoryPropertyFlags memory_property_flags;
+-    void * ptr;
++    void * ptr = nullptr;
++    void * owned_flex_ptr = nullptr;
++    uint64_t owned_flex_bytes = 0;
+     size_t size = 0;
+     vk::DeviceAddress bda_addr {};
+ 
+@@ -1059,8 +1063,11 @@
+         }
+         VK_LOG_DEBUG("~vk_buffer_struct(" << buffer << ", " << size << ")");
+ 
+-        device->device.freeMemory(device_memory);
+-        device->device.destroyBuffer(buffer);
++        // The bridge checks positive completion and kick quiescence before Vulkan frees.
++        if (buffer) device->device.destroyBuffer(buffer);
++        if (device_memory) device->device.freeMemory(device_memory);
++        if (owned_flex_ptr && ps5_ai_flex_free(owned_flex_ptr, owned_flex_bytes))
++            ps5_ai_ggml_retain("owned_flexible_buffer_free_not_safe");
+     }
+ };
+ 

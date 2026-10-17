@@ -1,0 +1,15 @@
+{
+  "SDK": "D:/ps5-dev/native-sdk/ps5-payload-sdk",
+  "LLVM": "D:/ps5-dev/llvm-mingw/bin",
+  "LLVM_ROOT": "D:/ps5-dev/llvm-mingw",
+  "VK": "D:/ps5-dev/sources/PS5_Vulkan",
+  "MESA": "D:/ps5-dev/sources/PS5_Mesa",
+  "SD": "D:/ps5-dev/sources/stable-diffusion.cpp",
+  "PLATFORM": "D:/ps5-dev/sources/PS5_PayloadSDK/platform",
+  "VULKAN_HEADERS": "D:/ps5-dev/Vulkan-Headers",
+  "DEPS": "D:/ps5-dev/reviewed-libraries",
+  "NATIVE_TOOL": "D:/ps5-dev/ps5-native-tool.exe",
+  "HOST_BIN": "D:/ps5-dev/msys-clang64/bin",
+  "PAYLOAD_SDK": "D:/ps5-dev/payload-sdk-v0.44/ps5-payload-sdk",
+  "SDK_SOURCE": "D:/ps5-dev/sources/sdk"
+}

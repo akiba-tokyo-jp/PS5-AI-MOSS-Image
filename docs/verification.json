@@ -1,0 +1,110 @@
+{
+  "tested_on": "2026-10-18 JST",
+  "firmware": "12.40",
+  "native_eboot_sha256": "0e9957344596289f0edda0d9163768d814ab647b8f108bebaf1d57764ea57e77",
+  "gpu_readback_bytes": 67108864,
+  "whole_pool_readback_verified": false,
+  "dispatch_delta_1024": 138826,
+  "submit_delta_1024": 29518,
+  "fence_delta_1024": 29518,
+  "home_screen_icon_visually_confirmed": false,
+  "tests": [
+    {
+      "model": "WAI-Illustrious-SDXL v17.0",
+      "size": "256x256",
+      "steps": 8,
+      "sampler": "euler_a",
+      "cfg_scale": 5,
+      "seed": 135792,
+      "model_loaded_before": false,
+      "native_generation_seconds": 43.226907,
+      "Windows_OpenAI_seconds": 44.51499999995576,
+      "OpenAI_SDK_version": "3.34.0",
+      "PNG_bytes": 86190,
+      "PNG_sha256": "5170c8ba35689ab634a3c3786f969410b880a62282582bf4f471210bf791a826",
+      "native_OpenAI_PNG_byte_identical": true,
+      "existing_services_preserved": true,
+      "PS5_rebooted": false,
+      "system_file_writes": 0,
+      "gpu_used": true,
+      "gpu_unet_sampled_nodes": 1,
+      "gpu_flash_attention_sampled_nodes": 1,
+      "direct_reserved_bytes": 6442450944,
+      "direct_peak_bytes": 5203050496,
+      "process_peak_rss_bytes": 8996077568,
+      "journals": [
+        {
+          "name": "native-startup.log",
+          "bytes": 879584,
+          "rotation": 3
+        },
+        {
+          "name": "native-driver.log",
+          "bytes": 3270746,
+          "rotation": 0
+        },
+        {
+          "name": "native-pool.log",
+          "bytes": 60264,
+          "rotation": 0
+        },
+        {
+          "name": "native-startup.log.previous",
+          "bytes": 4194224,
+          "rotation": 2
+        }
+      ]
+    },
+    {
+      "model": "WAI-Illustrious-SDXL v17.0",
+      "size": "1024x1024",
+      "steps": 20,
+      "sampler": "euler_a",
+      "cfg_scale": 5,
+      "seed": 135792,
+      "model_loaded_before": true,
+      "native_generation_seconds": 91.648546,
+      "Windows_OpenAI_seconds": 93.09399999998277,
+      "OpenAI_SDK_version": "3.34.0",
+      "PNG_bytes": 857419,
+      "PNG_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986",
+      "native_OpenAI_PNG_byte_identical": true,
+      "existing_services_preserved": true,
+      "PS5_rebooted": false,
+      "system_file_writes": 0,
+      "gpu_used": true,
+      "gpu_unet_sampled_nodes": 1,
+      "gpu_flash_attention_sampled_nodes": 1,
+      "direct_reserved_bytes": 6442450944,
+      "direct_peak_bytes": 5436981248,
+      "process_peak_rss_bytes": 8996077568,
+      "journals": [
+        {
+          "name": "native-startup.log",
+          "bytes": 684066,
+          "rotation": 11
+        },
+        {
+          "name": "native-driver.log",
+          "bytes": 1880204,
+          "rotation": 2
+        },
+        {
+          "name": "native-pool.log",
+          "bytes": 62736,
+          "rotation": 0
+        },
+        {
+          "name": "native-startup.log.previous",
+          "bytes": 4194300,
+          "rotation": 10
+        },
+        {
+          "name": "native-driver.log.previous",
+          "bytes": 4194278,
+          "rotation": 1
+        }
+      ]
+    }
+  ]
+}
