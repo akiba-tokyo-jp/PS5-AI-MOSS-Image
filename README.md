@@ -1,6 +1,8 @@
 # PS5 AI WAI
 
-2026-10-19：**CLIPの重複計算削減・UNet共通計算の再利用・ControlNetのCFGバッチ化・メモリ割当を反映しました。** 最終構成はDirect 9422MiB（約9.201GiB）、CPU CLIPの重みグループは16MiB目安です。OpenPose＋漫画LoRA1／20stepsの256初回は124.567→115.815秒。同じプロセスで256→1024の切替132.952秒、同じ1024の繰返し117.600秒、基準PNGと一致しました。1024同士のキャッシュ条件は異なるため速度倍率は算出しません。[比較・メモリ・検証範囲](docs/optimization-20261019.md)・[成功動画12秒](docs/media/optimization-openpose1024.mp4)。
+2026-10-19追加測定：**モデル未読み込みからの1024×1024生成は184.026→161.397秒、22.629秒（約12.3%）短縮しました。** 同じWAI＋漫画LoRA＋OpenPose、20stepsで、基準PNGと全バイト一致。アプリ再起動後の各1枚で、OSファイルキャッシュは消去していません。[比較条件と実測](docs/optimization-20261019.md)・[初回生成の成功動画12秒](docs/media/optimization-openpose1024-cold.mp4)。
+
+2026-10-19：**CLIPの重複計算削減・UNet共通計算の再利用・ControlNetのCFGバッチ化・メモリ割当を反映しました。** 最終構成はDirect 9422MiB（約9.201GiB）、CPU CLIPの重みグループは16MiB目安です。OpenPose＋漫画LoRA1／20stepsの256初回は124.567→115.815秒。同じプロセスで256→1024の切替132.952秒、同じ1024の繰返し117.600秒、基準PNGと一致しました。132.952秒と117.600秒はconditioning cache条件が異なるため、この2値から改修による高速化率は算出しません。[比較・メモリ・検証範囲](docs/optimization-20261019.md)・[成功動画12秒](docs/media/optimization-openpose1024.mp4)。
 
 2026-10-19：**UNetの工程別計測とログ同期を修正しました。** 同じOpenPose1024初回は194.54→184.03秒、PNG完全一致。pool/startupのfsync合計は12.73→0.33秒でした。各1枚の観測です。[工程別実測・条件・制約](docs/unet-profiling.md)を参照してください。 [実API検証の成功動画12秒](docs/media/controlnet-openpose1024-logsync.mp4)。
 

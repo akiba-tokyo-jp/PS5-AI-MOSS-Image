@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "as_of": "2026-10-19",
-  "scope": "Filtered extract of eleven saved successful receipts: nine 256x256 and two 1024x1024. No new PS5 operation or generation. Private paths, tokens, prompts and job identifiers are omitted.",
+  "scope": "Filtered extract of thirteen saved successful receipts: nine256x256 and four1024x1024, including both old and final app-model-cold1024 results. No new PS5 operation or generation. Private paths, tokens, prompts and job identifiers are omitted.",
   "conditions": {
     "model": "WAI-Illustrious-SDXL v17.0",
     "steps": 20,
@@ -24,7 +24,8 @@
     "256 warm row has conditioning/weight cache hits and cannot isolate the ControlNet optimization.",
     "The 1024 size-change row has model_loaded_before=true but CLIP recomputation; it is not comparable to a fully cold 1024 run as a speedup ratio.",
     "Phase metrics are CPU wall time including internal waits, not pure GPU timestamp measurements; nested durations must not be added.",
-    "The final V16 cold256 improvement is about 7.0%; the CLIP-only 8.9% improvement describes an earlier intermediate variant."
+    "The final V16 cold256 improvement is about 7.0%; the CLIP-only 8.9% improvement describes an earlier intermediate variant.",
+    "Old and new app-cold1024 rows both record model_loaded_before=false. Each was observed once; PS5 OS file caches were not flushed. The comparison includes changed implementation, Direct reservation and CFG batching/fallback behavior while user generation parameters match."
   ],
   "records": [
     {
@@ -893,6 +894,166 @@
       "generation_POSTs": 1,
       "automatic_retries": 0,
       "Windows_inference": false
+    },
+    {
+      "id": "baseline-app-cold1024",
+      "size": "1024x1024",
+      "control_image_sha256": "9c23032f84e9c5b7080db6892631f9f78adab2ddec91ab554230b588cdbdd5da",
+      "receipt_sha256": "73cc6ae8e8d59cb7ab09b26550e084d9ef9343b65e73bd1cc6ef06cca9c523cc",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 184.026332,
+      "Windows_API_seconds": 184.90600000001723,
+      "actual_steps": 20,
+      "CLIP_seconds": 24.26,
+      "controlnet_seconds": 48.240091,
+      "controlnet_evals": 41,
+      "PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "PNG_bytes": 505949,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 125,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8170848256,
+      "Direct_peak_used_bytes": 9084305408,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": true,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 327,
+          "invalid_clock_samples": 0,
+          "seconds": 80.810967442
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 328,
+          "invalid_clock_samples": 0,
+          "seconds": 18.958530585
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 41,
+          "invalid_clock_samples": 0,
+          "seconds": 38.687485021
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 41,
+          "invalid_clock_samples": 0,
+          "seconds": 7.481146844
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 41,
+          "invalid_clock_samples": 0,
+          "seconds": 0.016292313
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 82,
+          "invalid_clock_samples": 0,
+          "seconds": 0.015867894
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 124476,
+          "invalid_clock_samples": 0,
+          "seconds": 0.478793829
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "app_model_cold": true,
+      "OS_file_cache_flushed": false
+    },
+    {
+      "id": "memory-v16-app-cold1024",
+      "size": "1024x1024",
+      "control_image_sha256": "9c23032f84e9c5b7080db6892631f9f78adab2ddec91ab554230b588cdbdd5da",
+      "receipt_sha256": "73bfefa5ca271b008ec9e4758ce2ee37659e9d8c67d2dc1224d0a0a7531a2b27",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 161.397149,
+      "Windows_API_seconds": 163.0,
+      "actual_steps": 20,
+      "CLIP_seconds": 14.1,
+      "controlnet_seconds": 42.337407,
+      "controlnet_evals": 20,
+      "PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "PNG_bytes": 505949,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 124,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535901696,
+      "Direct_reserved_bytes": 9879683072,
+      "Direct_end_used_bytes": 8170831872,
+      "Direct_peak_used_bytes": 9177235456,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 340,
+          "invalid_clock_samples": 0,
+          "seconds": 76.434818994
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 340,
+          "invalid_clock_samples": 0,
+          "seconds": 18.850521707
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 33.705740433
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 7.315130872
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.010382806
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.00236579
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 88188,
+          "invalid_clock_samples": 0,
+          "seconds": 0.334782848
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "app_model_cold": true,
+      "OS_file_cache_flushed": false,
+      "reference_PNG_equal": true,
+      "reference_PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "reference_receipt_sha256": "73cc6ae8e8d59cb7ab09b26550e084d9ef9343b65e73bd1cc6ef06cca9c523cc",
+      "reference_bytes_compared": true
     }
   ],
   "memory_caveats": [
@@ -912,10 +1073,19 @@
     "CLIP_only_reduction_percent": 8.850134208031722,
     "size_change1024_generation_seconds": 132.951936,
     "warm1024_generation_seconds": 117.599516,
-    "old_cold1024_speed_ratio_reported": false,
     "long_running_catalog_validated": false,
     "TV_color_user_confirmation_complete": false,
     "home_icon_cache_is_separate_issue": true,
-    "mask_inpainting_changes_deployed": false
+    "mask_inpainting_changes_deployed": false,
+    "old_and_new_app_cold1024_compared": true,
+    "baseline_app_cold1024_generation_seconds": 184.026332,
+    "final_app_cold1024_generation_seconds": 161.397149,
+    "app_cold1024_shorter_seconds": 22.629182999999983,
+    "app_cold1024_reduction_percent": 12.296709255716722,
+    "app_cold1024_each_case_measurements": 1,
+    "OS_file_cache_flushed_for_app_cold_comparison": false,
+    "warm_against_old_cold_speed_ratio_reported": false,
+    "app_cold1024_requests_equal_except_upload_ID": true,
+    "app_cold1024_PNG_exact_bytes_equal": true
   }
 }

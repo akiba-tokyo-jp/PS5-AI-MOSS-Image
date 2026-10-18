@@ -13,10 +13,10 @@
     {
       "file": "README.md",
       "sha256": "a5fc28e896cf59472ec69ba968b1552519b72821348dda4847413d5b4c25e49e",
-      "published_sha256": "a5fc28e896cf59472ec69ba968b1552519b72821348dda4847413d5b4c25e49e",
-      "published_bytes": 14648,
+      "published_sha256": "e295fb0901160f6e943a8fecf6189f3c63fa1c5f1ee775c937bcf7a66e4a23e6",
+      "published_bytes": 15168,
       "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
     },
     {
       "file": "build-profiles/native.json",
@@ -65,6 +65,14 @@
       "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
     },
     {
+      "file": "docs/media/optimization-openpose1024-cold.mp4",
+      "sha256": "8d5dab6794ee63c08fd4fb41d00a335dd7f5638560e32313adae17b5057d01e6",
+      "published_sha256": "8d5dab6794ee63c08fd4fb41d00a335dd7f5638560e32313adae17b5057d01e6",
+      "published_bytes": 65762,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
+    },
+    {
       "file": "docs/media/optimization-openpose1024.mp4",
       "sha256": "36f94552bc4176e0c050d991f9d86c1bac1973733dd6e260cc31d97a03d2c933",
       "published_sha256": "36f94552bc4176e0c050d991f9d86c1bac1973733dd6e260cc31d97a03d2c933",
@@ -75,18 +83,18 @@
     {
       "file": "docs/optimization-20261019-evidence.json",
       "sha256": "97a2c92dd2cc1f9b87f6360d7899669a62a9a9b3c738840591f45483ac498806",
-      "published_sha256": "4b00af2e09bc579cc60c391150c931164a2eead44bec5141ddbd219d1c7a55e6",
-      "published_bytes": 32577,
+      "published_sha256": "87f0ff8d4452c9a6570768367898ba00992b2869c763366bce16a4e45741a622",
+      "published_bytes": 38999,
       "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
     },
     {
       "file": "docs/optimization-20261019.md",
       "sha256": "a938750e1026a18a717c446744d6b98a118b6e3549d4f710f8fbd101626c2706",
-      "published_sha256": "a938750e1026a18a717c446744d6b98a118b6e3549d4f710f8fbd101626c2706",
-      "published_bytes": 11417,
+      "published_sha256": "a4e2f7aede6a18ad25d2337341a6221b79e2977ecefd85452a62b848e3cc7331",
+      "published_bytes": 13047,
       "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
     },
     {
       "file": "native/app/arena.h",
