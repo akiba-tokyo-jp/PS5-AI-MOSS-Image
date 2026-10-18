@@ -4,7 +4,7 @@
  * No constructor, AGC/Vulkan call, compute queue, engine call, free or teardown.
  */
 #include "status.h"
-#include "font.h"
+#include "dashboard.h"
 #include "raster.h"
 #include <ps5platform/videoout.h>
 #include <errno.h>
@@ -54,26 +54,8 @@ static int monotonic(uint64_t *out) {
     if((uint64_t)t.tv_sec>(UINT64_MAX-(uint64_t)t.tv_nsec)/UINT64_C(1000000000))return 0;
     *out=(uint64_t)t.tv_sec*UINT64_C(1000000000)+(uint64_t)t.tv_nsec;return 1;
 }
-static void put(unsigned char *frame,unsigned x,unsigned y,uint32_t color) {
-    if(x>=PS5_AI_STATUS_WIDTH||y>=PS5_AI_STATUS_HEIGHT)return;size_t offset=ps5_ai_status_pixel_offset(x,y);
-    if(offset<=FRAME_BYTES-sizeof(color))memcpy(frame+offset,&color,sizeof(color));
-}
 static void draw(unsigned char *frame,const struct ps5_ai_status_snapshot_v1 *snapshot) {
-    char rows[24][128];size_t count=ps5_ai_status_format(snapshot,rows);
-    memset(frame,0,FRAME_BYTES);
-    for(size_t line=0;line<count;line++) {
-        unsigned scale=line?3:4,x=48,y=40+(unsigned)line*38;
-        for(const char *p=rows[line];*p&&x+6*scale<1872;p++,x+=6*scale) {
-            unsigned char c=(unsigned char)*p;if(c>='a'&&c<='z')c-=32;
-            const unsigned char *glyph=NULL;
-            if(c>='0'&&c<='9')glyph=glyphs[c-'0'];
-            else if(c>='A'&&c<='Z')glyph=glyphs[10+c-'A'];
-            else {const char *at=strchr(punctuation,c);if(at)glyph=glyphs[36+(at-punctuation)];}
-            if(!glyph)continue;
-            for(unsigned col=0;col<5;col++)for(unsigned bit=0;bit<7;bit++)if(glyph[col]&(1u<<bit))
-                for(unsigned dy=0;dy<scale;dy++)for(unsigned dx=0;dx<scale;dx++)put(frame,x+col*scale+dx,y+bit*scale+dy,UINT32_C(0xffe7ecf2));
-        }
-    }
+    (void)ps5_ai_dashboard_draw(frame,snapshot,0,0);
     for(size_t offset=0;offset<FRAME_BYTES;offset+=64)__asm__ volatile("clflush (%0)"::"r"(frame+offset):"memory");
     __asm__ volatile("mfence":::"memory");
 }

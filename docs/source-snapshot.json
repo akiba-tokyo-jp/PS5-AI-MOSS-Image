@@ -1,5 +1,5 @@
 {
-  "scope": "Native log-modes-v4 source inputs and CPU gateway log-bound-v3 inputs; unchanged inference overlay and earlier precision trial evidence remain separate. Public sanitized OpenAPI differs intentionally. Portable rebuilt binaries are inspected separately and have not been console-executed.",
+  "scope": "Approved CPU dashboard, native authenticated display-state health, and CPU gateway response-only metadata parser. Inference algorithms, GPU driver and memory settings unchanged. Public sanitized OpenAPI differs intentionally; public portable binaries remain separate from the console-executed build.",
   "files": [
     {
       "file": "native/app/arena.h",
@@ -179,11 +179,11 @@
     },
     {
       "file": "native/app/server.c",
-      "sha256": "f5f9edd52f5c69381a2c626d41c9d5672c1719ef11445d9b5eafb4faaac18740",
-      "bytes": 53010,
-      "published_sha256": "f5f9edd52f5c69381a2c626d41c9d5672c1719ef11445d9b5eafb4faaac18740",
+      "sha256": "8806439060e8636d42d4aa664dbb79076ba13d2cb174d82d1e3dcd9323858e72",
+      "bytes": 53539,
+      "published_sha256": "8806439060e8636d42d4aa664dbb79076ba13d2cb174d82d1e3dcd9323858e72",
       "identical_to_tested_input": true,
-      "published_bytes": 53010
+      "published_bytes": 53539
     },
     {
       "file": "native/app/shutdown_policy.h",
@@ -275,11 +275,12 @@
     },
     {
       "file": "native/ui/display.c",
-      "sha256": "b5e5f311558c19cda7766ba92822a5c53d462b06416473c03e40b860bf21a61c",
-      "bytes": 11289,
-      "published_sha256": "b5e5f311558c19cda7766ba92822a5c53d462b06416473c03e40b860bf21a61c",
-      "identical_to_tested_input": true,
-      "published_bytes": 11289
+      "sha256": "d7e67e97af63758dbaf3dad6d2b0bd9692fa3467c2978f3d7cc72d6432a46e7f",
+      "bytes": 10335,
+      "published_sha256": "955c75c833bf33cc3099b11599cc3e864fa9e608918592882fd24c9b4cbe2287",
+      "identical_to_tested_input": false,
+      "published_bytes": 10178,
+      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
     },
     {
       "file": "native/ui/font.h",
@@ -309,9 +310,10 @@
       "file": "native/ui/status.h",
       "sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
       "bytes": 5386,
-      "published_sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "identical_to_tested_input": true,
-      "published_bytes": 5386
+      "published_sha256": "8a4b76b656267686c3cc204a36cbc8b548b1662fa1c442954397037a0619c0a6",
+      "identical_to_tested_input": false,
+      "published_bytes": 5380,
+      "publication_note": "Comment corrected to reflect integration; API and ABI unchanged."
     },
     {
       "file": "native/gateway/cpu_hooks.c",
@@ -331,11 +333,12 @@
     },
     {
       "file": "native/gateway/engine_bridge.inc",
-      "sha256": "8a5a1f6908e23a671f56728ae9709e529e36a7590b863f055296abfe651ad467",
-      "bytes": 10259,
-      "published_sha256": "8a5a1f6908e23a671f56728ae9709e529e36a7590b863f055296abfe651ad467",
-      "identical_to_tested_input": true,
-      "published_bytes": 10259
+      "sha256": "c169bae103c68d22fc5de619b22d908352402632ef0ee89d4ea7ed2787ea440e",
+      "bytes": 13080,
+      "published_sha256": "166ba32796deb90f45f461600ebdf35f3b349036ec3aa9d6f40aca6d8ca9a4ff",
+      "identical_to_tested_input": false,
+      "published_bytes": 12880,
+      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
     },
     {
       "file": "native/gateway/openai.inc",
@@ -640,6 +643,33 @@
       "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
       "bytes": 1408,
       "identical_to_tested_input": true
+    },
+    {
+      "file": "native/ui/dashboard.h",
+      "sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
+      "bytes": 8896,
+      "published_sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
+      "published_bytes": 8896,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/ui/dashboard_font.h",
+      "sha256": "87c20e4c90717fda7e2e8774c3fdfea07ffad010180b988dc4a4444880cf0f9f",
+      "bytes": 585475,
+      "published_sha256": "8f01c913b1a90934bd4d0d5091fe792ce34d9ac92fe84df08eb3f0f347b06649",
+      "published_bytes": 585496,
+      "identical_to_tested_input": false,
+      "publication_note": "License path comment corrected for the public tree; bitmap data and rendering code unchanged."
+    },
+    {
+      "file": "native/ui/dashboard_brand.h",
+      "sha256": "2c2b7683bcc97007aadca71c3c2bb04d2342831dc647df60feaee8e6e76dedad",
+      "bytes": 47416,
+      "published_sha256": "2c2b7683bcc97007aadca71c3c2bb04d2342831dc647df60feaee8e6e76dedad",
+      "published_bytes": 47416,
+      "identical_to_tested_input": true
     }
-  ]
+  ],
+  "actual_console_native_eboot_sha256": "be1067a7520dce661129a2a1cab8c85fd92bd01be17d1d82b91917199679fac6",
+  "actual_console_gateway_elf_sha256": "d9976a1e8885bd455c80f46c7b2872341001a057c059ec6ad7764e2b3e2d16e2"
 }

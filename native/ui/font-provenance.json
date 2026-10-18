@@ -1,0 +1,31 @@
+{
+  "derivative_name": "WAI Dashboard Glyphs",
+  "license": "OFL-1.1",
+  "original_distribution": "pdfjs-dist standard_fonts",
+  "distribution_version": "5.6.205",
+  "source_fonts": [
+    {
+      "file": "LiberationSans-Regular.ttf",
+      "bytes": 139512,
+      "sha256": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f"
+    },
+    {
+      "file": "LiberationSans-Bold.ttf",
+      "bytes": 137052,
+      "sha256": "361c61b82d575c5c35fd9157fda8b0194bcfcd0d88ea8521a4fb5dd53d33dddc"
+    }
+  ],
+  "glyph_mask_bytes": 196364,
+  "font_sizes": [
+    22,
+    26,
+    36,
+    56
+  ],
+  "license_file": "../../licenses/WAI-Dashboard-Glyphs-OFL.txt",
+  "icon_source": {
+    "file": "../../assets/sce_sys/icon0.png",
+    "bytes": 230954,
+    "sha256": "09f8d47eaae975246884718df9e6e761b01d22e607b8089ffccbc14073a6e7d5"
+  }
+}

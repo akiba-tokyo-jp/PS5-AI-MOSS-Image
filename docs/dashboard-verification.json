@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-18 JST",
+  "state": "verified",
+  "size": "768x1024",
+  "steps": 20,
+  "cfg_scale": 5,
+  "sampler": "euler_a",
+  "precision": "FP32",
+  "Direct_pool_bytes": 6442450944,
+  "cold_generation_seconds": 92.443825,
+  "cold_Windows_API_seconds": 94.25,
+  "prior_cold_generation_seconds": 92.473289,
+  "same_cold_PNG_as_prior": true,
+  "cold_PNG_sha256": "763b3eca54fda750cbc03081570dafb0d3127824abc0a834c70ae493175ba8cd",
+  "cold_PNG_bytes": 941994,
+  "warm_jobs": [
+    {
+      "id": "horror-urban",
+      "generation_seconds": 68.853608,
+      "Windows_seconds": 70.31,
+      "PNG_sha256": "168d3c6787ae94ab44b79805a39ac92e2c4fb7166a42331c71dbcdc80e47c243",
+      "gpu_used": true,
+      "PNG_decoded_and_exact": true
+    },
+    {
+      "id": "horror-yokai",
+      "generation_seconds": 68.844985,
+      "Windows_seconds": 70.55,
+      "PNG_sha256": "a9cba38dcd8a3f69bf41b7c2410de0ddf1407ac534f05094b255aaec9b8c638e",
+      "gpu_used": true,
+      "PNG_decoded_and_exact": true
+    },
+    {
+      "id": "horror-panic",
+      "generation_seconds": 68.834553,
+      "Windows_seconds": 70.72,
+      "PNG_sha256": "88c69e1bd52782ca757982c224f37f34c3d274a73b0a6e64c59a999c7d46c365",
+      "gpu_used": true,
+      "PNG_decoded_and_exact": true
+    },
+    {
+      "id": "essay-diary",
+      "generation_seconds": 68.794121,
+      "Windows_seconds": 70.09,
+      "PNG_sha256": "01146e51fb2e8530be5a36310c7c53f241d22e0a7a356819fe425c2153cfdecc",
+      "gpu_used": true,
+      "PNG_decoded_and_exact": true
+    },
+    {
+      "id": "essay-parenting",
+      "generation_seconds": 70.62019,
+      "Windows_seconds": 72.26,
+      "PNG_sha256": "d10860131d58410b7feb832d4b2f538af98860ee125177cfd41a62aa598df6cd",
+      "gpu_used": true,
+      "PNG_decoded_and_exact": true
+    },
+    {
+      "id": "essay-travel",
+      "generation_seconds": 70.589895,
+      "Windows_seconds": 71.95,
+      "PNG_sha256": "bba2efb73f23c73e2e3b9b29e6708fe7193026a9cc11bde6137b7f11740696e5",
+      "gpu_used": true,
+      "PNG_decoded_and_exact": true
+    }
+  ],
+  "warm_median_seconds": 68.8492965,
+  "inter_job_gap_seconds": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+  ],
+  "peak_cpu_bytes": [
+    9053028352
+  ],
+  "peak_gpu_bytes": [
+    5402066944
+  ],
+  "memory_fields_are_process_lifetime_peaks": true,
+  "display_observations": 44,
+  "display_heartbeat_first": 424,
+  "display_heartbeat_last": 1062,
+  "display_positive_presentations": true,
+  "display_faults": 0,
+  "physical_HDMI_visual_inspection": false,
+  "native_process_unchanged_during_generation": true,
+  "gateway_process_unchanged_during_generation": true,
+  "extra_cold_generation_POSTs": 1,
+  "warm_test_generation_POSTs": 0,
+  "Windows_inference": false,
+  "recording_kind": "Actual Windows desktop review of completed PS5 results; not live inference or PS5 HDMI capture",
+  "inference_engine_GPU_driver_model_memory_settings_unchanged": true
+}

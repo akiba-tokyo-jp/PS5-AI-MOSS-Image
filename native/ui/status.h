@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Optional native status display. Not linked into any current WAI package.
+ * Optional native status display integrated into the native WAI app.
  * Publishers copy measured POD data only; no renderer/GPU calls under engine locks.
  */
 #ifndef PS5_AI_STATUS_DISPLAY_V1_H

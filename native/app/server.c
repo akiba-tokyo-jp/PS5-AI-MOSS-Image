@@ -620,15 +620,23 @@ static void health(socket_t fd) {
         active += !strcmp(jobs[i].status, "running"); queued += !strcmp(jobs[i].status, "queued");
     }
     unlock_state();
+    char screen_json[256]="null";
+#ifndef _WIN32
+    struct ps5_ai_status_display_state_v1 display={0};
+    if(!ps5_ai_status_display_state(&display))
+        snprintf(screen_json,sizeof(screen_json),"{\"ready\":%s,\"heartbeat\":%" PRIu64 ",\"last_presented_frame\":%" PRIu64 ",\"fault\":%s,\"stopped\":%s}",
+            display.ready?"true":"false",display.heartbeat,display.completed_flip_argument,
+            display.display_fault?"true":"false",display.stopped?"true":"false");
+#endif
     snprintf(body, sizeof(body),
         "{\"status\":\"%s\",\"server\":\"ps5-ai\",\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
-        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 "}",
+        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s}",
         s.available && s.gpu_available ? "ready" : "degraded", backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
-        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation);
+        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json);
     send_json(fd, 200, body);
 }
 static void submit(socket_t fd, const char *body) {

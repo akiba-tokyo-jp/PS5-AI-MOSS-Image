@@ -92,8 +92,64 @@ static int backend_http(const char *method,const char *path,const char *body,cha
     }
     if(http_status)*http_status=code;return ok && total==length;
 }
+
+/* Only for same-console /health responses. Unknown metadata is validated and
+ * skipped with a depth bound. Public request/job parsers remain strict/flat.
+ * Scratch storage belongs to the caller's heap object, not recursive stacks. */
+static int skip_backend_metadata(const char **p,unsigned depth,char *scratch,size_t cap) {
+    if(depth>8)return 0;
+    skip_space(p);
+    if(**p=='"')return parse_string(p,scratch,cap);
+    if(**p=='-' || isdigit((unsigned char)**p))return parse_number(p,scratch,cap);
+    if(!strncmp(*p,"true",4)){*p+=4;return 1;}
+    if(!strncmp(*p,"false",5)){*p+=5;return 1;}
+    if(!strncmp(*p,"null",4)){*p+=4;return 1;}
+    char close=**p=='{'?'}':(**p=='['?']':0);int object_kind=**p=='{';
+    if(!close)return 0;(*p)++;skip_space(p);if(**p==close){(*p)++;return 1;}
+    for(;;){
+        if(object_kind){if(!parse_string(p,scratch,cap))return 0;skip_space(p);if(*(*p)++!=':')return 0;skip_space(p);}
+        if(!skip_backend_metadata(p,depth+1,scratch,cap))return 0;
+        skip_space(p);if(**p==close){(*p)++;return 1;}
+        if(*(*p)++!=',')return 0;skip_space(p);
+    }
+}
+
+static int parse_backend_health_object(const char *p, object *obj) {
+    memset(obj, 0, sizeof(*obj)); skip_space(&p);
+    if (*p++ != '{') return 0;
+    skip_space(&p);
+    if (*p == '}') { ++p; skip_space(&p); return *p == 0; }
+    for (;;) {
+        if (obj->count == MAX_FIELDS || *p != '"') return 0;
+        field *f = &obj->values[obj->count];
+        if (!parse_string(&p, f->key, sizeof(f->key))) return 0;
+        for (size_t i = 0; i < obj->count; ++i)
+            if (!strcmp(f->key, obj->values[i].key)) return 0;
+        skip_space(&p); if (*p++ != ':') return 0; skip_space(&p);
+        if (*p == '"') {
+            f->type = 1;
+            if (!parse_string(&p, f->value, sizeof(f->value))) return 0;
+        } else if (*p == '-' || isdigit((unsigned char)*p)) {
+            f->type = 2;
+            if (!parse_number(&p, f->value, sizeof(f->value))) return 0;
+        } else if (!strncmp(p, "true", 4)) { f->type = 3; p += 4; }
+        else if (!strncmp(p, "false", 5)) { f->type = 4; p += 5; }
+        else if (!strncmp(p, "null", 4)) { f->type = 5; p += 4; }
+        else if (*p=='{' || *p=='[') {
+            f->type=6;
+            if(!skip_backend_metadata(&p,0,f->value,sizeof(f->value)))return 0;
+            f->value[0]=0;
+        }
+        else return 0;
+        ++obj->count; skip_space(&p);
+        if (*p == '}') { ++p; skip_space(&p); return *p == 0; }
+        if (*p++ != ',') return 0;
+        skip_space(&p);
+    }
+}
+
 static int backend_json(const char *method,const char *path,const char *body,object *o,int *code) {
-    char *raw=malloc(16385);if(!raw)return 0;int ok=backend_http(method,path,body,raw,16385,NULL,code) && parse_object(raw,o);free(raw);return ok;
+    char *raw=malloc(16385);if(!raw)return 0;int ok=backend_http(method,path,body,raw,16385,NULL,code) && (!strcmp(path,"/health")?parse_backend_health_object(raw,o):parse_object(raw,o));free(raw);return ok;
 }
 static int backend_true(object *o,const char *key){field *f=find_field(o,key);return f && f->type==3;}
 static const char *backend_text(object *o,const char *key){field *f=find_field(o,key);return f && f->type==1?f->value:"";}

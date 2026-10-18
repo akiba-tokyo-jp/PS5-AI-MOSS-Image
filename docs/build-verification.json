@@ -3,7 +3,7 @@
   "native_source_units": 11,
   "RADV_platform_source_units": 1,
   "native_SELF_integrity": "valid",
-  "native_rebuilt_eboot_sha256": "697cebab978daa97ce116bc61e026235948a889a36ada4fd80daba60a1513fee",
+  "native_rebuilt_eboot_sha256": "97e96475b356a984a84976447a16710ecf216f98e02ed57e2a46ee2f546d20da",
   "native_rebuilt_binary_executed_on_PS5": false,
   "existing_dependencies_sha256_verified": true,
   "clean_environment_dependency_build_verified": false,
@@ -18,5 +18,12 @@
   "native_logger_fault_checks_passed": true,
   "bounded_API_stdio_rotation_and_rename_failure_verified": true,
   "logging_source_snapshot": "source-snapshot.json",
-  "latest_runtime_evidence": "logging-verification.json"
+  "latest_runtime_evidence": "dashboard-verification.json",
+  "actual_dashboard_console_eboot_sha256": "be1067a7520dce661129a2a1cab8c85fd92bd01be17d1d82b91917199679fac6",
+  "native_dashboard_frame_guard_verified": true,
+  "backend_health_parser_checks_passed": 10,
+  "public_request_parser_nested_JSON_still_rejected": true,
+  "public_gateway_rebuilt_ELF_sha256": "cb4cc253cb151c9ff37d36dd4109f4c4107bcaba5b13e23f83fac84d8e300730",
+  "public_gateway_rebuilt_executed_on_PS5": false,
+  "dashboard_native_health_mock_checks_passed": 3
 }

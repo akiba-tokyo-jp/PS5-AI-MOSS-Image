@@ -14,6 +14,7 @@ This is a source publication, not a distribution of Sony SDKs, firmware, model w
 | PS5 payload SDK | John Törnblom and contributors; payload CRT / stubs | GPL-3.0-or-later and file-specific notices |
 | cobanov/PS5LM | Native compatibility and lifecycle reference; five-function libc compatibility adaptation | GPL-3.0 and source-specific notices |
 | mansanitizer/psllama | CPU VideoOut tiling/status reference | GPL-3.0; see upstream and source comments |
+| WAI Dashboard Glyphs | Embedded bitmap derivative of Liberation Sans; original Google / Red Hat notices retained | SIL OFL-1.1; see licenses/WAI-Dashboard-Glyphs-OFL.txt |
 | libc++ / libc++abi / libunwind / LLVM builtins | Native C++ runtime and compiler | Apache-2.0 WITH LLVM-exception |
 | Vulkan-Headers | Khronos headers | Apache-2.0 / MIT, file-specific |
 | stb_image_write / nlohmann json / oniguruma | Pulled through pinned stable-diffusion.cpp, not separate vendored copies here | MIT / public-domain option, MIT, BSD respectively; retain upstream files/notices when building |
@@ -26,3 +27,6 @@ Claims of authorship do not extend to their inference algorithms, model weights,
 The icon and sample images were generated on the PS5 with WAI v17 and TAESDXL. The 512-pixel icon is a Lanczos resize of the verified 1024 PNG; no Windows inference was used.
 Keep model attribution and applicable model/output terms when reusing artwork.
 No third-party application screenshot, user photograph, private recording URL or authentication credential is included.
+
+Dashboard glyph masks retain OFL-1.1 separately from application code. Their derivative name is WAI Dashboard Glyphs.
+The static masks and existing app-icon thumbnail need no runtime font library or additional GPU rendering context.
