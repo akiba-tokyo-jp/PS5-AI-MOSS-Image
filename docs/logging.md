@@ -110,3 +110,7 @@ GPUの演算・submit/fence・メモリ所有の実装、モデル、FP32、6GiB
 `a1ec807794ab605e7c814cc12328ce54208bcaa1f68af2dd05a8400e21f51807`。
 公開ソースの別ビルドはSELF整合性まで検査し、実機実行したバイナリとは区別しています。
 記録は[logging-verification.json](logging-verification.json)、ソース対応は[source-snapshot.json](source-snapshot.json)。
+
+## 2026-10-19：Direct poolと通常解放の同期境界
+
+ControlNet利用時に正常Direct解放のphase名がnormalの既存一覧から漏れていた問題を修正しました。checked recordは全件保持し、正常なpoolの割当・import・返却だけ同期を128件/64KiB/1秒（次の記録時に判定）へまとめ、PNG公開前に必須checkpointを追加しました。異常、debug、初期化・終了、物理allocation/mappingは即時同期を維持します。current/previous容量制限も維持しました。[工程別実測と回帰テスト](unet-profiling.md)を参照してください。

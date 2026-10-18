@@ -1,6 +1,10 @@
 # PS5 AI WAI
 
-2026-10-18：**Canny / OpenPose ControlNetの256・1024生成とOpenAI互換APIからのPNG取得をPS5実機で確認しました。** Direct9GiB・512MiB単位、CPU CLIP一時重みの共有プール利用に対応しています。ホーム用・状態画面内のアイコンをユーザー添付キャラクターへ更新しました。
+2026-10-19：**UNetの工程別計測とログ同期を修正しました。** 同じOpenPose1024初回は194.54→184.03秒、PNG完全一致。pool/startupのfsync合計は12.73→0.33秒でした。各1枚の観測です。[工程別実測・条件・制約](docs/unet-profiling.md)を参照してください。 [実API検証の成功動画12秒](docs/media/controlnet-openpose1024-logsync.mp4)。
+
+BGRAの描画とVideoOut形式を揃え、赤紫になる表示色を修正して実機へ反映しました。TVの配色確認はユーザー回答待ちです。ホームは画像ファイルが更新済みでも旧キャッシュ表示が続いており、表示更新成功とは扱いません。
+
+2026-10-18：**Canny / OpenPose ControlNetの256・1024生成とOpenAI互換APIからのPNG取得をPS5実機で確認しました。** Direct9GiB・512MiB単位、CPU CLIP一時重みの共有プール利用に対応しています。ホーム用・状態画面内の画像ファイルをユーザー添付キャラクターへ更新しました。ホームの表示は旧アイコンのままです。
 [実測値・制約・モデル配置](docs/controlnet.md)・[API仕様](docs/api.md)。
 
 | 1024×1024 /20steps /漫画LoRA1 | PS5内生成 |
@@ -8,7 +12,7 @@
 | Canny | 162.56秒 |
 | OpenPose | 329.68秒 |
 
-OpenPoseの速度差は未解決です。機能検証の各1枚であり、同一条件の速度最適化比較ではありません。
+この表は2026-10-18の機能検証各1枚です。OpenPose遅延の一部はログ同期で説明できましたが、GPU演算・内部待ちの分離と初回の断片化対策は残っています。最新の同条件比較は上の工程別記録を参照してください。
 
 ![PS5で生成したCanny1024](docs/images/controlnet-canny1024.png)
 
@@ -52,9 +56,9 @@ Windowsはビルド・転送・APIクライアントを担当します。推論�
 
 ![処理の構成図](docs/images/architecture.svg)
 
-![新しい状態画面のデザイン例](docs/images/dashboard-preview.png)
+![新しい状態画面のデザイン例](docs/images/dashboard-colour-preview.png)
 
-上図は同じ描画コードをWindowsで実行した仮データ・旧アイコンのプレビューです。現行アイコンは上のユーザー添付キャラクターです。PS5のHDMIスクリーンショットではありません。
+上図は同じ描画コードをWindowsで実行した仮データ・添付キャラクターのプレビューです。PS5のHDMIスクリーンショットではありません。
 実機では取得できる項目だけを表示するため、カード数や数値は異なります。
 
 ## 実際に生成した画像

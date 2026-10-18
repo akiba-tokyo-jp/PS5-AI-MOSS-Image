@@ -1,9 +1,11 @@
+#include "phase_profile.h"
 /* SPDX-License-Identifier: MIT
  * Native application-owned Direct regions, not anonymous flexible memory.
  * Historical ps5_ai_flex_* ABI is retained for the frozen GGML host importer.
  * No fixed VA, Mprotect, raw syscall, budget/credential or foreign process API.
  */
 #include "direct_pool.h"
+#include "journal_metrics.h"
 #include "placement.h"
 #include "arena.h"
 #include "probe.h"
@@ -62,6 +64,15 @@ static void acquire(atomic_flag *value) {
     while (atomic_flag_test_and_set_explicit(value, memory_order_acquire)) __builtin_ia32_pause();
 }
 static void release(atomic_flag *value) { atomic_flag_clear_explicit(value, memory_order_release); }
+
+static uint64_t pool_unsynced_records,pool_unsynced_bytes,pool_last_sync_ns;
+static int pool_sync_locked(uint64_t now) {
+    uint64_t begin=ps5_ai_profile_clock();int ok=journal>=0 && !fsync(journal);
+    ps5_ai_profile_finish(27,begin,0);
+    if(ok){pool_unsynced_records=0;pool_unsynced_bytes=0;pool_last_sync_ns=now;}
+    return ok;
+}
+
 static int trace(const char *format, ...) {
     char line[1024];
     va_list args; va_start(args, format);
@@ -83,11 +94,32 @@ static int trace(const char *format, ...) {
 #endif
         }
     }
-    if (!failed && fsync(journal)) failed = 1;
+    /* Only successful own-claim bookkeeping may defer durability, and
+     * only during a measured job in normal mode. Keep every checked record.
+     * Faults, physical allocation/mapping, initialization and shutdown retain
+     * immediate fsync. No GPU ownership/query/free operation is skipped. */
+    uint64_t now=ps5_ai_profile_clock();
+    int routine=now && ps5_ai_profile_enabled() && !ps5_ai_native_journal_debug_enabled() &&
+        (!strncmp(line,"alloc pointer=",sizeof("alloc pointer=")-1) || !strncmp(line,"import_committed pointer=",sizeof("import_committed pointer=")-1) ||
+         !strncmp(line,"import_grant allowlisted=1 ",sizeof("import_grant allowlisted=1 ")-1) || !strncmp(line,"free pointer=",sizeof("free pointer=")-1));
+    if(!failed){
+        pool_unsynced_records++;pool_unsynced_bytes+=(uint64_t)count;
+        if(!routine || !pool_last_sync_ns || now<pool_last_sync_ns || pool_unsynced_records>=128 ||
+           pool_unsynced_bytes>=65536 || now-pool_last_sync_ns>=UINT64_C(1000000000))
+            if(!pool_sync_locked(now))failed=1;
+    }
     release(&journal_lock);
     if (failed) atomic_store(&log_ok, false);
     return !failed && atomic_load(&log_ok);
 }
+
+int ps5_ai_direct_pool_log_checkpoint(void) {
+    acquire(&journal_lock);int ok=atomic_load(&log_ok) && pool_sync_locked(ps5_ai_profile_clock());
+    if(!ok)atomic_store(&log_ok,false);release(&journal_lock);
+    if(!ok)ps5_ai_flex_retain_fault("Direct_pool_durable_checkpoint_failed");
+    return ok && atomic_load(&log_ok);
+}
+
 static int open_journal(void) {
 #ifdef PS5_AI_DIRECT_POOL_HOST_TEST
     return host_open_journal();
@@ -367,7 +399,15 @@ void *ps5_ai_flex_alloc(uint64_t bytes, uint64_t alignment) {
         }
         if (found_region != UINT32_MAX) break;
     }
-    if (found_region == UINT32_MAX) { state.denied_allocations++; release(&lock); return NULL; }
+    if (found_region == UINT32_MAX) {
+        uint64_t maximum=0,total_free=state.free_bytes,largest=direct.largest_region_bytes;
+        for(uint32_t n=0;n<direct.region_count;n++){uint64_t run=0;for(uint32_t page=0;page<regions[n].pages;page++){
+            if(bit(regions[n].page_first+page))run=0;else {run+=PAGE;if(run>maximum)maximum=run;}}}
+        state.denied_allocations++;release(&lock);
+        (void)trace("Direct_pool_denied reason=no_contiguous_region requested_bytes=%llu rounded_bytes=%llu free_bytes=%llu largest_region_bytes=%llu largest_free_span_bytes=%llu snapshot_at_denial=1",
+            (unsigned long long)bytes,(unsigned long long)rounded,(unsigned long long)total_free,(unsigned long long)largest,(unsigned long long)maximum);
+        return NULL;
+    }
     struct region *r = &regions[found_region];
     for (uint32_t i = 0; i < pages; ++i) {
         uint32_t page = r->page_first + found_page + i; bitmap[page / 64] |= UINT64_C(1) << (page % 64);

@@ -1,3 +1,4 @@
+#include "phase_profile.h"
 #if defined(GGML_MAX_NAME) && GGML_MAX_NAME != 160
 #error Native Direct WAI must use the exact linked SD/GGML tensor ABI
 #endif
@@ -170,6 +171,7 @@ static void fallback_log(const char* message) noexcept {
 }
 
 static void write_event(const nlohmann::json& event) noexcept {
+    PS5AIProfileScope timing(28);
     try {
         const std::string line = event.dump() + "\n";
         std::lock_guard<std::mutex> lock(log_mutex);
@@ -185,6 +187,29 @@ static void write_event(const nlohmann::json& event) noexcept {
     } catch (...) {
         fallback_log("ps5-ai: structured log unavailable");
     }
+}
+
+
+static std::atomic<bool> phase_profile_active{false};
+struct PhaseCounter{std::atomic<uint64_t> ns{0},calls{0},bytes{0},invalid{0};};
+static PhaseCounter phase_counters[PS5_AI_PROFILE_METRICS];
+extern "C" int ps5_ai_profile_enabled(void){return phase_profile_active.load(std::memory_order_relaxed);}
+extern "C" void ps5_ai_profile_add(unsigned id,uint64_t ns,uint64_t bytes,int valid){
+    if(id>=PS5_AI_PROFILE_METRICS || !ps5_ai_profile_enabled())return;
+    auto& c=phase_counters[id];c.ns.fetch_add(ns,std::memory_order_relaxed);c.calls.fetch_add(1,std::memory_order_relaxed);c.bytes.fetch_add(bytes,std::memory_order_relaxed);if(!valid)c.invalid.fetch_add(1,std::memory_order_relaxed);
+}
+static void phase_profile_begin(){for(auto& c:phase_counters){c.ns=0;c.calls=0;c.bytes=0;c.invalid=0;}phase_profile_active=true;}
+static void phase_profile_report(){
+    phase_profile_active=false;
+    const char* groups[]={"unet","controlnet","other_runners"};
+    const char* phases[]={"graph_total","weight_prepare_including_capacity","workspace_prepare_allocate","activation_upload","graph_call_including_internal_wait","explicit_workspace_wait","output_capture_readback","cleanup_including_wait"};
+    const char* extras[]={"weight_tensor_copy_set","weight_transfer_explicit_wait","startup_log_fsync","Direct_pool_log_fsync","engine_structured_log","startup_stderr_mirror","backend_quiescence_call_including_logging","backend_idle_poll_without_logging"};
+    nlohmann::json metrics=nlohmann::json::object();
+    for(unsigned i=0;i<PS5_AI_PROFILE_METRICS;i++){
+        auto& c=phase_counters[i];std::string name=i<24?std::string(groups[i/8])+"."+phases[i%8]:extras[i-24];
+        metrics[name]={{"seconds",c.ns.load()/1e9},{"calls",c.calls.load()},{"bytes",c.bytes.load()},{"invalid_clock_samples",c.invalid.load()}};
+    }
+    write_event({{"event","native_phase_profile"},{"schema",1},{"CPU_wall_time",true},{"pure_GPU_timestamp",false},{"nested_times_do_not_sum",true},{"scope","engine generation only; log summary excluded"},{"metrics",metrics}});
 }
 
 extern "C" ggml_backend_buffer_t ps5_ai_cpu_clip_params_buffer(size_t size) {
@@ -706,6 +731,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         return -1;
     }
     *stats = {};
+    phase_profile_begin();
     InferenceObservation observation = {progress, user, stats, 0, 0, 0, nullptr, nullptr, request->steps, 0,
                                        request->reference_image_id[0]!=0,0,nullptr,false};
     active_reference_observation=&observation;
@@ -863,6 +889,8 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             throw std::runtime_error("Image rejected: ControlNet GPU/residual completion evidence is missing");
         if (cpu_clip_pool_live_bytes.load() != 0)
             throw std::runtime_error("CPU CLIP shared Direct weights were not returned after conditioning");
+        if(!ps5_ai_direct_pool_log_checkpoint())
+            throw std::runtime_error("Direct pool log checkpoint failed; image not published");
         const auto& image = images[0];
         const std::string temporary_path = std::string(output_path) + ".partial";
         if (!stbi_write_png(temporary_path.c_str(), image.width, image.height, image.channel,
@@ -897,6 +925,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         free_sd_images(images, image_count);
         images = nullptr;
     }
+    phase_profile_report();
     stats->gpu_used = observation.gpu_unet_math_nodes > 0 ? 1 : 0;
     stats->generation_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     stats->peak_cpu_bytes = std::max(stats->peak_cpu_bytes, cpu_peak_bytes());

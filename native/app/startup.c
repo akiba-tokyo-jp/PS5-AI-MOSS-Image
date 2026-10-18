@@ -1,3 +1,4 @@
+#include "phase_profile.h"
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "probe.h"
 #include "precision_mode.h"
@@ -339,7 +340,9 @@ static bool journal_sync_locked(uint64_t now) {
     bool measured = monotonic_ns(&started);
     if (!measured) log_healthy = false;
     journal_totals.fsync_calls++;
+    uint64_t profile_begin=ps5_ai_profile_clock();
     int failed = fsync(log_fd);
+    ps5_ai_profile_finish(26,profile_begin,0);
     if (measured) journal_add_elapsed(&journal_totals.fsync_ns, started);
     if (failed) {
         log_healthy = false;
@@ -378,7 +381,7 @@ static void report_impl(bool routine, const char *fmt, va_list args) {
     }
     /* Critical stderr remains a diagnostic mirror. Routine records retain
      * checked file writes and UI lines but omit this unchecked duplicate. */
-    line[length] = '\n'; if (!routine) (void)write(2, line, record_bytes);
+    line[length] = '\n'; if (!routine) {uint64_t t=ps5_ai_profile_clock();(void)write(2, line, record_bytes);ps5_ai_profile_finish(29,t,record_bytes);}
     if (log_fd >= 0) {
         uint64_t started = 0;
         bool measured = monotonic_ns(&started);
@@ -414,7 +417,9 @@ static void report_impl(bool routine, const char *fmt, va_list args) {
 void ps5_ai_ggml_report(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    report_impl(false, fmt, args);
+    const bool routine=ps5_ai_profile_enabled() && !ps5_ai_native_journal_debug_enabled() && fmt &&
+        !strcmp(fmt,"GGML_owned_flex_import bytes=%llu requested=%llu type=%u physical_direct_heap_unchanged=1");
+    report_impl(routine, fmt, args);
     va_end(args);
 }
 
@@ -576,11 +581,13 @@ static bool monotonic_ns(uint64_t *out) {
 }
 
 static bool await_backend_quiescence(const char *phase, bool expect_work) {
+    uint64_t profile_poll_begin=0;
     backend_quiescent = false;
     /* Only these exact successful housekeeping phases may defer fsync.
      * Queries, deadlines, faults and the failure record below are unchanged. */
     const bool routine = phase && (!strcmp(phase, "GGML_internal_cleanup") ||
-        !strcmp(phase, "GGML_after_fence") || !strcmp(phase, "flex_owned_buffer_free"));
+        !strcmp(phase, "GGML_after_fence") || !strcmp(phase, "flex_owned_buffer_free") ||
+        (ps5_ai_profile_enabled() && !strcmp(phase,"native_Direct_owned_buffer_free")));
     void (*success_report)(const char *, ...) = routine ? ps5_ai_ggml_report_routine : ps5_ai_ggml_report;
     success_report("BEFORE backend_quiescence phase=%s requested_timeout_ns=10000000000 metadata_poll_only=1 hard_timeout_guaranteed=0", phase);
     uint64_t begin, now;
@@ -588,6 +595,7 @@ static bool await_backend_quiescence(const char *phase, bool expect_work) {
     if (!log_healthy) goto failed;
     reason = "monotonic_clock_failed";
     if (!monotonic_ns(&begin)) goto failed;
+    profile_poll_begin=ps5_ai_profile_clock();
     for (;;) {
         reason = "backend_state_query_failed";
         int query = ps5_ai_arena_kick_snapshot(&last_kick);
@@ -603,6 +611,7 @@ static bool await_backend_quiescence(const char *phase, bool expect_work) {
                 last_kick.requested_epoch == last_kick.completed_epoch) {
                 reason = "submitted_work_without_started_kick";
                 if (expect_work && (!last_kick.initialized || !last_kick.thread_started || !last_kick.requested_epoch)) goto failed;
+                ps5_ai_profile_finish(31,profile_poll_begin,0);profile_poll_begin=0;
                 backend_quiescent = true;
                 success_report("PASS backend_quiescence phase=%s initialized=%d thread_started=%d pending=%d active=%d submit_inflight=%d requested_epoch=%llu completed_epoch=%llu backend_fault_retained=0 backend_log_healthy=1",
                        phase, last_kick.initialized, last_kick.thread_started, last_kick.pending, last_kick.active,
@@ -619,6 +628,7 @@ static bool await_backend_quiescence(const char *phase, bool expect_work) {
         if (usleep(1000) && errno != EINTR) goto failed;
     }
 failed:
+    ps5_ai_profile_finish(31,profile_poll_begin,0);
     failures++;
     ps5_ai_ggml_report("FAIL backend_quiescence phase=%s reason=%s pending=%d active=%d submit_inflight=%d requested_epoch=%llu completed_epoch=%llu backend_fault_retained=%d backend_log_healthy=%d retain_all_resources=1 no_retry=1",
            phase, reason, last_kick.pending, last_kick.active, last_kick.submit_inflight,
@@ -634,7 +644,9 @@ __attribute__((noreturn)) void ps5_ai_ggml_cpu_allocation_failure(void) {
 }
 int ps5_ai_ggml_wait_backend(const char *phase, int expect_work) {
     if (pthread_mutex_lock(&metadata_mutex)) return 0;
+    uint64_t profile_begin=ps5_ai_profile_clock();
     int ready = await_backend_quiescence(phase, expect_work != 0);
+    ps5_ai_profile_finish(30,profile_begin,0);
     if (pthread_mutex_unlock(&metadata_mutex)) return 0;
     return ready;
 }

@@ -1,3 +1,4 @@
+#include "phase_profile.h"
 #include <algorithm>
 extern "C" int ps5_ai_precision_check_output(const float *, unsigned long long, const char *);
 #include <exception>
@@ -604,6 +605,7 @@ std::optional<sd::Tensor<float>> GGMLRunner::compute(get_graph_cb_t get_graph,
                                                      bool no_return,
                                                      const std::function<bool()>& read_outputs) {
     last_compute_status_ = GGML_STATUS_FAILED;
+    PS5AIProfileScope graph_timing(ps5_ai_profile_group(get_desc().c_str())*8);
     if (graph_active_) {
         LOG_ERROR("%s does not support reentrant graph execution", get_desc().c_str());
         return std::nullopt;
@@ -627,6 +629,7 @@ std::optional<sd::Tensor<float>> GGMLRunner::compute(get_graph_cb_t get_graph,
         GGMLRunner& runner;
         const bool& success;
         ~GraphEndGuard() {
+            PS5AIProfileScope cleanup_timing(ps5_ai_profile_group(runner.get_desc().c_str())*8+7);
             if (!runner.workspace_.segment_end()) {
                 runner.last_compute_status_ = GGML_STATUS_FAILED;
             }
@@ -775,6 +778,7 @@ bool GGMLRunner::execute_segment(ggml_cgraph* graph, int n_threads) {
     }
     auto scheduler = workspace_.scheduler();
     ggml_status status;
+    { PS5AIProfileScope call_timing(ps5_ai_profile_group(get_desc().c_str())*8+4);
     if (scheduler != nullptr) {
         if (sd_get_backend_eval_callback() != nullptr && !multi_device_eval_callback_warned) {
             LOG_WARN("%s: eval callback is not supported with the backend scheduler; ignoring", get_desc().c_str());
@@ -786,7 +790,8 @@ bool GGMLRunner::execute_segment(ggml_cgraph* graph, int n_threads) {
                                                              sd_get_backend_eval_callback(),
                                                              sd_get_backend_eval_callback_data());
     }
-    workspace_.synchronize();
+    }
+    ps5_ai_profile_call(ps5_ai_profile_group(get_desc().c_str())*8+5,0,[&]{workspace_.synchronize();});
     if (status != GGML_STATUS_SUCCESS) {
         last_compute_status_ = status;
         LOG_ERROR("%s compute failed: %s", get_desc().c_str(), ggml_status_to_string(status));
@@ -921,6 +926,7 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             SegmentGraphBindings& bindings;
             ggml_context* context;
             ~SegmentCleanup() {
+                PS5AIProfileScope cleanup_timing(ps5_ai_profile_group(runner.get_desc().c_str())*8+7);
                 if (!runner.workspace_.segment_end()) {
                     runner.last_compute_status_ = GGML_STATUS_FAILED;
                 }
@@ -938,7 +944,7 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
             return fail_segment("owned graph data admission before workspace preparation");
         }
-        if (!workspace_.prepare(measurement)) {
+        if (!ps5_ai_profile_call(ps5_ai_profile_group(get_desc().c_str())*8+2,0,[&]{return workspace_.prepare(measurement);})) {
             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
             return fail_segment("workspace preparation");
         }
@@ -960,7 +966,7 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             }
             return ready;
         };
-        if (!weights.segment_start(index, ensure_capacity)) {
+        if (!ps5_ai_profile_call(ps5_ai_profile_group(get_desc().c_str())*8+1,0,[&]{return weights.segment_start(index, ensure_capacity);})) {
             return fail_segment("weight preparation");
         }
         // Preparing weights can execute LoRA graphs and reclaim an idle workspace.
@@ -975,18 +981,20 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
             return fail_segment("owned graph data/scratch admission after weight preparation");
         }
-        if (!workspace_.prepare(measurement)) {
+        if (!ps5_ai_profile_call(ps5_ai_profile_group(get_desc().c_str())*8+2,0,[&]{return workspace_.prepare(measurement);})) {
             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
             return fail_segment("workspace preparation");
         }
         if (!ensure_capacity()) {
             return fail_segment("workspace capacity check");
         }
+        { PS5AIProfileScope allocate_timing(ps5_ai_profile_group(get_desc().c_str())*8+2);
         if (!workspace_.allocate(segment_graph, [&](ggml_backend_sched_t scheduler, ggml_cgraph* current) {
                 pin_multi_device_nodes(scheduler, current);
             })) {
             last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
             return fail_segment("workspace allocation");
+        }
         }
         for (const auto& size : measurement.buffers) {
             track_compute_buffer(size.backend);
@@ -997,7 +1005,7 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
         if (!ensure_capacity()) {
             return fail_segment("allocated capacity check");
         }
-        copy_data_to_backend_tensor(segment_graph, false);
+        ps5_ai_profile_call(ps5_ai_profile_group(get_desc().c_str())*8+3,0,[&]{copy_data_to_backend_tensor(segment_graph, false);});
         auto prefetch_requests = memory_requests(measurement.buffers, new_cache_bytes);
         if (!prefetch_requests.empty()) {
             weights.enqueue_next(index, prefetch_requests.front());
@@ -1007,6 +1015,7 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
         if (!execute_segment(segment_graph, n_threads)) {
             return fail_segment("execution");
         }
+        { PS5AIProfileScope output_timing(ps5_ai_profile_group(get_desc().c_str())*8+6);
         auto cache_status = cache_.capture(segment_graph);
         if (cache_status == GGML_STATUS_SUCCESS) {
             cache_status = cut_cache_.capture(graph, segment, get_desc().c_str());
@@ -1028,7 +1037,8 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
                 }
             }
         }
-        if (!workspace_.segment_end()) {
+        }
+        if (!ps5_ai_profile_call(ps5_ai_profile_group(get_desc().c_str())*8+5,0,[&]{return workspace_.segment_end();})) {
             last_compute_status_ = GGML_STATUS_FAILED;
             return fail_segment("workspace synchronization");
         }

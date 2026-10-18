@@ -1,3 +1,4 @@
+#include "phase_profile.h"
 #include "model_manager.h"
 
 #include <algorithm>
@@ -579,13 +580,13 @@ bool ModelManager::stage_tensors_to_compute_backend(const std::vector<TensorStat
                 TensorState* state          = staged_tensor.first;
                 ggml_tensor* managed_tensor = state->tensor;
                 ggml_tensor* staging_tensor = staged_tensor.second;
-                ggml_backend_tensor_copy(managed_tensor, staging_tensor);
+                ps5_ai_profile_call(24,ggml_nbytes(managed_tensor),[&]{ggml_backend_tensor_copy(managed_tensor, staging_tensor);});
                 std::swap(managed_tensor->buffer, staging_tensor->buffer);
                 std::swap(managed_tensor->data, staging_tensor->data);
                 std::swap(managed_tensor->extra, staging_tensor->extra);
                 state->staged_to_compute_backend = true;
             }
-            ggml_backend_synchronize(compute_backend);
+            ps5_ai_profile_call(25,0,[&]{ggml_backend_synchronize(compute_backend);});
 
             auto block             = std::make_unique<ComputeStagingBlock>();
             block->compute_backend = compute_backend;
@@ -1035,7 +1036,7 @@ bool ModelManager::load_tensor_parts(TensorState& state) {
     }
     if (!buffer.empty()) {
         // Upload the assembled tensor once, including for row-split backend buffers.
-        ggml_backend_tensor_set(state.tensor, buffer.data(), 0, size);
+        ps5_ai_profile_call(24,size,[&]{ggml_backend_tensor_set(state.tensor, buffer.data(), 0, size);});
     }
     state.loaded_to_params_backend = true;
     return true;
@@ -1092,7 +1093,7 @@ bool ModelManager::load_tensors(const std::vector<TensorState*>& states) {
                 auto* first = entry.second.front()->tensor;
                 for (auto* state : entry.second) {
                     if (state->tensor != first)
-                        ggml_backend_tensor_copy(first, state->tensor);
+                        ps5_ai_profile_call(24,ggml_nbytes(first),[&]{ggml_backend_tensor_copy(first, state->tensor);});
                     state->loaded_to_params_backend = true;
                 }
             }

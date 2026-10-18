@@ -104,7 +104,7 @@ static void *display_owner(void *unused) {
     stage=5;rc=sceVideoOutSetFlipRate(video,0);if(rc)goto unavailable;
     struct {uint64_t pre[2];unsigned char bytes[80];uint64_t post[2];} a;
     memset(&a,0,sizeof(a));a.pre[0]=a.pre[1]=a.post[0]=a.post[1]=GUARD;
-    sceVideoOutSetBufferAttribute2(a.bytes,UINT64_C(0x8000000022000000),0,1920,1080,0,0,0);
+    sceVideoOutSetBufferAttribute2(a.bytes,PS5_VIDEO_OUT_PIXEL_FORMAT_B8G8R8A8_SDR,0,1920,1080,0,0,0);
     if(a.pre[0]!=GUARD||a.pre[1]!=GUARD||a.post[0]!=GUARD||a.post[1]!=GUARD){local.ownership_uncertain=1;goto unavailable;}
     struct {uint64_t pre[2];struct ps5_video_out_buffer rows[2];uint64_t post[2];} b;
     memset(&b,0,sizeof(b));b.pre[0]=b.pre[1]=b.post[0]=b.post[1]=GUARD;b.rows[0].data=pixels;b.rows[1].data=pixels+FRAME_BYTES;

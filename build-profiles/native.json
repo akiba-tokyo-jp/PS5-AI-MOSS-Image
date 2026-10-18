@@ -449,6 +449,7 @@
   ],
   "runner_compile": [
     "${LLVM}/clang++.exe",
+    "-I${ROOT}/native/app",
     "-I${ROOT}/patches/stable-diffusion/overlay/src",
     "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
     "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
@@ -499,6 +500,7 @@
   "reference_compile": [
     [
       "${LLVM}/clang++.exe",
+      "-I${ROOT}/native/app",
       "-I${ROOT}/patches/stable-diffusion/overlay/src",
       "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
       "-I${SD}/src/pipeline",
@@ -550,6 +552,7 @@
     ],
     [
       "${LLVM}/clang++.exe",
+      "-I${ROOT}/native/app",
       "-I${ROOT}/patches/stable-diffusion/overlay/src",
       "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
       "-I${SD}/src/pipeline",
@@ -601,6 +604,7 @@
     ],
     [
       "${LLVM}/clang++.exe",
+      "-I${ROOT}/native/app",
       "-I${ROOT}/patches/stable-diffusion/overlay/src",
       "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
       "-I${SD}/src/pipeline",
@@ -652,6 +656,7 @@
     ],
     [
       "${LLVM}/clang++.exe",
+      "-I${ROOT}/native/app",
       "-I${ROOT}/patches/stable-diffusion/overlay/src",
       "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
       "-I${SD}/src/pipeline",
@@ -703,6 +708,7 @@
     ],
     [
       "${LLVM}/clang++.exe",
+      "-I${ROOT}/native/app",
       "-I${ROOT}/patches/stable-diffusion/overlay/src",
       "-I${ROOT}/patches/stable-diffusion/overlay/src/core",
       "-I${SD}/src/pipeline",

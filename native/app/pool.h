@@ -46,6 +46,8 @@ bool ps5_ai_flex_grant_gpu(void *address, uint64_t bytes);
 int ps5_ai_flex_import_committed(void *address, uint64_t bytes);
 /* Only call after destroying the imported VkBuffer/VkDeviceMemory. */
 int ps5_ai_flex_free(void *address, uint64_t bytes);
+/* Checked metadata writes; required durable checkpoint before publishing PNG. */
+int ps5_ai_direct_pool_log_checkpoint(void);
 void ps5_ai_flex_snapshot(struct ps5_ai_flex_stats *out);
 uint64_t ps5_ai_flex_pool_bytes(void);
 void ps5_ai_flex_retain_fault(const char *reason);
