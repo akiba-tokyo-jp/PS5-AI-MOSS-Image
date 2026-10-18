@@ -78,5 +78,73 @@
   "raw_stderr_file_created": false,
   "public_portable_binary_console_executed": false,
   "public_portable_eboot_sha256": "697cebab978daa97ce116bc61e026235948a889a36ada4fd80daba60a1513fee",
-  "public_portable_SELF_integrity": "valid"
+  "public_portable_SELF_integrity": "valid",
+  "continuous_catalog_followup": {
+    "date": "2026-10-18 JST",
+    "started_at": "2026-10-18T14:26:38+09:00",
+    "finished_at": "2026-10-18T14:33:53+09:00",
+    "size": "768x1024",
+    "steps": 20,
+    "cfg_scale": 5,
+    "sampler": "euler_a",
+    "seed": 20261018,
+    "negative_prompt": null,
+    "different_catalog_prompts": true,
+    "consecutive_completed_jobs": 6,
+    "native_generation_seconds": [
+      70.670045,
+      70.647998,
+      70.682643,
+      70.687452,
+      70.659041,
+      70.623088
+    ],
+    "Windows_API_seconds": [
+      72.36,
+      72.23,
+      72.77,
+      72.77,
+      72.62,
+      71.95
+    ],
+    "native_seconds_median": 70.66454300000001,
+    "second_three_vs_first_three_median_ratio": 0.9998442904628121,
+    "inter_job_gap_seconds": [
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    "all_completed": true,
+    "all_gpu_used": true,
+    "all_PNGs_fully_decoded": true,
+    "OpenAI_client_vs_native_GET_PNG_identical": true,
+    "PNG_sha256_by_ordinal": [
+      "1fbc56776bd963bc021db98fb4f9bd61dd9577644ff35a0df86866e40aad25f4",
+      "c77de2f365c4732a89248167871c6647e5f21960e057645b8030b575b5ed2866",
+      "66549e30505cf85386b3bc5fbdc77b9eeb8ef207a65b436301f7fbddf065c6df",
+      "0210c1258d23c7d9dc0b7d2df946930cdcc7aaf6c611ea705b85c98cf7cff5fd",
+      "1a16f6ebb713edddc1f3d8ed37aa1b5bcb17179b634e0b81b63704e6ae515903",
+      "24540c9f91b7f8a44447f1135d7b4efb0a275e9a337d5ba0798f40e03958f946"
+    ],
+    "reported_peak_cpu_bytes_values": [
+      9098674176
+    ],
+    "reported_peak_gpu_bytes_values": [
+      5404590080
+    ],
+    "peak_memory_scope": "Lifetime process/pool peaks; GPU is an owned-pool upper bound, not global VRAM. Unchanged peaks do not prove leak-free operation.",
+    "native_and_gateway_identity_unchanged": true,
+    "generation_POSTs_by_observer": 0,
+    "automatic_POST_retries": 0,
+    "STOP_files_created": 0,
+    "process_restarts": 0,
+    "PS5_setting_changes": 0,
+    "original_catalog_kept_running": true,
+    "whole_catalog_endurance_test_completed": false,
+    "video_kind": "Actual Windows desktop review of completed results, not live inference",
+    "video_seconds": 16,
+    "video": "media/log-modes-continuous-six.mp4"
+  }
 }
