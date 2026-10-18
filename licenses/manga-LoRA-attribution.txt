@@ -1,0 +1,3 @@
+manga | Illustrious Style Lora by imge
+https://civitai.com/models/1745962?modelVersionId=1976014
+Original weights are obtained separately; converted for the exact WAI v17 checkpoint.

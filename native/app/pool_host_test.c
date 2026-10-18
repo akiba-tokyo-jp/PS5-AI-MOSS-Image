@@ -79,7 +79,7 @@ int ps5_ai_ggml_wait_backend(const char *phase, int expect) { assert(phase && !e
 int main(int argc, char **argv) {
     assert(argc == 2); const char *name = argv[1];
     if (!strcmp(name, "arithmetic")) {
-        assert(!ps5_ai_direct_pool_configure(UINT64_C(6) << 30, UINT64_C(512) << 20, UINT64_C(1) << 30));
+        assert(!ps5_ai_direct_pool_configure(PS5_AI_DATA_VA_BYTES, UINT64_C(512) << 20, UINT64_C(1) << 30));
         assert(direct.target_bytes > UINT32_MAX && !allocs && !maps);
         assert(ps5_ai_direct_pool_configure(UNIT, UNIT, MIN_RESERVE) == -1); return 0;
     }
@@ -117,18 +117,18 @@ int main(int argc, char **argv) {
                              (uintptr_t)regions[0].cpu==UINT64_C(0x200000000));
         assert(!ps5_ai_flex_pool_bytes() && !ps5_ai_flex_alloc(PAGE, PAGE)); return 0;
     }
-    assert(!rc && direct.ready && ps5_ai_flex_pool_bytes() == target && direct.region_count == 24);
-    assert((uintptr_t)mock[0].address==PS5_AI_DATA_VA_BASE && (uintptr_t)mock[23].address+piece==PS5_AI_DATA_VA_END);
-    assert(ps5_ai_flex_prepare() == -1 && allocs == 24);
+    assert(!rc && direct.ready && ps5_ai_flex_pool_bytes() == target && direct.region_count == 28);
+    assert((uintptr_t)mock[0].address==PS5_AI_DATA_VA_BASE && (uintptr_t)mock[27].address+piece==PS5_AI_DATA_VA_END);
+    assert(ps5_ai_flex_prepare() == -1 && allocs == 28);
     assert(!ps5_ai_flex_alloc(piece + PAGE, PAGE)); /* Cannot span two mappings. */
     if (!strcmp(name, "claim_growth")) {
         for (unsigned i = 0; i < 4097; ++i) assert(ps5_ai_flex_alloc(PAGE, PAGE));
         assert(claim_capacity == 8192 && state.allocations == 4097); return 0;
     }
     if (!strcmp(name, "region_fragmentation")) {
-        void *a[24];for(unsigned i=0;i<24;i++){a[i]=ps5_ai_flex_alloc(piece-UNIT,PAGE);assert(a[i]==mock[i].address);}
-        assert(state.free_bytes==24*UNIT && !ps5_ai_flex_alloc(3*MIB,PAGE));
-        for(unsigned i=0;i<24;i++)assert(!ps5_ai_flex_free(a[i],piece-UNIT));
+        void *a[28];for(unsigned i=0;i<28;i++){a[i]=ps5_ai_flex_alloc(piece-UNIT,PAGE);assert(a[i]==mock[i].address);}
+        assert(state.free_bytes==28*UNIT && !ps5_ai_flex_alloc(3*MIB,PAGE));
+        for(unsigned i=0;i<28;i++)assert(!ps5_ai_flex_free(a[i],piece-UNIT));
     }
     void *p = ps5_ai_flex_alloc(PAGE, PAGE); assert(p == mock[0].address);
     if (!strcmp(name, "pending")) pending = 1;
@@ -149,6 +149,6 @@ int main(int argc, char **argv) {
         assert(ps5_ai_direct_pool_release_if_idle() == -1 && held && direct.ownership_uncertain && mock_owned == target);
         assert(unmaps == 1 && frees == (fail_release ? 1 : 0)); return 0;
     }
-    assert(!ps5_ai_direct_pool_release_if_idle() && !mock_owned && unmaps == 24 && frees == 24 && !ps5_ai_flex_pool_bytes());
+    assert(!ps5_ai_direct_pool_release_if_idle() && !mock_owned && unmaps == 28 && frees == 28 && !ps5_ai_flex_pool_bytes());
     return 0;
 }

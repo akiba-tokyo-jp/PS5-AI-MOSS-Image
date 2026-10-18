@@ -18,6 +18,7 @@ typedef struct ps5_ai_request {
     double cfg_scale;
     int64_t seed;
     char sampler[32];
+    double manga_strength; /* Default 1 for existing requests; native override 0..1.5. */
 } ps5_ai_request;
 
 typedef struct ps5_ai_engine_status {

@@ -4,7 +4,7 @@
     "taesd_path": "/app0/models/taesdxl-official-f32.safetensors",
     "backend": "cpu,unet=Vulkan0,vae=Vulkan0",
     "params_backend": "cpu,unet=Vulkan0",
-    "max_vram_gib": "Vulkan0=5.75",
+    "max_vram_gib": "Vulkan0=6.75",
     "cpu_threads": 4,
     "mmap": false,
     "eager_load": false,
@@ -18,7 +18,8 @@
     "flash_attn_mode": "auto,unet=on",
     "batched_cfg": true,
     "conditioning_cache_size": 2,
-    "gpu_pool_bytes": 6442450944,
-    "working_reserve_bytes": 1073741824
+    "gpu_pool_bytes": 7516192768,
+    "working_reserve_bytes": 1073741824,
+    "manga_lora_path": "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors"
   }
 }

@@ -1,5 +1,10 @@
 # PS5 AI WAI
 
+2026-10-18：**漫画LoRAの標準適用とDirect 7GiBを実機で確認しました。** 既存OpenAI互換APIの同じリクエストで動作します。256×256/20stepsは初回LoRA読み込み込み22.83秒、全3024テンソル適用・実PNG取得を確認。WAI初回38.19秒とはロード条件が違うため速度比は出していません。
+[実機記録・メモリ・画像](docs/manga.md)・[24秒のライブ検証](docs/media/manga-verification.mp4)。現在の版には別途取得・変換した漫画LoRAが必要です。
+
+![PS5で生成した漫画LoRAの実画像](docs/images/manga-256.png)
+
 状態画面を濃紺とミントのカード表示へ更新しました。滑らかな文字・進捗・取得できるメモリ値・ログをCPUで描画します。
 [画面と実機検証](docs/dashboard.md)・[16秒の成功記録](docs/media/dashboard-success.mp4)を参照してください。取得できない使用率や温度は表示しません。
 
@@ -18,7 +23,7 @@ WAI768×1024・20stepsは初回92.47秒、読み込み済み57.06秒で同一PNG
 `stable-diffusion.cpp / GGML → Vulkan → PS5向けRADV / AGC` を接続し、画像生成APIとテレビ上の状態表示を実装しました。
 Windowsはビルド・転送・APIクライアントを担当します。推論はPS5本体で実行します。
 
-**FW 12.40の実機で1024×1024のGPU生成と、Windowsの公式OpenAI SDK・PowerShellによるPNG取得を確認済みです。**
+**FW 12.40でGPU生成とWindowsからのPNG取得を確認済みです。** 漫画LoRA版の個別検証は256×256、従来WAI単体では1024×1024を確認しました。
 実験的な移植です。他のFW、本体、起動環境での動作は未検証です。
 
 ![処理の構成図](docs/images/architecture.svg)
@@ -42,7 +47,7 @@ CPU CLIP、GPU UNet・Flash Attention、TAESDXLで復号しました。フルVAE
 **[25秒の成功結果動画を見る](docs/media/verified-results.mp4)** — 実PNGと実測ログを表示したWindows画面の振り返り録画です。
 ライブ生成中の映像・PS5のHDMIキャプチャではありません。GitHubでプレビューできない場合は動画ページからダウンロードできます。
 
-## 最新の性能改善
+## LoRA導入前の性能改善
 
 20 stepsのCFGをbatch2にまとめ、UNet呼び出しを40回から20回へ減らしました。採用設定は**FP32演算 + batched CFG**です。
 

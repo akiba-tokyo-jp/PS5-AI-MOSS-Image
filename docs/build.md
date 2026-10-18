@@ -115,3 +115,16 @@ python tests/native_log_stdio.py
 実際のpolicy parserとdriver loggerを使い、normal時の整形省略、debug時のまとめ同期、
 critical/checkpointの同期、fsync失敗のsticky状態を確認します。
 API用ヘッダーは連続ローテーションとrename失敗時の上限維持を確認します。
+
+## 漫画LoRA版の追加モデル
+
+この版は7GiB Direct / Vulkan予算6.75GiBと、WAI v17専用変換LoRAを使います。元WAI・原作者imgeのGLoRAは別途取得し、作者の利用条件・クレジットを保持してください。重みはGitHubに同梱しません。
+
+```powershell
+python -m pip install numpy
+python tools/prepare_manga_lora_v1.py --base D:/PS5-AI/models/waiIllustriousSDXL_v170.safetensors --directory D:/PS5-AI/models/loras
+```
+
+これはWindowsでのモデル形式変換で、画像生成ではありません。固定mirror commitと元配布SHAを確認し、WAIの完全なSHAを変換metadataへ保存します。旧GLoRAの補正をrank48/F32へ変換し、使用1008層のサンプル補正を検査します。SVDやrank切詰めは行いません。モデルごとの変換なので別checkpointに使い回しません。clip_skip=2を前提とします。
+
+出力`manga-illustrious-wai-v17-r48-f32.safetensors`をタイトルのmodelsディレクトリへ置き、更新した`config/native.json.example`を使います。既存6GiB版のconfigだけを書き換えて動くものではなく、nativeとアプリ内RADVのVA区切りを一緒に再ビルドします。通常OS終了・原本退避・ハッシュ照合後に配備してください。

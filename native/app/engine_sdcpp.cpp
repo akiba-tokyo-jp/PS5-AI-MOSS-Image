@@ -62,6 +62,7 @@ static bool partial_taesd_gpu_decode = false;
 static std::atomic<bool> parameter_loading{false};
 extern "C" void ps5_ai_native_config_mark(unsigned,const char*);
 extern "C" void ps5_ai_native_locale_snapshot(uint64_t[11]);
+extern "C" void ps5_ai_native_capacity_snapshot(const char*);
 
 static void set_error(char* error, size_t size, const char* message) {
     if (error && size) {
@@ -457,7 +458,9 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
                      {"vae_tile_image_pixels", engine_config.vae_tile_size},
                      {"vae_tile_overlap", engine_config.vae_tile_overlap},
                      {"eager_load", engine_config.eager_load},
-                      {"lora_apply_mode", "at_runtime"}, {"configured_LoRA_inputs", 0},
+                      {"lora_apply_mode", "at_runtime"}, {"configured_LoRA_inputs", 1},
+                      {"manga_lora_path", engine_config.manga_lora_path},
+                      {"manga_default_strength", 1.0},
                       {"model_mmap_policy", "read-only; existing public mmap provider; no whole-file prefault"},
                      {"flash_attn_mode", engine_config.flash_attn_mode}, {"batched_cfg", engine_config.batched_cfg},
                      {"conditioning_cache_size", engine_config.conditioning_cache_size},
@@ -638,6 +641,9 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     const auto start = std::chrono::steady_clock::now();
     int result = -1;
     try {
+        if (!std::isfinite(request->manga_strength) || request->manga_strength < 0 || request->manga_strength > 1.5)
+            throw std::runtime_error("Manga strength is outside the finite 0..1.5 range");
+        ps5_ai_native_capacity_snapshot("before_manga_generation");
         if (!model_context) {
             sd_ctx_params_t context_params;
             sd_ctx_params_init(&context_params);
@@ -659,10 +665,23 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             }
             write_event({{"event", "model_loaded"}, {"path", engine_config.model},
                          {"architecture", sd_get_model_version_name(model_context)}});
+            ps5_ai_native_capacity_snapshot("after_WAI_model_load");
         }
         sd_img_gen_params_t params;
         sd_img_gen_params_init(&params);
         params.prompt = request->prompt;
+        params.clip_skip = 2; // Preserve SDXL's existing resolved default; converted adapter requires it.
+        std::string manga_prompt;
+        sd_lora_t manga_adapter = {false, static_cast<float>(request->manga_strength), engine_config.manga_lora_path.c_str()};
+        if (request->manga_strength > 0) {
+            manga_prompt = std::string("monochrome, ") + request->prompt;
+            params.prompt = manga_prompt.c_str();
+            params.loras = &manga_adapter;
+            params.lora_count = 1;
+        }
+        write_event({{"event", "manga_lora_request"}, {"strength", request->manga_strength},
+                     {"enabled", request->manga_strength > 0}, {"trigger", "monochrome"},
+                     {"adapter", engine_config.manga_lora_path}, {"apply_mode", "at_runtime"}});
         params.negative_prompt = request->negative_prompt;
         params.width = request->width;
         params.height = request->height;
@@ -726,6 +745,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     stats->gpu_used = observation.gpu_unet_math_nodes > 0 ? 1 : 0;
     stats->generation_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     stats->peak_cpu_bytes = std::max(stats->peak_cpu_bytes, cpu_peak_bytes());
+    ps5_ai_native_capacity_snapshot("after_manga_generation");
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
     write_event({{"event", "generation_result"}, {"success", result == 0},

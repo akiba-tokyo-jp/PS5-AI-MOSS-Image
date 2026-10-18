@@ -11,6 +11,7 @@
 
 struct PS5AIEngineConfig {
     std::string model, vae, taesd, backend, params_backend, max_vram;
+    std::string manga_lora_path;
     std::string flash_attn_mode = "auto,unet=on";
     bool batched_cfg = true;
     int conditioning_cache_size = 2;
@@ -78,6 +79,9 @@ struct PS5AIEngineConfig {
         result.gpu_pool_bytes = plan.gpu_pool_bytes;
         result.working_reserve_bytes = plan.working_reserve_bytes;
         result.model = object.value("model", "");
+        result.manga_lora_path = object.value("manga_lora_path", "");
+        if (result.manga_lora_path != "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors")
+            throw std::runtime_error("This manga build requires its verified WAI v17-specific converted LoRA");
         result.vae = object.value("vae", "");
         result.taesd = object.value("taesd_path", "");
         result.backend = object.value("backend", "");
@@ -167,8 +171,8 @@ struct PS5AIEngineConfig {
         params.max_vram = max_vram.empty() ? nullptr : max_vram.c_str();
         params.n_threads = cpu_threads;
         params.enable_mmap = mmap;
-        // No LoRA inputs are exposed by this native API. Avoid AUTO's unused
-        // writable file mapping; the checkpoint and inference math are unchanged.
+        // Keep WAI immutable; the selected adapter is applied by the existing
+        // runtime LoRA path. Its GLoRA conversion is specific to this checkpoint.
         params.lora_apply_mode = LORA_APPLY_AT_RUNTIME;
         params.disable_prefetch = disable_prefetch;
         params.eager_load = eager_load;

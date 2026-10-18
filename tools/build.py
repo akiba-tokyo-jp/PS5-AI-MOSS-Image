@@ -27,7 +27,9 @@ def main():
         path=Path(c['DEPS'])/row['name']
         if not path.is_file() or digest(path)!=row['sha256']:raise RuntimeError('Missing/replaced reviewed dependency: '+row['name'])
     out.mkdir(parents=True,exist_ok=True);(out/'obj').mkdir(exist_ok=True)
+    (out/'temp').mkdir(exist_ok=True)
     env=dict(os.environ);env['PATH']=str(c['HOST_BIN'])+os.pathsep+str(c['LLVM'])+os.pathsep+env.get('PATH','')
+    env['TMP']=env['TEMP']=str(out/'temp')
     commands=[]
     with (out/'build.log').open('w',encoding='utf-8') as log:
         def run(cmd):
@@ -83,6 +85,7 @@ def main():
         for name in ('param.json','icon0.png'):shutil.copyfile(ROOT/'assets/sce_sys'/name,title/'sce_sys'/name)
         (title/'licenses').mkdir(exist_ok=True)
         shutil.copyfile(ROOT/'licenses/WAI-Dashboard-Glyphs-OFL.txt',title/'licenses/WAI-Dashboard-Glyphs-OFL.txt')
+        shutil.copyfile(ROOT/'licenses/manga-LoRA-attribution.txt',title/'licenses/manga-LoRA-attribution.txt')
         run(['${NATIVE_TOOL}','self','--sign','--in',str(native),'--out',str(title/'eboot.bin'),'--magic','0x1D3D154F'])
         inspection=run(['${NATIVE_TOOL}','self','--inspect','--file',str(title/'eboot.bin')]);(out/'inspect.txt').write_text(inspection)
         if 'integrity: valid' not in inspection:raise RuntimeError('SELF integrity not confirmed')

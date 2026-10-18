@@ -299,6 +299,7 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
     int ok = 0; int64_t v;
     memset(r, 0, sizeof(*r));
     r->width = r->height = 512; r->steps = 12; r->cfg_scale = 5; r->seed = -1;
+    r->manga_strength = 1;
     strcpy(r->sampler, "euler");
     if (!parse_object(body, obj)) { snprintf(error, cap, "Malformed, duplicate, nested, or oversized JSON field"); goto done; }
     for (size_t i = 0; i < obj->count; ++i) {
@@ -313,6 +314,8 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
             if (!get_int(f, 1, 100, &v)) { snprintf(error, cap, "steps must be an integer 1..100"); goto done; } r->steps = (int)v;
         } else if (!strcmp(f->key, "cfg_scale")) {
             if (!get_double(f, 0, 30, &r->cfg_scale)) { snprintf(error, cap, "cfg_scale must be finite and 0..30"); goto done; }
+        } else if (!strcmp(f->key, "manga_strength")) {
+            if (!get_double(f, 0, 1.5, &r->manga_strength)) { snprintf(error, cap, "manga_strength must be finite and 0..1.5"); goto done; }
         } else if (!strcmp(f->key, "seed")) {
             if (!get_int(f, -1, INT64_MAX, &r->seed)) { snprintf(error, cap, "seed must be an integer -1..9223372036854775807"); goto done; }
         } else if (!strcmp(f->key, "sampler")) {

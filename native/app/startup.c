@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <ps5platform/kernel.h>
+#include <ps5platform/heap.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -536,6 +537,25 @@ static struct ps5_ai_arena_stats report_arena(const char *phase) {
     return stats;
 }
 
+void ps5_ai_native_capacity_snapshot(const char *phase) {
+    struct ps5_heap_stats heap = {0};
+    ps5_heap_stats(&heap);
+    int64_t total = sceKernelGetDirectMemorySize();
+    struct {
+        uint64_t before;
+        int64_t start;
+        size_t bytes;
+        uint64_t after;
+    } query = {UINT64_C(0x7a7a63e1981f53b1), -1, 0, UINT64_C(0x42f1a311b98cd752)};
+    int32_t rc = total > 0 ? sceKernelAvailableDirectMemorySize(0, total, UINT64_C(2097152), &query.start, &query.bytes) : -1;
+    bool guarded = query.before == UINT64_C(0x7a7a63e1981f53b1) && query.after == UINT64_C(0x42f1a311b98cd752);
+    bool valid = guarded && !rc && query.start >= 0 && query.start <= total && query.bytes <= (uint64_t)(total - query.start);
+    ps5_ai_ggml_report("native_capacity phase=%s direct_size_reported_bytes=%lld available_query_rc=0x%08x canary=%d available_span_valid=%d available_span_bytes=%llu available_span_is_total_free=0 CPU_heap_mapped_bytes=%llu CPU_heap_peak_mapped_bytes=%llu CPU_heap_segments=%u CPU_heap_arenas=%u CPU_libc_fallbacks=%llu CPU_heap_internal_free_unknown=1 query_only=1",
+        phase, (long long)total, (unsigned)rc, guarded, valid,
+        (unsigned long long)(valid ? query.bytes : 0), (unsigned long long)heap.mapped_bytes,
+        (unsigned long long)heap.peak_bytes, heap.segments, heap.arenas, heap.libc_fallbacks);
+}
+
 static struct ps5_ai_flex_stats report_direct(const char *phase) {
     struct ps5_ai_flex_stats stats = {0};
     ps5_ai_flex_snapshot(&stats);
@@ -710,8 +730,8 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     struct ps5_ai_memory_plan plan = {0};
     ps5_ai_native_config_mark(1,"memory_plan_before");
     if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size) ||
-        plan.gpu_pool_bytes != UINT64_C(6442450944) || plan.working_reserve_bytes != UINT64_C(1073741824))
-        return init_error(error,error_size,"Fixed native Direct6GiB/CPUreserve1GiB configuration required");
+        plan.gpu_pool_bytes != (UINT64_C(7)<<30) || plan.working_reserve_bytes != UINT64_C(1073741824))
+        return init_error(error,error_size,"Candidate native Direct7GiB/initial working reserve1GiB configuration required");
     ps5_ai_native_config_mark(16,"memory_plan_returned");
     ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=268435456 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
         (unsigned long long)plan.gpu_pool_bytes,(unsigned long long)plan.working_reserve_bytes);
@@ -745,9 +765,10 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     struct ps5_ai_flex_stats pool=report_direct("native_prepared");
     if (!direct.ready || direct.ownership_uncertain || direct.physical_owned_bytes!=plan.gpu_pool_bytes ||
         direct.mapped_bytes!=plan.gpu_pool_bytes || direct.largest_region_bytes!=UINT64_C(268435456) ||
-        direct.region_count!=24 || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
+        direct.region_count!=28 || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
         !pool.gpu_access_granted || pool.fault_retained || !pool.log_healthy || !log_healthy)
         return init_error(error,error_size,"Native owned region accounting incomplete");
+    ps5_ai_native_capacity_snapshot("candidate_7GiB_pool_prepared");
     int rc=__real_ps5_ai_engine_init(config_path,error,error_size);
     if (rc) return init_error(error,error_size,"Native real engine initialization failed");
     ps5_ai_ggml_graph_phase(1);

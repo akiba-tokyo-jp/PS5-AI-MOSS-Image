@@ -1,3 +1,5 @@
+現在のnative版は漫画LoRA強度1.0を既定適用します。8189のリクエストやモデル名は同じです。native8188のみ`manga_strength`（有限値0..1.5、0で無効）を受け付けます。詳細：[漫画LoRAの検証](manga.md)。img2img/IP-Adapterの画像入力APIは未実装です。以下の1024×1024の過去検証は漫画LoRA導入前のWAI単体を指します。
+
 # API仕様
 
 normal/debugとログ容量上限は[ログ設定](logging.md)を参照。OpenAIエンドポイントの仕様は維持しています。
