@@ -5,6 +5,8 @@
 #define GGML_MAX_NAME 160
 #endif
 #include "engine.h"
+#include "precision_mode.h"
+#include <cmath>
 #include "ggml.h"
 #include "ggml-backend.h"
 #include "ggml-vulkan.h"
@@ -190,6 +192,25 @@ static void engine_log(enum sd_log_level_t level, const char* text, void*) noexc
     }
 }
 
+static std::atomic<uint64_t> precision_outputs{0}, precision_values{0}, precision_nonfinite{0}, precision_unet_outputs{0};
+static bool precision_announced=false,precision_fp16=false;
+static ggml_log_callback precision_previous_log=nullptr;
+static void *precision_previous_log_data=nullptr;
+static void precision_log(enum ggml_log_level level,const char *text,void *) {
+    if (precision_previous_log) precision_previous_log(level,text,precision_previous_log_data);
+    if (text && std::strstr(text,"ggml_vulkan:") && std::strstr(text," | fp16: ")) {
+        precision_announced=true;precision_fp16=std::strstr(text," | fp16: 1")!=nullptr;
+        write_event({{"event","native_backend_precision"},{"fp16",precision_fp16},{"GGML_VK_DISABLE_F16_present",std::getenv("GGML_VK_DISABLE_F16")!=nullptr},{"startup_log",text}});
+    }
+}
+extern "C" int ps5_ai_precision_check_output(const float *data,unsigned long long count,const char *stage) {
+    uint64_t invalid=0;
+    if(!data && count) invalid=count;
+    else for(unsigned long long i=0;i<count;++i)invalid+=!std::isfinite(data[i]);
+    precision_outputs.fetch_add(1);precision_values.fetch_add(count);precision_nonfinite.fetch_add(invalid);
+    if(stage && std::strcmp(stage,"unet")==0)precision_unet_outputs.fetch_add(1);
+    return invalid==0;
+}
 static void verify_native_hardware() {
 #if defined(PS5_AI_NATIVE_RADV) && defined(__PROSPERO__)
     const auto create_instance = reinterpret_cast<PFN_vkCreateInstance>(vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
@@ -236,6 +257,19 @@ static void verify_native_hardware() {
          device.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)) {
         throw std::runtime_error("Physical Vulkan device is not a hardware AMD GPU; software/unknown devices are rejected");
     }
+    const auto get_features=reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceFeatures2"));
+    if(!get_features)throw std::runtime_error("Physical feature query unavailable");
+    VkPhysicalDeviceShaderFloat16Int8Features arithmetic{};arithmetic.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
+    VkPhysicalDevice16BitStorageFeatures storage{};storage.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;storage.pNext=&arithmetic;
+    VkPhysicalDeviceFeatures2 features{};features.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;features.pNext=&storage;
+    get_features(physical,&features);
+    write_event({{"event","native_fp16_capabilities"},{"shaderFloat16",bool(arithmetic.shaderFloat16)},
+        {"storageBuffer16BitAccess",bool(storage.storageBuffer16BitAccess)},
+        {"uniformAndStorageBuffer16BitAccess",bool(storage.uniformAndStorageBuffer16BitAccess)},
+        {"storagePushConstant16",bool(storage.storagePushConstant16)},{"storageInputOutput16",bool(storage.storageInputOutput16)},
+        {"requested_fp16_math",bool(PS5_AI_ENABLE_FP16)}});
+    if(PS5_AI_ENABLE_FP16 && (!arithmetic.shaderFloat16 || !storage.storageBuffer16BitAccess || !storage.uniformAndStorageBuffer16BitAccess))
+        throw std::runtime_error("Required physical FP16 arithmetic/storage features missing; no feature override");
     hardware_verified = true;
     std::snprintf(current_status.device, sizeof(current_status.device), "%s", device.deviceName);
     std::snprintf(current_status.driver, sizeof(current_status.driver), "native RADV driverVersion=%u", device.driverVersion);
@@ -382,6 +416,8 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
             throw std::runtime_error("Native Direct WAI configured memory plan differs from actual prepared pool admission");
         verify_native_hardware();
         // Backend registration is explicit; no remote/RPC fallback is compiled.
+        ggml_log_get(&precision_previous_log,&precision_previous_log_data);
+        ggml_log_set(precision_log,nullptr);
         sd_list_devices(nullptr, 0);
         for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
             auto* device = ggml_backend_dev_get(i);
@@ -395,6 +431,8 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         if (!gpu_device) {
             throw std::runtime_error("No Vulkan GPU backend was found; generation requires observed GPU model math");
         }
+        if(!precision_announced || precision_fp16!=bool(PS5_AI_ENABLE_FP16))
+            throw std::runtime_error("Actual GGML fp16 startup log does not match requested precision");
         const std::string gpu_name = ggml_backend_dev_name(gpu_device);
         engine_config.resolve_defaults(gpu_name);
         engine_config.validate_actual_pool(gpu_name, pool.reserved_bytes);
@@ -443,6 +481,8 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
     }
 }
 
+#include "precision_gate.inc"
+#include "precision_conv_gate.inc"
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
 extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexcept {
@@ -538,6 +578,8 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
         if (mismatches || checksum != expected_checksum || !ps5_ai_ggml_log_healthy())
             throw std::runtime_error("Native_Direct large Direct GPU buffer readback mismatch or missing durable log");
         resources.release();
+        precision_readback_gate();
+        precision_conv_readback_gate();
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
         ps5_ai_ggml_report("Native_Direct_data_gate_completed success=1 verified_tensor_bytes=67108864 before_used=%llu after_used=%llu peak_used=%llu reserved=%llu active_imports=%llu scope=single_SCALE_graph_not_model_success",
@@ -568,6 +610,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     *stats = {};
     InferenceObservation observation = {progress, user, stats, 0, 0, 0, nullptr, nullptr, request->steps, 0};
     parameter_loading.store(false);
+    precision_outputs.store(0);precision_values.store(0);precision_nonfinite.store(0);precision_unet_outputs.store(0);
     sd_image_t* images = nullptr;
     int image_count = 0;
     struct GenerationCleanup {
@@ -590,6 +633,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             sd_ctx_params_t context_params;
             sd_ctx_params_init(&context_params);
             engine_config.apply_context(context_params);
+            // Same direct-convolution path as the verified FP32 auto selection.
+            // It is admitted only after the separate startup CPU-oracle gate.
+            // FP16 im2col is not used as the numerical reference for this gate.
+            context_params.conv_direct_mode="on";
+            write_event({{"event","native_conv_policy"},{"mode","on"},{"basis","direct GPU convolution passed independent CPU oracle"}});
             ps5_ai_native_ui_phase(PS5_AI_STATUS_LOADING);
             ps5_ai_native_ui_log("Loading WAI-Illustrious-SDXL v17.0 checkpoint");
             model_context = new_sd_ctx(&context_params);
@@ -685,6 +733,9 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"owned_direct_data_fault_retained", pool.fault_retained != 0},
                  {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
                  {"backend", engine_config.backend},
+                 {"fp16_math",precision_fp16},{"finite_checked_outputs",precision_outputs.load()},
+                 {"finite_checked_values",precision_values.load()},{"nonfinite_values",precision_nonfinite.load()},
+                 {"finite_checked_unet_outputs",precision_unet_outputs.load()},
                  {"seconds_including_initial_model_load", stats->generation_seconds},
                  {"process_peak_rss_bytes", stats->peak_cpu_bytes ? nlohmann::json(stats->peak_cpu_bytes) : nlohmann::json(nullptr)},
                  {"peak_gpu_bytes", nullptr}, {"gpu_memory_measurement", "unavailable"}});

@@ -29,7 +29,23 @@ CPU CLIP、GPU UNet・Flash Attention、TAESDXLで復号しました。フルVAE
 **[25秒の成功結果動画を見る](docs/media/verified-results.mp4)** — 実PNGと実測ログを表示したWindows画面の振り返り録画です。
 ライブ生成中の映像・PS5のHDMIキャプチャではありません。GitHubでプレビューできない場合は動画ページからダウンロードできます。
 
-## 確認できたこと
+## 最新の性能改善
+
+20 stepsのCFGをbatch2にまとめ、UNet呼び出しを40回から20回へ減らしました。採用設定は**FP32演算 + batched CFG**です。
+
+| 読み込み済み・同条件の繰り返し | 従来FP32 | CFGバッチ化後 |
+|---|---:|---:|
+| 256×256 / 20 steps | 35.44秒 | **14.62秒** |
+| 1024×1024 / 20 steps | 84.09秒 | **79.27秒** |
+
+256のPNGは元版と完全一致。1024も取得・目視・NaN/Inf検査を完了しました。6GiBのDirect枠を維持しています。
+FP16は物理機能と`fp16: 1`、実GPU読み戻し、WAI1024生成まで確認しましたが、この構成では遅く、既定には採用していません。
+初回・読み込み済みを分けた値と限界は[FP16/CFG比較](docs/precision.md)、[短い検証動画](docs/media/precision-cfg-verified.mp4)をご覧ください。
+
+[![FP16・CFGバッチ化の実測比較](docs/images/precision-comparison.png)](docs/media/precision-cfg-verified.mp4)
+
+## 前版の確認記録
+
 
 2026-10-18 JST、同じネイティブプロセスで実施しました。時間はモデル読込・推論・復号を含むアプリ側の時間と、Windowsが応答を受け取るまでの時間です。
 

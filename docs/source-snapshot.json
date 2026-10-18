@@ -1,5 +1,5 @@
 {
-  "scope": "Native app/runtime/UI source copied byte-for-byte from the tested build; paths reorganized. Gateway embedded schema changes display URL and nullable enums only. New portable build and client files are independently checked; rebuilt binary has not been relaunched on PS5.",
+  "scope": "Native precision-v3 app and precision-v2 runner sources copied byte-for-byte from their compiled trial. Runtime results are recorded separately in precision-verification.json. Public portable rebuilt binary is separately inspected; no claim of public rebuilt binary console execution.",
   "files": [
     {
       "file": "native/app/arena.h",
@@ -59,11 +59,11 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "sha256": "10771f8987818bc2907c152159fc8b7c2b977ee18ffd0429aea89355290a331c",
-      "bytes": 42056,
-      "published_sha256": "10771f8987818bc2907c152159fc8b7c2b977ee18ffd0429aea89355290a331c",
+      "sha256": "254605bd566cd288d30c9c4fe78b9fea6e1abea7b585e86e4b745273034bb1d9",
+      "bytes": 45326,
+      "published_sha256": "254605bd566cd288d30c9c4fe78b9fea6e1abea7b585e86e4b745273034bb1d9",
       "identical_to_tested_input": true,
-      "published_bytes": 42056
+      "published_bytes": 45326
     },
     {
       "file": "native/app/host_shim.h",
@@ -195,11 +195,11 @@
     },
     {
       "file": "native/app/startup.c",
-      "sha256": "a3e012ef7b2cf0ad925ab08533ac4f02d3fa6287923bbdd5b917a00b3718fbd5",
-      "bytes": 57405,
-      "published_sha256": "a3e012ef7b2cf0ad925ab08533ac4f02d3fa6287923bbdd5b917a00b3718fbd5",
+      "sha256": "f13fe6d3287fc71ef4ae1a81beabc55310c8d6dec823406897c9f141df7b2c68",
+      "bytes": 56557,
+      "published_sha256": "f13fe6d3287fc71ef4ae1a81beabc55310c8d6dec823406897c9f141df7b2c68",
       "identical_to_tested_input": true,
-      "published_bytes": 57405
+      "published_bytes": 56557
     },
     {
       "file": "native/app/status.h",
@@ -499,11 +499,11 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/ggml_runner.cpp",
-      "sha256": "8e1c56eb8fb90c01b8f56548e6285038282970fe435a2a52c94c85c4bd654a23",
-      "bytes": 43244,
-      "published_sha256": "8e1c56eb8fb90c01b8f56548e6285038282970fe435a2a52c94c85c4bd654a23",
+      "sha256": "e86bbcadaa88b71aa64d7fe43043d05410fcbced72baaa17cb543e7f3b31b1c6",
+      "bytes": 43602,
+      "published_sha256": "e86bbcadaa88b71aa64d7fe43043d05410fcbced72baaa17cb543e7f3b31b1c6",
       "identical_to_tested_input": true,
-      "published_bytes": 43244
+      "published_bytes": 43602
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c",
@@ -576,6 +576,46 @@
       "published_sha256": "1c98d036730806fc03867664bd64840ba5361f6653b9e80d8f524f39abca0af7",
       "identical_to_tested_input": true,
       "published_bytes": 961
+    },
+    {
+      "file": "native/app/precision_mode.h",
+      "sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
+      "bytes": 80,
+      "published_sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
+      "published_bytes": 80,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/app/precision_gate.inc",
+      "sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
+      "bytes": 5002,
+      "published_sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
+      "published_bytes": 5002,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp",
+      "sha256": "6c08628a6e2a6174778d2e18ef117b5e8f7017de634c6b0034d64856113d1af8",
+      "bytes": 9176,
+      "published_sha256": "6c08628a6e2a6174778d2e18ef117b5e8f7017de634c6b0034d64856113d1af8",
+      "published_bytes": 9176,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/core/pool.h",
+      "sha256": "c8e686f83343db6804f99fe5233ce90a02918852517f7f40b2d2b445a8d298e8",
+      "bytes": 2697,
+      "published_sha256": "c8e686f83343db6804f99fe5233ce90a02918852517f7f40b2d2b445a8d298e8",
+      "published_bytes": 2697,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/app/precision_conv_gate.inc",
+      "sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
+      "bytes": 4787,
+      "published_sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
+      "published_bytes": 4787,
+      "identical_to_tested_input": true
     }
   ]
 }

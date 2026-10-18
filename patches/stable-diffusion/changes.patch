@@ -94,7 +94,13 @@
  
 --- a/src/core/ggml_runner.cpp
 +++ b/src/core/ggml_runner.cpp
-@@ -10,6 +10,7 @@
+@@ -1,4 +1,5 @@
+ #include <algorithm>
++extern "C" int ps5_ai_precision_check_output(const float *, unsigned long long, const char *);
+ #include <exception>
+ #include <map>
+ #include <utility>
+@@ -10,6 +11,7 @@
  #include "core/layer_split_partition.h"
  #include "core/segment_graph_bindings.h"
  #include "core/segment_weight_pipeline.h"
@@ -102,7 +108,21 @@
  
  using namespace sd;
  
-@@ -925,6 +926,12 @@
+@@ -285,7 +287,12 @@
+         return std::nullopt;
+     }
+ 
+-    return sd::make_sd_tensor_from_ggml<float>(tensor);
++    auto output = sd::make_sd_tensor_from_ggml<float>(tensor);
++    if (!ps5_ai_precision_check_output(output.data(), (unsigned long long)output.numel(), get_desc().c_str())) {
++        LOG_ERROR("%s %s contains NaN/Inf; refusing output", get_desc().c_str(), label);
++        return std::nullopt;
++    }
++    return output;
+ }
+ 
+ void GGMLRunner::copy_data_to_backend_tensor(ggml_cgraph* gf, bool clear_after_copy) {
+@@ -925,6 +932,12 @@
          } segment_cleanup{*this, weights, bindings, segment_context};
  
          auto measurement = segmented ? measure(segment_graph, segment.compute_buffer_size) : full_measurement;
@@ -115,7 +135,7 @@
          if (!workspace_.prepare(measurement)) {
              last_compute_status_ = GGML_STATUS_ALLOC_FAILED;
              return fail_segment("workspace preparation");
-@@ -954,6 +961,14 @@
+@@ -954,6 +967,14 @@
          if (!workspace_.measurement_matches(segment_graph, measurement)) {
              measurement = measure(segment_graph, segment.compute_buffer_size);
          }

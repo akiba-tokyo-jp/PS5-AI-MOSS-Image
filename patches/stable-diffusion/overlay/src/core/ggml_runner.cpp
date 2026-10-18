@@ -1,4 +1,5 @@
 #include <algorithm>
+extern "C" int ps5_ai_precision_check_output(const float *, unsigned long long, const char *);
 #include <exception>
 #include <map>
 #include <utility>
@@ -286,7 +287,12 @@ std::optional<sd::Tensor<float>> GGMLRunner::read_graph_tensor(ggml_tensor* tens
         return std::nullopt;
     }
 
-    return sd::make_sd_tensor_from_ggml<float>(tensor);
+    auto output = sd::make_sd_tensor_from_ggml<float>(tensor);
+    if (!ps5_ai_precision_check_output(output.data(), (unsigned long long)output.numel(), get_desc().c_str())) {
+        LOG_ERROR("%s %s contains NaN/Inf; refusing output", get_desc().c_str(), label);
+        return std::nullopt;
+    }
+    return output;
 }
 
 void GGMLRunner::copy_data_to_backend_tensor(ggml_cgraph* gf, bool clear_after_copy) {

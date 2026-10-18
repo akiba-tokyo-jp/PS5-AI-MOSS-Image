@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "probe.h"
+#include "precision_mode.h"
 #include "engine.h"
 #include "arena.h"
 #include "v3_shutdown.h"
@@ -716,7 +717,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         return init_error(error,error_size,"Native arena persistent journal unavailable");
     if (setenv("GGML_NO_BACKTRACE","1",1) || setenv("MESA_SHADER_CACHE_DISABLE","true",1) ||
         setenv("MESA_SHADER_CACHE_DIR","/app0/ai-runtime/logs",1) || setenv("TMPDIR","/app0/ai-runtime",1) ||
-        setenv("GGML_VK_DISABLE_F16","1",1) || setenv("GGML_VK_DISABLE_ASYNC","1",1) ||
+        (PS5_AI_ENABLE_FP16 ? unsetenv("GGML_VK_DISABLE_F16") : setenv("GGML_VK_DISABLE_F16","1",1)) || setenv("GGML_VK_DISABLE_ASYNC","1",1) ||
         setenv("GGML_VK_SERIALIZE_SUBMISSIONS","1",1) || setenv("GGML_VK_DISABLE_FUSION","1",1) ||
         setenv("GGML_VK_DISABLE_COOPMAT","1",1) || setenv("GGML_VK_DISABLE_COOPMAT2","1",1) ||
         setenv("GGML_VK_SUBALLOCATION_BLOCK_SIZE","67108864",1) || setenv("GGML_VK_VISIBLE_DEVICES","0",1))

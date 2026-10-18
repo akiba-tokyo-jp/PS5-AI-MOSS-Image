@@ -57,10 +57,14 @@ SD側はAVX/AVX2/FMA/F16C/BMI2有効、AVX512無効、C++20・公開libc++・exc
 4. 新しい出力フォルダーで実行します。
 
 ```powershell
-python tools/build.py --config .local/build.json --out D:/ps5-dev/build/wai-native
+python tools/build.py --config .local/build.json --precision fp32 --out D:/ps5-dev/build/wai-native
 ```
 
 過去の個人用ログ・PID・セッションreceiptは不要です。ソースをコンパイルし直し、driver内のplatform memberを置換してリンクします。
+既定は実測で速かったFP32演算版です。FP16試験版は`--precision fp16`で作ります。
+FP16版は`GGML_VK_DISABLE_F16`を解除し、実際の起動ログと物理機能を検査します。
+直接畳み込みは独立したCPU正解値とのGPU読み戻し照合に合格した場合だけ使います。
+core runnerも公開overlayから再コンパイルし、固定の既存SD依存アーカイブ内の対応1メンバーを置き換えます。
 strip前後のPT_LOADが同じこと、native runtime providerが6件であることを検査します。
 完成済み出力を上書きしません。依存のSHAが違う場合は停止します。
 別ツールチェーンで作ったライブラリのSHA不一致を、単に期待値を書き換えて成功扱いしないでください。
@@ -87,6 +91,7 @@ $env:WAI_TEST_OUT = 'D:/ps5-dev/build/gateway'
 $env:WAI_TEST_LLVM = 'D:/ps5-dev/llvm-mingw/bin'
 python tests/openai_gateway_protocol.py
 python tests/native_log_storage.py
+python tests/native_precision.py --config .local/build.json --out D:/ps5-dev/build/precision-host
 ```
 
 試験はHTTP認証、未対応パラメーター、同時要求、backend failure、HMAC/base64、ログrotation/容量不足・retained状態通知を確認します。

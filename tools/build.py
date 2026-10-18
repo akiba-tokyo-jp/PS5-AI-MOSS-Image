@@ -15,7 +15,7 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
@@ -54,6 +54,7 @@ def main():
             if stem in ('app_crt','cpp_allocation'):extra+=['-fno-exceptions','-fno-rtti']
             if stem=='server':extra+=['-Dmain=ps5_ai_server_main']
             if stem=='engine_sdcpp':extra+=['-DPS5_AI_NATIVE_RADV=1']
+            if stem in ('engine_sdcpp','startup'):extra+=['-DPS5_AI_ENABLE_FP16='+str(int(a.precision=='fp16'))]
             print('Compiling '+source,flush=True)
             run(['${LLVM}/clang.exe',*common,*extra,'-c','${ROOT}/'+source,'-o','${OUT}/obj/'+name])
         print('Compiling the owned RADV platform layer',flush=True);run(profile['platform_compile'])
@@ -61,7 +62,14 @@ def main():
         before=run(['${LLVM}/llvm-ar.exe','t',str(driver)]).splitlines()
         if len(before)!=704 or before.count('radv_ps5_platform_native.o')!=1:raise RuntimeError('Unexpected driver archive members')
         run(['${LLVM}/llvm-ar.exe','r',str(driver),'${OUT}/obj/radv_ps5_platform_native.o'])
-        link=[v.replace('${DEPS}/'+driver.name,str(driver).replace('\\','/')) for v in profile['link']]
+        print('Compiling graph admission and finite output checks',flush=True)
+        run(profile['runner_compile'])
+        core_name='libstable-diffusion.graph-admission-1024-v3.a'
+        core=out/'libstable-diffusion.precision.a';shutil.copyfile(Path(c['DEPS'])/core_name,core)
+        before=run(['${LLVM}/llvm-ar.exe','t',str(core)]).splitlines()
+        if len(before)!=75 or before.count('ggml_runner.cpp.o')!=1:raise RuntimeError('Unexpected core archive members')
+        run(['${LLVM}/llvm-ar.exe','r',str(core),'${OUT}/ggml_runner.cpp.o'])
+        link=[v.replace('${DEPS}/'+driver.name,str(driver).replace('\\','/')).replace('${DEPS}/'+core_name,str(core).replace('\\','/')) for v in profile['link']]
         print('Linking native application',flush=True);run(link)
         raw=out/'llvm-pie.elf';deploy=out/'llvm-pie.deploy.elf'
         run(['${LLVM}/llvm-strip.exe','--strip-debug','-o',str(deploy),str(raw)])
@@ -75,6 +83,7 @@ def main():
         for name in ('param.json','icon0.png'):shutil.copyfile(ROOT/'assets/sce_sys'/name,title/'sce_sys'/name)
         run(['${NATIVE_TOOL}','self','--sign','--in',str(native),'--out',str(title/'eboot.bin'),'--magic','0x1D3D154F'])
         inspection=run(['${NATIVE_TOOL}','self','--inspect','--file',str(title/'eboot.bin')]);(out/'inspect.txt').write_text(inspection)
-        (out/'manifest.json').write_text(json.dumps({'local_build_only':True,'console_executed':False,'needed':needed,'sources':{str(s.relative_to(ROOT)):digest(s) for folder in ['native/app','native/ui','native/runtime','native/link'] for s in (ROOT/folder).iterdir() if s.is_file()},'eboot_sha256':digest(title/'eboot.bin'),'commands':commands},indent=2)+'\n')
+        if 'integrity: valid' not in inspection:raise RuntimeError('SELF integrity not confirmed')
+        (out/'manifest.json').write_text(json.dumps({'local_build_only':True,'console_executed':False,'requested_precision':a.precision,'runner_sha256':digest(ROOT/'patches/stable-diffusion/overlay/src/core/ggml_runner.cpp'),'scratch_bounds_sha256':digest(ROOT/'patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp'),'needed':needed,'sources':{str(s.relative_to(ROOT)):digest(s) for folder in ['native/app','native/ui','native/runtime','native/link'] for s in (ROOT/folder).iterdir() if s.is_file()},'eboot_sha256':digest(title/'eboot.bin'),'commands':commands},indent=2)+'\n')
         print('Built and inspected '+str(title/'eboot.bin')+'. No deployment or inference was performed.',flush=True)
 if __name__=='__main__':main()

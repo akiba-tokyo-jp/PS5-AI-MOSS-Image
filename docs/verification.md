@@ -3,7 +3,9 @@
 2026-10-18 JST / PS5 FW12.40。元ログは私用領域に保存し、ここでは成功した生成の数値・ハッシュ・観測範囲を公開します。
 元ログの全文、個人の端末写真、トークン、失敗動画は含めません。
 
-## 最新の実測
+最新の性能・精度比較は[FP16/CFG検証](precision.md)を参照してください。以下は前版の履歴です。
+
+## 前版の実測
 
 CPU CLIP / Vulkan UNet / Vulkan TAESDXL、Euler A、CFG5、seed135792。同じネイティブプロセスで実行しました。
 TAESDXLのtileは256、overlap0.5。batched CFGは無効、conditioning cacheは2です。

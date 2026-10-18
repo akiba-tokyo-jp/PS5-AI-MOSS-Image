@@ -16,7 +16,7 @@
     "vae_tile_overlap": 0.5,
     "log": "/app0/ai-runtime/logs/engine.jsonl",
     "flash_attn_mode": "auto,unet=on",
-    "batched_cfg": false,
+    "batched_cfg": true,
     "conditioning_cache_size": 2,
     "gpu_pool_bytes": 6442450944,
     "working_reserve_bytes": 1073741824

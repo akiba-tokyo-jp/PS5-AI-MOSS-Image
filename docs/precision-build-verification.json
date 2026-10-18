@@ -1,0 +1,38 @@
+{
+  "SELF_integrity": "valid for both requested precisions",
+  "public_rebuilt_FP32_sha256": "db0c559843989c3addb6ee8604528442d5eb6d9811bef6005a45aff2c8d95d8f",
+  "public_rebuilt_FP16_sha256": "eff616954caeda3498fe14a68751d1a2b27bd61993f0040d861b4269d672d81d",
+  "public_rebuilt_binaries_executed_on_PS5": false,
+  "native_source_units": 11,
+  "platform_units": 1,
+  "core_runner_units": 1,
+  "existing_dependency_hashes_verified": true,
+  "clean_environment_dependency_build_verified": false,
+  "precision_host_tests": {
+    "state": "PASS",
+    "scratch_checks": 48,
+    "profiles": [
+      {
+        "profile": "fp32",
+        "checks_passed": 24,
+        "GPU_calls": 0,
+        "backend_allocations": 0,
+        "model_inference": false,
+        "full_1024_graph_built": false
+      },
+      {
+        "profile": "fp16",
+        "checks_passed": 24,
+        "GPU_calls": 0,
+        "backend_allocations": 0,
+        "model_inference": false,
+        "full_1024_graph_built": false
+      }
+    ],
+    "finite_checks": "normal / NaN / +Inf / -Inf / null / counters",
+    "GPU_calls": 0,
+    "model_inference": false
+  },
+  "actually_executed_trial_FP16_sha256": "458e8302faeef91cce907c70e04781c39039ff4b905174c1c9e095bee70007aa",
+  "actually_executed_trial_FP32_sha256": "b98dcde2fcc0ab55b35ee7757f158cab9fe91e91fd5e4cb8f214cff29cef100e"
+}

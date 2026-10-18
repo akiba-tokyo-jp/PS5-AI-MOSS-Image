@@ -1,5 +1,7 @@
 #pragma once
-/* Pure metadata bound for the frozen 8003 GGML Vulkan / PS5 scalar profile.
+/* Pure metadata bound for frozen 8003 PS5 scalar FP32 OR FP16 math.
+ * Both use <=4 bytes/element staging, the same scalar Br<=16/Bc32|64,
+ * tile denoms32|64|128, and F32 split accumulation. Coopmat stays disabled.
  * No backend, pipeline, allocator or model-data access is performed here.
  * Requested-buffer maxima exclude previous context high-water marks and do not
  * establish aggregate/fragmentation/driver/whole-1024 readiness. */
@@ -70,10 +72,18 @@ static bool matmul(const ggml_tensor * dst,const Profile & profile,Bounds & out)
     /* Staging covers matrix/vector/swap branches and F32 or F16 conversion.
      * qx staging<=4 bytes/logical element; qy padding denom<=128. A possible
      * temporaryQ8_1 Y is smaller than this F32 upper bound. */
+    /* Frozen Vulkan6119/6475: with both operands F16, matrix dequant/copy
+     * and vector copy staging are two bytes/element, including swapped inputs.
+     * Neither branch can choose F32 Y or Q8 quantization for F16 input.
+     * Mixed/F32 operands retain the previous four-byte conservative bound.
+     * Padding, split accumulation, actual256MiB claim and pool checks stay.
+     * Enable this narrower profile only in the physically verified F16 mode. */
+    const uint64_t staging_bytes=!profile.f16_math_disabled &&
+        a->type==GGML_TYPE_F16 && b->type==GGML_TYPE_F16 ? 2 : 4;
     uint64_t padded=0,ye=0,xbytes=0,ybytes=0;
     if (!rounded(uint64_t(b->ne[1]),128,padded)||padded>UINT32_MAX||!mul(padded,uint64_t(b->ne[0]),ye)||
         !mul(ye,uint64_t(b->ne[2]),ye)||!mul(ye,uint64_t(b->ne[3]),ye)||
-        !mul(maximum(ae,be),4,xbytes)||!mul(maximum(maximum(ae,be),ye),4,ybytes)) return false;
+        !mul(maximum(ae,be),staging_bytes,xbytes)||!mul(maximum(maximum(ae,be),ye),staging_bytes,ybytes)) return false;
     uint32_t split=1;
     for (uint32_t cores=0;cores<=profile.shader_cores_upper;++cores) {
         for (uint32_t tile: {32u,64u,128u}) {
@@ -142,7 +152,7 @@ static bool zero_prealloc_op(ggml_op op) {
 static Bounds inspect(const ggml_cgraph * graph,const Profile & profile) {
     Bounds result;
     if (!graph || graph->n_nodes<0 || graph->n_nodes>327680 ||
-        !profile.ps5_scalar_no_coopmat || !profile.f16_math_disabled || !profile.no_async || !profile.no_fusion ||
+        !profile.ps5_scalar_no_coopmat || !profile.no_async || !profile.no_fusion ||
         profile.shader_cores_upper!=36) {
         result.known=false;result.reason="unsupported_or_unverified_profile";return result;
     }
