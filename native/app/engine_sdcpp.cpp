@@ -19,6 +19,8 @@
 #include "probe.h"
 #include "memory_plan.h"
 #include "ui_hooks.h"
+#include "journal_metrics.h"
+#include "log_policy.h"
 static_assert(sizeof(ggml_tensor) == 432, "Exact linked MAX_NAME160 tensor ABI");
 
 #include <algorithm>
@@ -128,6 +130,8 @@ extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan*
     try {
         if (!out) throw std::runtime_error("Native Direct WAI memory-plan output is missing");
         const auto config = bounded_config(path);
+        if(!ps5_ai_native_journal_configure_debug(ps5_ai_log_policy_debug(config)))
+            throw std::runtime_error("Native journal policy must be fixed once before AGC initialization");
         ps5_ai_native_config_mark(13,"memory_plan_fields_before");
         const auto plan = PS5AIEngineConfig::memory_plan(config.value("engine", nlohmann::json::object()));
         *out = plan;
@@ -178,13 +182,18 @@ static void write_event(const nlohmann::json& event) noexcept {
 }
 
 static void engine_log(enum sd_log_level_t level, const char* text, void*) noexcept {
-    ps5_ai_native_ui_log(text);
     // The shared progress callback also receives tensor byte-loading progress.
     // These exact loader messages identify that phase without changing I/O.
     if (text && std::strncmp(text, "loading ", 8) == 0 && std::strstr(text, " tensors from "))
         parameter_loading.store(true);
     if (text && std::strncmp(text, "loading tensors completed", 25) == 0)
         parameter_loading.store(false);
+    // Preserve loading/progress state, warnings, errors and INFO phase times.
+    // Detailed tensor/token diagnostics and full split prompts are debug-only.
+    if(!ps5_ai_native_journal_debug_enabled() &&
+       (level==SD_LOG_DEBUG || level==SD_LOG_VERBOSE ||
+        (text && std::strncmp(text,"split prompt ",13)==0)))return;
+    ps5_ai_native_ui_log(text);
     try {
         write_event({{"event", "sdcpp_log"}, {"level", static_cast<int>(level)}, {"text", text ? text : ""}});
     } catch (...) {

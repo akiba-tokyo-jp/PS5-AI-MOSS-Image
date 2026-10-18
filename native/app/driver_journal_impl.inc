@@ -3,13 +3,14 @@
  * BEFORE, failure, retention and final ownership record remains critical. */
 #include "bounded_journal.h"
 static struct ps5_ai_bounded_journal arena_journal_cap;
-#define ARENA_ROUTINE_SYNC_RECORDS UINT64_C(64)
-#define ARENA_ROUTINE_SYNC_BYTES UINT64_C(32768)
+#define ARENA_ROUTINE_SYNC_RECORDS UINT64_C(1024)
+#define ARENA_ROUTINE_SYNC_BYTES UINT64_C(524288)
 #define ARENA_ROUTINE_SYNC_NS UINT64_C(1000000000)
 static struct ps5_ai_native_arena_journal_stats arena_journal_totals;
 _Static_assert(sizeof(struct ps5_ai_native_arena_journal_stats)==48,"Owned arena journal POD ABI");
 static uint64_t arena_routine_records, arena_routine_bytes, arena_last_sync_ns;
 static bool arena_sync_time_valid;
+static atomic_uint_fast64_t arena_routine_suppressed;
 
 static void arena_lock(atomic_flag *lock) {
     while (atomic_flag_test_and_set_explicit(lock, memory_order_acquire)) __builtin_ia32_pause();
@@ -83,6 +84,10 @@ static bool ps5_ai_arena_trace(const char *format,...) {
     va_list arguments;va_start(arguments,format);bool ok=ps5_ai_arena_trace_impl(false,format,arguments);va_end(arguments);return ok;
 }
 static bool ps5_ai_arena_trace_routine(const char *format,...) {
+    if(!ps5_ai_native_journal_debug_enabled()) {
+        atomic_fetch_add_explicit(&arena_routine_suppressed,1,memory_order_relaxed);
+        return atomic_load(&arena_log_healthy);
+    }
     va_list arguments;va_start(arguments,format);bool ok=ps5_ai_arena_trace_impl(true,format,arguments);va_end(arguments);return ok;
 }
 void ps5_ai_native_arena_journal_snapshot(struct ps5_ai_native_arena_journal_stats *out) {
@@ -91,5 +96,8 @@ void ps5_ai_native_arena_journal_snapshot(struct ps5_ai_native_arena_journal_sta
 }
 bool ps5_ai_native_arena_journal_checkpoint(void) {
     return ps5_ai_arena_trace("arena_journal_checkpoint critical=1 routine_success_flush_requested=1");
+}
+uint64_t ps5_ai_native_arena_journal_suppressed(void) {
+    return atomic_load_explicit(&arena_routine_suppressed,memory_order_relaxed);
 }
 

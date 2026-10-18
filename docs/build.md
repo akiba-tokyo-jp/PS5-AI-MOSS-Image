@@ -1,5 +1,7 @@
 # ビルドと再現性
 
+最新のnormal/debug・容量制限版も公開用ソースから再ビルドし、SELF整合性を確認しました。実機結果と公開別ビルドの区別は[ログ検証](logging.md)を参照。
+
 ## 今回検証した範囲
 
 公開フォルダーのネイティブ11翻訳単位とRADVプラットフォーム1翻訳単位を再コンパイルし、
@@ -96,3 +98,20 @@ python tests/native_precision.py --config .local/build.json --out D:/ps5-dev/bui
 
 試験はHTTP認証、未対応パラメーター、同時要求、backend failure、HMAC/base64、ログrotation/容量不足・retained状態通知を確認します。
 生成画像を返さないホストfixtureを使い、GPU推論成功の代わりには扱いません。
+
+## ログ方針のホスト検査
+
+以下はCPUの模擬検査で、モデル推論や実GPU呼び出しを行いません。出力先をD等へ指定します。
+
+```powershell
+$env:WAI_TEST_LLVM = 'D:/ps5-dev/llvm/bin'
+$env:WAI_TEST_SD = 'D:/ps5-dev/sources/stable-diffusion'
+$env:WAI_TEST_LOG_OUT = 'D:/ps5-dev/tests/log-policy'
+$env:WAI_TEST_STDIO_OUT = 'D:/ps5-dev/tests/log-stdio'
+python tests/native_log_policy.py
+python tests/native_log_stdio.py
+```
+
+実際のpolicy parserとdriver loggerを使い、normal時の整形省略、debug時のまとめ同期、
+critical/checkpointの同期、fsync失敗のsticky状態を確認します。
+API用ヘッダーは連続ローテーションとrename失敗時の上限維持を確認します。

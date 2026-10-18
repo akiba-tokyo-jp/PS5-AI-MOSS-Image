@@ -1,5 +1,5 @@
 {
-  "scope": "Native precision-v3 app and precision-v2 runner sources copied byte-for-byte from their compiled trial. Runtime results are recorded separately in precision-verification.json. Public portable rebuilt binary is separately inspected; no claim of public rebuilt binary console execution.",
+  "scope": "Native log-modes-v4 source inputs and CPU gateway log-bound-v3 inputs; unchanged inference overlay and earlier precision trial evidence remain separate. Public sanitized OpenAPI differs intentionally. Portable rebuilt binaries are inspected separately and have not been console-executed.",
   "files": [
     {
       "file": "native/app/arena.h",
@@ -35,11 +35,11 @@
     },
     {
       "file": "native/app/driver_journal_impl.inc",
-      "sha256": "8fb1c880c2888c30b61a7acd63c0944ae23175fc73d7128b3015841ecf23f4ca",
-      "bytes": 6011,
-      "published_sha256": "8fb1c880c2888c30b61a7acd63c0944ae23175fc73d7128b3015841ecf23f4ca",
+      "sha256": "3b35ccabbf53d50f016313223023b54e31cb46849533e9daa63fac7b4c0f614b",
+      "bytes": 6403,
+      "published_sha256": "3b35ccabbf53d50f016313223023b54e31cb46849533e9daa63fac7b4c0f614b",
       "identical_to_tested_input": true,
-      "published_bytes": 6011
+      "published_bytes": 6403
     },
     {
       "file": "native/app/engine.h",
@@ -59,11 +59,11 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "sha256": "254605bd566cd288d30c9c4fe78b9fea6e1abea7b585e86e4b745273034bb1d9",
-      "bytes": 45326,
-      "published_sha256": "254605bd566cd288d30c9c4fe78b9fea6e1abea7b585e86e4b745273034bb1d9",
+      "sha256": "f50792e1f2827d0364120b46a63fffe1e4289dda179cfb127400527d615539e6",
+      "bytes": 45903,
+      "published_sha256": "f50792e1f2827d0364120b46a63fffe1e4289dda179cfb127400527d615539e6",
       "identical_to_tested_input": true,
-      "published_bytes": 45326
+      "published_bytes": 45903
     },
     {
       "file": "native/app/host_shim.h",
@@ -83,11 +83,11 @@
     },
     {
       "file": "native/app/journal_metrics.h",
-      "sha256": "94949bbec5d34732761c6adcdad9252fdf0e24b6569b88def08b394f61c0807c",
-      "bytes": 1128,
-      "published_sha256": "94949bbec5d34732761c6adcdad9252fdf0e24b6569b88def08b394f61c0807c",
+      "sha256": "326ee6978e0f5c543c1c07e8d3693c534ce45470a6ff166c0f50f55f4f82e234",
+      "bytes": 1483,
+      "published_sha256": "326ee6978e0f5c543c1c07e8d3693c534ce45470a6ff166c0f50f55f4f82e234",
       "identical_to_tested_input": true,
-      "published_bytes": 1128
+      "published_bytes": 1483
     },
     {
       "file": "native/app/kick_impl32.c",
@@ -179,11 +179,11 @@
     },
     {
       "file": "native/app/server.c",
-      "sha256": "e72de1b9bae9cad7c6ba8e0b15ecd7b1008e11270e4db1b93b3b2969db47e9ee",
-      "bytes": 52517,
-      "published_sha256": "e72de1b9bae9cad7c6ba8e0b15ecd7b1008e11270e4db1b93b3b2969db47e9ee",
+      "sha256": "f5f9edd52f5c69381a2c626d41c9d5672c1719ef11445d9b5eafb4faaac18740",
+      "bytes": 53010,
+      "published_sha256": "f5f9edd52f5c69381a2c626d41c9d5672c1719ef11445d9b5eafb4faaac18740",
       "identical_to_tested_input": true,
-      "published_bytes": 52517
+      "published_bytes": 53010
     },
     {
       "file": "native/app/shutdown_policy.h",
@@ -195,11 +195,11 @@
     },
     {
       "file": "native/app/startup.c",
-      "sha256": "f13fe6d3287fc71ef4ae1a81beabc55310c8d6dec823406897c9f141df7b2c68",
-      "bytes": 56557,
-      "published_sha256": "f13fe6d3287fc71ef4ae1a81beabc55310c8d6dec823406897c9f141df7b2c68",
+      "sha256": "3fb95cbc84d032fc9556bd7936c4232b36205ae216ceba24964c35dc5f0d56b1",
+      "bytes": 57549,
+      "published_sha256": "3fb95cbc84d032fc9556bd7936c4232b36205ae216ceba24964c35dc5f0d56b1",
       "identical_to_tested_input": true,
-      "published_bytes": 56557
+      "published_bytes": 57549
     },
     {
       "file": "native/app/status.h",
@@ -355,11 +355,11 @@
     },
     {
       "file": "native/gateway/server.c",
-      "sha256": "cb0ab9715bf42d4fdafd4b67e74c3c90976361e0ff92784d6f1f0ca35d172c55",
-      "bytes": 54651,
-      "published_sha256": "cb0ab9715bf42d4fdafd4b67e74c3c90976361e0ff92784d6f1f0ca35d172c55",
+      "sha256": "13d5d8453d7d4c9a4c568fa5648945d78296ca817a28a5952ca091edf9964124",
+      "bytes": 55144,
+      "published_sha256": "13d5d8453d7d4c9a4c568fa5648945d78296ca817a28a5952ca091edf9964124",
       "identical_to_tested_input": true,
-      "published_bytes": 54651
+      "published_bytes": 55144
     },
     {
       "file": "native/gateway/status.h",
@@ -615,6 +615,30 @@
       "bytes": 4787,
       "published_sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
       "published_bytes": 4787,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/app/log_policy.h",
+      "published_sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
+      "published_bytes": 726,
+      "sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
+      "bytes": 726,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/app/bounded_stdio_log.h",
+      "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "published_bytes": 1408,
+      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "bytes": 1408,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/gateway/bounded_stdio_log.h",
+      "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "published_bytes": 1408,
+      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "bytes": 1408,
       "identical_to_tested_input": true
     }
   ]

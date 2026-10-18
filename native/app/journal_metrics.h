@@ -19,6 +19,10 @@ __attribute__((visibility("hidden"))) void ps5_ai_native_arena_journal_snapshot(
  * gate (initial data gate, generation, or shutdown). This performs filesystem
  * I/O, unlike the metadata snapshot above. */
 __attribute__((visibility("hidden"))) bool ps5_ai_native_arena_journal_checkpoint(void);
+/* CPU diagnostics policy only; fixed once before AGC/worker initialization. */
+__attribute__((visibility("hidden"))) bool ps5_ai_native_journal_configure_debug(bool enabled);
+__attribute__((visibility("hidden"))) bool ps5_ai_native_journal_debug_enabled(void);
+__attribute__((visibility("hidden"))) uint64_t ps5_ai_native_arena_journal_suppressed(void);
 #ifdef __cplusplus
 }
 #endif

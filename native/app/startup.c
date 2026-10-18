@@ -184,13 +184,27 @@ __attribute__((constructor)) static void constructor_witness(void) { constructor
 /* Journal policy changes diagnostics only, never GPU completion/ownership.
  * The same mutex protects writes and bounded unsynced counters. The 1s limit
  * is checked on report calls; there is no timer thread or idle-time guarantee. */
-#define ROUTINE_SYNC_RECORDS 64u
-#define ROUTINE_SYNC_BYTES (32u * 1024u)
+#define ROUTINE_SYNC_RECORDS 1024u
+#define ROUTINE_SYNC_BYTES (512u * 1024u)
 #define ROUTINE_SYNC_NS UINT64_C(1000000000)
 static unsigned routine_unsynced_records;
 static size_t routine_unsynced_bytes;
 static uint64_t journal_last_sync_ns;
 static bool journal_sync_time_valid;
+static atomic_bool journal_debug_enabled, journal_policy_configured;
+static atomic_uint_fast64_t journal_routine_suppressed;
+bool ps5_ai_native_journal_debug_enabled(void) {
+    return atomic_load_explicit(&journal_debug_enabled,memory_order_relaxed);
+}
+bool ps5_ai_native_journal_configure_debug(bool enabled) {
+    bool expected=false;
+    if(engine_init_calls!=1 || agc_init_attempts ||
+       !atomic_compare_exchange_strong(&journal_policy_configured,&expected,true))return false;
+    atomic_store_explicit(&journal_debug_enabled,enabled,memory_order_relaxed);
+    ps5_ai_ggml_report("journal_policy mode=%s routine_sync_records=%u routine_sync_bytes=%u routine_sync_ns=%llu critical_sync_immediate=1 GPU_checks_unchanged=1",
+        enabled?"debug":"normal",ROUTINE_SYNC_RECORDS,ROUTINE_SYNC_BYTES,(unsigned long long)ROUTINE_SYNC_NS);
+    return atomic_load(&log_healthy);
+}
 static bool monotonic_ns(uint64_t *out);
 /* Optional UI producer: scalar phase/progress are atomic; bounded text copies
  * use a separate try-lock. No engine/SD/driver lock is acquired by callbacks. */
@@ -305,6 +319,7 @@ static void native_ui_start_after_real_gate(void) {
 }
 struct journal_metrics {
     uint64_t records, checked_write_ns, fsync_calls, fsync_ns;
+    uint64_t routine_suppressed;
 };
 static struct journal_metrics journal_totals;
 
@@ -403,6 +418,10 @@ void ps5_ai_ggml_report(const char *fmt, ...) {
 }
 
 void ps5_ai_ggml_report_routine(const char *fmt, ...) {
+    if(!ps5_ai_native_journal_debug_enabled()) {
+        atomic_fetch_add_explicit(&journal_routine_suppressed,1,memory_order_relaxed);
+        return;
+    }
     va_list args;
     va_start(args, fmt);
     report_impl(true, fmt, args);
@@ -412,6 +431,7 @@ void ps5_ai_ggml_report_routine(const char *fmt, ...) {
 static bool journal_metrics_snapshot(struct journal_metrics *out) {
     if (pthread_mutex_lock(&log_mutex)) { log_healthy = false; return false; }
     *out = journal_totals;
+    out->routine_suppressed=atomic_load_explicit(&journal_routine_suppressed,memory_order_relaxed);
     if (pthread_mutex_unlock(&log_mutex)) { log_healthy = false; return false; }
     return log_healthy;
 }
@@ -424,14 +444,15 @@ static void report_journal_metrics(const struct journal_metrics *before) {
         log_healthy = false;
         return;
     }
-    ps5_ai_ggml_report("startup_journal_metrics phase=API_after_generate records=%llu checked_write_us=%llu fsync_calls=%llu fsync_us=%llu scope=generation_delta_before_summary startup_journal_only=1 stderr_mirror_and_lock_wait_excluded=1 native_platform_pool_engine_journals_excluded=1 not_total_generation_time=1",
+    ps5_ai_ggml_report("startup_journal_metrics phase=API_after_generate records=%llu checked_write_us=%llu fsync_calls=%llu fsync_us=%llu routine_suppressed=%llu scope=generation_delta_before_summary startup_journal_only=1 stderr_mirror_and_lock_wait_excluded=1 native_platform_pool_engine_journals_excluded=1 not_total_generation_time=1",
         (unsigned long long)(after.records - before->records),
         (unsigned long long)((after.checked_write_ns - before->checked_write_ns) / 1000u),
         (unsigned long long)(after.fsync_calls - before->fsync_calls),
-        (unsigned long long)((after.fsync_ns - before->fsync_ns) / 1000u));
+        (unsigned long long)((after.fsync_ns - before->fsync_ns) / 1000u),
+        (unsigned long long)(after.routine_suppressed-before->routine_suppressed));
 }
 
-static void report_arena_journal_metrics(const struct ps5_ai_native_arena_journal_stats *before) {
+static void report_arena_journal_metrics(const struct ps5_ai_native_arena_journal_stats *before,uint64_t suppressed_before) {
     if(!ps5_ai_native_arena_journal_checkpoint())
         ps5_ai_ggml_retain("API_arena_journal_checkpoint_failed");
     struct ps5_ai_native_arena_journal_stats after={0};
@@ -440,12 +461,13 @@ static void report_arena_journal_metrics(const struct ps5_ai_native_arena_journa
        after.records<before->records||after.checked_write_ns<before->checked_write_ns||after.fsync_calls<before->fsync_calls||
        after.fsync_ns<before->fsync_ns||after.lock_wait_ns<before->lock_wait_ns)
         ps5_ai_ggml_retain("API_arena_journal_metrics_invalid");
-    ps5_ai_ggml_report("arena_journal_metrics phase=API_after_generate records=%llu checked_write_us=%llu fsync_calls=%llu fsync_us=%llu lock_wait_us=%llu scope=generation_delta_including_final_checkpoint arena_journal_only=1 stderr_timing_available=0 formatting_and_stderr_excluded=1 not_total_generation_time=1",
+    ps5_ai_ggml_report("arena_journal_metrics phase=API_after_generate records=%llu checked_write_us=%llu fsync_calls=%llu fsync_us=%llu lock_wait_us=%llu routine_suppressed=%llu scope=generation_delta_including_final_checkpoint arena_journal_only=1 stderr_timing_available=0 formatting_and_stderr_excluded=1 not_total_generation_time=1",
         (unsigned long long)(after.records-before->records),
         (unsigned long long)((after.checked_write_ns-before->checked_write_ns)/1000u),
         (unsigned long long)(after.fsync_calls-before->fsync_calls),
         (unsigned long long)((after.fsync_ns-before->fsync_ns)/1000u),
-        (unsigned long long)((after.lock_wait_ns-before->lock_wait_ns)/1000u));
+        (unsigned long long)((after.lock_wait_ns-before->lock_wait_ns)/1000u),
+        (unsigned long long)(ps5_ai_native_arena_journal_suppressed()-suppressed_before));
 }
 
 /* Observe the existing known-size model file mappings, without replacing the
@@ -660,30 +682,10 @@ static int init_error(char *error, size_t size, const char *message) {
 }
 
 static int native_capture_stderr(void) {
-    if(!native_session_paths_ready)return -1;
-    const char *path=native_session_stderr_path;
-    ps5_ai_ggml_report("BEFORE native_stderr_capture path=%s own_nonsecret_file=1 mode=0600",path);
-    if(!log_healthy)return -1;
-    errno=0;int fd=open(path,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600),saved=errno;
-    ps5_ai_ggml_report("RETURN native_stderr_open fd=%d errno=%d",fd,saved);
-    if(fd<0)return -1;
-    struct {uint64_t pre[2];struct stat value;uint64_t post[2];} g;
-    memset(&g,0,sizeof(g));g.pre[0]=g.pre[1]=g.post[0]=g.post[1]=UINT64_C(0x8d107ce492f6b35a);
-    errno=0;int rc=fstat(fd,&g.value);saved=errno;
-    int intact=g.pre[0]==UINT64_C(0x8d107ce492f6b35a)&&g.pre[1]==g.pre[0]&&g.post[0]==g.pre[0]&&g.post[1]==g.pre[0];
-    int valid=!rc&&intact&&S_ISREG(g.value.st_mode)&&(g.value.st_mode&0777)==0600&&g.value.st_size==0;
-    ps5_ai_ggml_report("RETURN native_stderr_fstat rc=%d errno=%d canaries=%d regular_mode0600_empty=%d",rc,saved,intact,valid);
-    if(!valid||!log_healthy){if(fd!=STDERR_FILENO)close(fd);return -1;}
-    errno=0;rc=dup2(fd,STDERR_FILENO);saved=errno;int dup_error=saved;
-    ps5_ai_ggml_report("RETURN native_stderr_dup2 rc=%d errno=%d expected_descriptor=2 public_provider=1",rc,saved);
-    int closed=0;if(fd!=STDERR_FILENO){errno=0;closed=close(fd);saved=errno;}
-    ps5_ai_ggml_report("RETURN native_stderr_source_close rc=%d errno=%d",closed,saved);
-    native_stderr_redirected=rc==STDERR_FILENO&&!closed&&log_healthy;
-    if(rc==-1&&dup_error==EPERM&&!closed&&log_healthy) {
-        ps5_ai_ggml_report("native_stderr_capture unavailable=1 reason=public_dup2_EPERM known_source_fd_closed=1 config_and_inference_may_continue=1 no_stderr_reason_claim=1");
-        return log_healthy?0:-1;
-    }
-    return native_stderr_redirected?0:-1;
+    /* Checked startup/driver journals and structured engine events already
+     * retain errors. Avoid an unbounded duplicate raw stderr file. */
+    ps5_ai_ggml_report("native_stderr_capture disabled=1 duplicate_raw_file=0 checked_bounded_journals_retained=1");
+    return atomic_load(&log_healthy)?0:-1;
 }
 
 int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error_size) {
@@ -787,6 +789,7 @@ int __wrap_ps5_ai_engine_generate(const ps5_ai_request *request, const char *pat
         ps5_ai_ggml_retain("API_journal_metrics_snapshot_failed");
     struct ps5_ai_native_arena_journal_stats arena_journal_before={0};
     ps5_ai_native_arena_journal_snapshot(&arena_journal_before);
+    const uint64_t arena_suppressed_before=ps5_ai_native_arena_journal_suppressed();
     if(arena_journal_before.abi_bytes!=sizeof(arena_journal_before)||!arena_journal_before.log_healthy)
         ps5_ai_ggml_retain("API_arena_journal_metrics_snapshot_failed");
     ps5_ai_ggml_report("BEFORE API_generate width=%d height=%d steps=%d seed=%lld Windows_inference=0 model_policy_from_config=1",
@@ -810,7 +813,7 @@ int __wrap_ps5_ai_engine_generate(const ps5_ai_request *request, const char *pat
     stats->gpu_used = actual_gpu_math;
     stats->peak_gpu_bytes = arena.peak_used_bytes + flex.peak_used_bytes;
     report_journal_metrics(&journal_before);
-    report_arena_journal_metrics(&arena_journal_before);
+    report_arena_journal_metrics(&arena_journal_before,arena_suppressed_before);
     if (!rc && (!actual_gpu_math || !log_healthy)) {
         if (error && error_size) snprintf(error, error_size, "Image rejected without actual completed GPU math receipt");
         rc = -1;

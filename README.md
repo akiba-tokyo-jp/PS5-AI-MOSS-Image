@@ -1,5 +1,9 @@
 # PS5 AI WAI
 
+2026-10-18：通常／デバッグのログを分離し、主要な継続ログを合計64MiBへ制限しました。
+WAI768×1024・20stepsは初回92.47秒、読み込み済み57.06秒で同一PNGを確認。
+続く別プロンプト8枚はPS5内72.34～72.42秒。条件・cache差・実機証拠は[ログと速度改善](docs/logging.md)を参照。
+
 <p align="center">
   <img src="assets/sce_sys/icon0.png" width="160" alt="PS5上のWAIで生成したアプリアイコン">
 </p>

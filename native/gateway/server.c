@@ -90,6 +90,8 @@ static int listen_port = 8189;
 static char api_token[257];
 static size_t token_len;
 static FILE *log_file;
+static char bounded_api_log_path[MAX_PATH_SIZE];
+#include "bounded_stdio_log.h"
 static job jobs[MAX_JOBS];
 static volatile sig_atomic_t stopping;
 static volatile sig_atomic_t listener_reload;
@@ -110,14 +112,18 @@ static void wipe_secret(void *data, size_t size) {
 }
 
 static void log_line(const char *format, ...) {
-    va_list ap;
+    char line[2048];va_list ap;
     lock_log();
-    fprintf(log_file ? log_file : stderr, "[%" PRId64 "] ", (int64_t)time(NULL));
+    int prefix=snprintf(line,sizeof(line),"[%" PRId64 "] ",(int64_t)time(NULL));
     va_start(ap, format);
-    vfprintf(log_file ? log_file : stderr, format, ap);
+    int body=prefix>0 && (size_t)prefix<sizeof(line)-1?
+        vsnprintf(line+prefix,sizeof(line)-(size_t)prefix-1,format,ap):-1;
     va_end(ap);
-    fputc('\n', log_file ? log_file : stderr);
-    fflush(log_file ? log_file : stderr);
+    if(body>=0 && prefix>0 && (size_t)body<sizeof(line)-(size_t)prefix-1) {
+        size_t bytes=(size_t)prefix+(size_t)body;line[bytes++]='\n';
+        if(!ps5_ai_bounded_stdio_append(&log_file,bounded_api_log_path,line,bytes,UINT64_C(2097152)))
+            fputs("API journal unavailable; bounded append skipped\n",stderr);
+    } else fputs("API journal oversized record skipped\n",stderr);
     unlock_log();
 }
 
@@ -914,9 +920,8 @@ static int setup_paths(void) {
         if (make_dir(path) && errno != EEXIST) { fprintf(stderr, "Cannot create %s\n", path); return 0; }
         if (path_metadata(path, &st, 1) || !S_ISDIR(st.st_mode)) return 0;
     }
-    char log_path[MAX_PATH_SIZE];
-    if (!path_for(log_path, sizeof(log_path), "logs", "api.log")) return 0;
-    log_file = fopen(log_path, "ab");
+    if (!path_for(bounded_api_log_path, sizeof(bounded_api_log_path), "logs", "api.log")) return 0;
+    log_file = fopen(bounded_api_log_path, "ab");
     if (!log_file) { fprintf(stderr, "Cannot open API log\n"); return 0; }
     return 1;
 }
@@ -1112,7 +1117,7 @@ int main(int argc, char **argv) {
     ps5_ai_v3_worker_join_receipt(join_rc, remaining_running, remaining_queued, listener_closed);
     ps5_ai_engine_shutdown(); wipe_secret(api_token, sizeof(api_token)); token_len = 0;
     ps5_ai_native_ui_log("API listener stopped; native TV display remains resident");
-    log_line("API stopped"); fclose(log_file);
+    log_line("API stopped"); if(log_file)fclose(log_file);
     return exit_code;
 }
 

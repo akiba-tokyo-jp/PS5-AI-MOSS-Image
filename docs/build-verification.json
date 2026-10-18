@@ -3,7 +3,7 @@
   "native_source_units": 11,
   "RADV_platform_source_units": 1,
   "native_SELF_integrity": "valid",
-  "native_rebuilt_eboot_sha256": "b4b19aa3235ac9c61df0721abb69eb2a5e30191120fd4ecbb0961db7f10e49b5",
+  "native_rebuilt_eboot_sha256": "697cebab978daa97ce116bc61e026235948a889a36ada4fd80daba60a1513fee",
   "native_rebuilt_binary_executed_on_PS5": false,
   "existing_dependencies_sha256_verified": true,
   "clean_environment_dependency_build_verified": false,
@@ -12,5 +12,11 @@
   "host_fault_rotation_checks_passed": 7,
   "host_tests_perform_inference": false,
   "public_PowerShell_model_discovery_on_PS5_verified": true,
-  "fresh_PS5_saved_PNG_download_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986"
+  "fresh_PS5_saved_PNG_download_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986",
+  "actual_log_modes_console_eboot_sha256": "a1ec807794ab605e7c814cc12328ce54208bcaa1f68af2dd05a8400e21f51807",
+  "native_log_mode_parser_checks_passed": 9,
+  "native_logger_fault_checks_passed": true,
+  "bounded_API_stdio_rotation_and_rename_failure_verified": true,
+  "logging_source_snapshot": "source-snapshot.json",
+  "latest_runtime_evidence": "logging-verification.json"
 }
