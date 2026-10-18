@@ -6,6 +6,9 @@
 extern "C" {
 #endif
 void ps5_ai_ggml_report(const char *format, ...);
+/* Successful routine diagnostics only. Checked writes/flushes; bounded sync.
+ * Submit-before, failure and final proof callers use the durable API above. */
+void ps5_ai_ggml_report_routine(const char *format, ...);
 int ps5_ai_ggml_log_healthy(void);
 int ps5_ai_ggml_wait_backend(const char *phase, int expect_work);
 __attribute__((noreturn)) void ps5_ai_ggml_retain(const char *reason);

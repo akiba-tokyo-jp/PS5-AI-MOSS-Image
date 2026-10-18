@@ -520,9 +520,7 @@ public:
         } else {
             auto block = std::dynamic_pointer_cast<SpatialTransformer>(blocks[name]);
 
-            // Only ordinary SDXL UNet receives stable, short, per-spatial cut names.
-            const std::string cut_prefix = sd_version_is_sdxl(config.version) ? "unet." + name : "";
-            return block->forward(ctx, x, context, cut_prefix);
+            return block->forward(ctx, x, context);
         }
     }
 
@@ -593,7 +591,12 @@ public:
                       ? ggml_add(ctx->ggml_ctx, label_emb, emb)
                       : ggml_add(ctx->ggml_ctx, emb, label_emb);  // [N, time_embed_dim]
         }
-        // sd::ggml_graph_cut::mark_graph_cut(emb, "unet.prelude", "emb");
+        // The same timestep/label embedding feeds every ResBlock. A cut keeps
+        // it once for this UNet evaluation instead of rebuilding it in every
+        // segment. SDXL batch=2 is 10 KiB (16 KiB owned Direct claim).
+        if (sd_version_is_sdxl(version)) {
+            sd::ggml_graph_cut::mark_graph_cut(emb, "unet.prelude", "emb");
+        }
 
         // input_blocks
         std::vector<ggml_tensor*> hs;

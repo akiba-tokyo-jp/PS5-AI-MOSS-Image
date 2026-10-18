@@ -15163,6 +15163,123 @@ bool ggml_backend_is_vk(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_vk_guid());
 }
 
+extern "C" uint64_t ps5_ai_cpu_clip_shared_direct_live_bytes(void);
+static int ggml_vk_idle_scratch_skip(const char* reason) {
+    if (!ps5_ai_ggml_log_healthy()) return -1;
+    ps5_ai_ggml_report("SKIP GGML_idle_scratch_owner_release reason=%s released_bytes=0", reason);
+    return ps5_ai_ggml_log_healthy() ? 0 : -1;
+}
+
+/* Native single-job/SD execution-mutex boundary only; submit producers and
+ * prefetch must remain stopped for the whole call. 1 trimmed, 0 safely skipped
+ * (or nothing owned), -1 unhealthy: caller must fail the operation.
+ * This API owns only these three transient buffers. Never call full cleanup,
+ * delete/recreate the backend, reset the device, or release physical regions.
+ */
+extern "C" int ps5_ai_ggml_release_idle_scratch(ggml_backend_t backend) {
+    if (!backend || !ggml_backend_is_vk(backend) || !backend->context) return 0;
+    auto* ctx = static_cast<ggml_backend_vk_context*>(backend->context);
+    if (!ctx->device || !ctx->device->serialize_submissions)
+        return ggml_vk_idle_scratch_skip("device_missing_or_not_serialized");
+    if (!ctx->compute_ctx.expired() || !ctx->transfer_ctx.expired() ||
+        ctx->submit_pending || ctx->almost_ready_fence_pending ||
+        (ctx->device->async_use_transfer_queue &&
+         ctx->transfer_semaphore_last_submitted < ctx->transfer_semaphore.value))
+        return ggml_vk_idle_scratch_skip("active_context_pending_fence_or_timeline");
+    for (const auto& tensor_ctx : ctx->tensor_ctxs)
+        if (!tensor_ctx.expired()) return ggml_vk_idle_scratch_skip("live_tensor_context");
+    /* External contexts may still contain recorded, unsubmitted commands.
+     * Native idle alone cannot prove those references are disposable. */
+    for (const auto& context : ctx->gc.contexts)
+        if (context && context.use_count() != 1) return ggml_vk_idle_scratch_skip("external_recorded_context_owner");
+    if (ps5_ai_cpu_clip_shared_direct_live_bytes() != 0) return ggml_vk_idle_scratch_skip("CPU_CLIP_claims_already_live");
+
+    vk_buffer* const scratch[] = {&ctx->prealloc_x, &ctx->prealloc_y, &ctx->prealloc_split_k};
+    uint64_t bytes = 0;
+    for (const auto* owner : scratch) {
+        if (!*owner || (*owner)->size == 0) continue;
+        if (owner->use_count() != 1 || (*owner)->device != ctx->device ||
+            !(*owner)->owned_flex_ptr || !(*owner)->owned_flex_bytes ||
+            (*owner)->size > (*owner)->owned_flex_bytes ||
+            (*owner)->owned_flex_bytes > UINT64_MAX - bytes)
+            return ggml_vk_idle_scratch_skip("scratch_not_unique_owned_extent");
+        bytes += (*owner)->owned_flex_bytes;
+    }
+    if (!bytes) return ggml_vk_idle_scratch_skip("no_owned_scratch_bytes");
+    ps5_ai_flex_stats before{};
+    ps5_ai_flex_snapshot(&before);
+    if (!before.mapping_owned || !before.gpu_access_granted || before.fault_retained ||
+        !before.log_healthy || !ps5_ai_ggml_log_healthy() || bytes > before.used_bytes) return -1;
+    ps5_ai_ggml_dispatch_stats dispatch{};
+    ps5_ai_ggml_dispatch_snapshot(&dispatch);
+    /* These diagnostic counters have different scopes: submits counts only
+     * graph-phase submissions containing commands; fenced_completions counts
+     * every matching pending-fence completion, including copies/preallocation.
+     * Completion authority is the bridge pending flag and the positive native
+     * idle receipt, as in the existing guard_cleanup(), not absolute equality. */
+    if (dispatch.work_pending || !dispatch.hardware_verified)
+        return ggml_vk_idle_scratch_skip("native_GPU_pending_or_hardware_unverified");
+    if (!ps5_ai_ggml_wait_backend("GGML_idle_scratch_owner_before_CPU_CLIP", dispatch.submits != 0)) return -1;
+    if (ps5_ai_cpu_clip_shared_direct_live_bytes() != 0 || !ps5_ai_ggml_log_healthy()) return -1;
+    ps5_ai_ggml_report("BEFORE GGML_idle_scratch_owner_release bytes=%llu buffers=x,y,split_k CPU_CLIP_live=0 unique_owners=1 positive_GPU_idle=1 weights_unchanged=1 driver_unchanged=1",
+        static_cast<unsigned long long>(bytes));
+    if (!ps5_ai_ggml_log_healthy()) return -1;
+    try {
+        /* Existing owner synchronization/graph cleanup resets completed command
+         * buffers, preserving pools/fences/pipelines. Device queue copy pools
+         * otherwise keep completed buffers until their periodic threshold. */
+        ggml_backend_vk_synchronize(backend);
+        if (ctx->device->compute_queue)
+            ggml_vk_command_pool_cleanup(ctx->device, ctx->device->compute_queue->cmd_pool);
+        if (ctx->device->transfer_queue)
+            ggml_vk_command_pool_cleanup(ctx->device, ctx->device->transfer_queue->cmd_pool);
+        if (!ctx->compute_ctx.expired() || !ctx->transfer_ctx.expired() || ctx->submit_pending ||
+            ctx->almost_ready_fence_pending || !ctx->gc.contexts.empty() || !ctx->tensor_ctxs.empty() ||
+            ctx->compute_cmd_pool.buffers_in_use() ||
+            (ctx->device->async_use_transfer_queue && ctx->transfer_cmd_pool.buffers_in_use()) ||
+            (ctx->device->compute_queue && ctx->device->compute_queue->cmd_pool.buffers_in_use()) ||
+            (ctx->device->transfer_queue && ctx->device->transfer_queue->cmd_pool.buffers_in_use()) ||
+            ctx->descriptor_set_idx || ctx->pipeline_descriptor_set_requirements ||
+            !ps5_ai_ggml_log_healthy() || ps5_ai_cpu_clip_shared_direct_live_bytes() != 0) return -1;
+        ps5_ai_ggml_dispatch_stats settled{};
+        ps5_ai_ggml_dispatch_snapshot(&settled);
+        ps5_ai_flex_stats still_owned{};
+        ps5_ai_flex_snapshot(&still_owned);
+        if (settled.work_pending || !settled.hardware_verified ||
+            settled.submits != dispatch.submits || settled.fenced_completions != dispatch.fenced_completions ||
+            settled.dispatches != dispatch.dispatches ||
+            still_owned.fault_retained || !still_owned.log_healthy ||
+            still_owned.used_bytes != before.used_bytes || still_owned.reserved_bytes != before.reserved_bytes)
+            return -1;
+        for (const auto* owner : scratch)
+            if (*owner && (*owner)->size && owner->use_count() != 1)
+                return ggml_vk_idle_scratch_skip("scratch_owner_changed_before_release");
+        /* Descriptor sets contain raw handles, not shared_ptr ownership. The
+         * normal cleanup above invalidates the old command recordings. Every
+         * new dispatch overwrites every descriptor binding it consumes in
+         * ggml_vk_dispatch_pipeline(), then records/binds it anew. */
+        for (auto* owner : scratch) ggml_vk_destroy_buffer(*owner);
+        ctx->prealloc_size_x = ctx->prealloc_size_y = ctx->prealloc_size_split_k = 0;
+        ctx->prealloc_x_need_sync = ctx->prealloc_y_need_sync = ctx->prealloc_split_k_need_sync = false;
+        ctx->prealloc_y_last_pipeline_used = nullptr;
+        ctx->prealloc_y_last_tensor_used = nullptr;
+        ctx->prealloc_y_last_k_padded = false;
+        ps5_ai_flex_stats after{};
+        ps5_ai_flex_snapshot(&after);
+        if (after.fault_retained || !after.log_healthy || !ps5_ai_ggml_log_healthy() ||
+            after.reserved_bytes != before.reserved_bytes || after.used_bytes > before.used_bytes ||
+            before.used_bytes - after.used_bytes != bytes)
+            ps5_ai_ggml_retain("GGML_idle_scratch_owner_release_receipt_mismatch");
+        ps5_ai_ggml_report("PASS GGML_idle_scratch_owner_release released_bytes=%llu pool_free_before=%llu pool_free_after=%llu CPU_CLIP_live=0 weights_unchanged=1 pools_fences_pipelines_preserved=1",
+            static_cast<unsigned long long>(bytes), static_cast<unsigned long long>(before.free_bytes),
+            static_cast<unsigned long long>(after.free_bytes));
+        if (!ps5_ai_ggml_log_healthy()) ps5_ai_ggml_retain("GGML_idle_scratch_owner_release_PASS_log_failed");
+        return 1;
+    } catch (...) {
+        ps5_ai_ggml_retain("GGML_idle_scratch_owner_release_exception_retained");
+    }
+}
+
 int ggml_backend_vk_get_device_count() {
     return ggml_vk_get_device_count();
 }

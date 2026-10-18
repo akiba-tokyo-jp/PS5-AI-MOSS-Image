@@ -17,6 +17,8 @@
 #include "core/ggml_extend_backend.h"
 #include "core/ggml_graph_cut.h"
 #include "core/ggml_runner.h"
+#include "core/controlnet_cfg.hpp"
+#include "pool.h"
 #include "core/ggml_tensor_utils.h"
 #include "core/layer_split_partition.h"
 #include "core/probe/conv_direct.h"
@@ -2366,6 +2368,22 @@ static sd::Tensor<float> batch_two_condition_tensors(const sd::Tensor<float>& a,
 }
 
 extern "C" void ps5_ai_controlnet_phase(int, uint64_t, double);
+extern "C" int ps5_ai_ggml_wait_backend(const char*, int);
+extern "C" int ps5_ai_ggml_log_healthy(void);
+extern "C" __attribute__((noreturn)) void ps5_ai_ggml_retain(const char*);
+#ifndef PS5_AI_CONTROLNET_BATCH_PAIR
+#define PS5_AI_CONTROLNET_BATCH_PAIR 0
+#endif
+
+static void require_cfg_allocation_fallback_safe(const char* phase) {
+    ps5_ai_flex_stats pool{};
+    if (!ps5_ai_ggml_wait_backend(phase, 0))
+        ps5_ai_ggml_retain("ControlNet_CFG_pair_fallback_GPU_quiescence_unproven");
+    ps5_ai_flex_snapshot(&pool);
+    if (!pool.mapping_owned || !pool.gpu_access_granted || pool.fault_retained ||
+        !pool.log_healthy || !ps5_ai_ggml_log_healthy())
+        ps5_ai_ggml_retain("ControlNet_CFG_pair_fallback_pool_state_unproven");
+}
 void StableDiffusionGGML::compute_sample_controls(const sd::Tensor<float>& control_image,
                                                   const sd::Tensor<float>& noised_input,
                                                   const sd::Tensor<float>& timesteps_tensor,
@@ -2385,15 +2403,9 @@ void StableDiffusionGGML::compute_sample_controls(const sd::Tensor<float>& contr
                                                condition.c_vector);
     if (!control_result.has_value() || control_result->empty())
         throw std::runtime_error("ControlNet compute failed; refusing uncontrolled image");
-    if(sd_version_is_sdxl(version) && control_result->size()!=10)
-        throw std::runtime_error("SDXL ControlNet must produce ten residual tensors");
-    uint64_t checked_values=0;
-    for(const auto& tensor:*control_result){
-        if(tensor.empty())throw std::runtime_error("ControlNet residual tensor is empty");
-        for(int64_t i=0;i<tensor.numel();i++)if(!std::isfinite(tensor.data()[i]))
-            throw std::runtime_error("ControlNet residual contains NaN/Inf");
-        checked_values+=static_cast<uint64_t>(tensor.numel());
-    }
+    const int64_t batch = noised_input.dim() >= 4 ? noised_input.shape()[3] : 1;
+    const uint64_t checked_values = ps5_ai_controlnet::validate_residuals(
+        *control_result, batch, sd_version_is_sdxl(version));
     ps5_ai_controlnet_phase(static_cast<int>(control_result->size()),checked_values,
                            (ggml_time_us()-control_start)/1000000.0);
 
@@ -2446,6 +2458,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
     std::vector<QwenPrefixInputs> qwen_prefix_inputs;
 
     RunnerEndOnExit sample_control_runner_end{!control_image.empty() && control_net != nullptr ? control_net.get() : nullptr};
+    bool controlnet_pair_enabled = PS5_AI_CONTROLNET_BATCH_PAIR != 0;
 
     const bool apply_denoise_mask = !denoise_mask.empty() &&
                                     std::any_of(denoise_mask.values().begin(), denoise_mask.values().end(),
@@ -2614,7 +2627,13 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
         sd::Tensor<float> uncond_out;
         sd::Tensor<float> img_uncond_out;
         sd_sample::SampleStepCacheDispatcher step_cache(cache_runtime, step, sigma);
-        std::vector<sd::Tensor<float>> controls;
+        ps5_ai_controlnet::EvaluationResidualCache<SDCondition> control_cache;
+        const auto get_controls = [&](const SDCondition& condition) -> const ps5_ai_controlnet::Residuals& {
+            return control_cache.get(condition, [&](const SDCondition& current,
+                                                      ps5_ai_controlnet::Residuals* result) {
+                compute_sample_controls(control_image, noised_input, timesteps_tensor, current, result);
+            });
+        };
         DiffusionParams diffusion_params;
         diffusion_params.x                = &noised_input;
         diffusion_params.timesteps        = &timesteps_tensor;
@@ -2623,13 +2642,6 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
         step_guidance_input.step          = step;
         step_guidance_input.schedule_size = sigmas.size();
         bool is_skiplayer_step            = skip_layer_guidance.is_enabled_for_step(step_guidance_input);
-
-        compute_sample_controls(control_image,
-                                noised_input,
-                                timesteps_tensor,
-                                cond,
-                                &controls);
-        bool uncond_controls_ready = false;
 
         static const std::vector<sd::Tensor<float>> empty_ref_latents;
         bool uncond_without_ref_latents = !img_uncond.empty() &&
@@ -2651,7 +2663,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                 if (config_->animatediff_loaded && noised_input.dim() >= 4 && noised_input.shape()[3] > 1) {
                     nvf = static_cast<int>(noised_input.shape()[3]);
                 }
-                UNetDiffusionExtra unet_extra{nvf, &controls, control_strength};
+                UNetDiffusionExtra unet_extra{nvf, nullptr, control_strength};
                 const auto& ip_tokens = use_uncond_ip ? ip_adapter_uncond_tokens : ip_adapter_tokens;
                 if (!ip_tokens.empty()) {
                     unet_extra.ip_context = &ip_tokens;
@@ -2724,16 +2736,8 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                 return std::move(cached_output);
             }
 
-            // A re-enabled condition can miss the cache even when the positive pass was reused.
-            if (!uncond_controls_ready && !uncond.empty() &&
-                (&condition == &uncond || &condition == &img_uncond)) {
-                compute_sample_controls(control_image,
-                                        noised_input,
-                                        timesteps_tensor,
-                                        uncond,
-                                        &controls);
-                uncond_controls_ready = true;
-            }
+            if (auto* unet_extra = std::get_if<UNetDiffusionExtra>(&diffusion_params.extra))
+                unet_extra->controls = &get_controls(condition);
 
             for (const auto& extension : generation_extensions) {
                 extension->before_diffusion(diffusion_params, step);
@@ -2779,23 +2783,55 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                 return {};
             }
 
-            std::vector<sd::Tensor<float>> uncond_controls;
-            compute_sample_controls(control_image, noised_input, timesteps_tensor, uncond, &uncond_controls);
-            if (controls.size() != uncond_controls.size()) {
-                return {};
-            }
-            std::vector<sd::Tensor<float>> batched_controls;
-            batched_controls.reserve(controls.size());
-            for (size_t i = 0; i < controls.size(); i++) {
-                sd::Tensor<float> batched_control = batch_two_condition_tensors(controls[i], uncond_controls[i]);
-                if (batched_control.empty()) {
-                    return {};
-                }
-                batched_controls.push_back(std::move(batched_control));
-            }
-
             sd::Tensor<float> batched_x =
                 sd::ops::concat(noised_input, noised_input, static_cast<size_t>(noised_input.dim() - 1));
+
+            const bool pair_shapes_ok = sd_version_is_sdxl(version) &&
+                noised_input.dim() == 4 && noised_input.shape()[3] == 1 &&
+                control_image.dim() == 4 && control_image.shape()[3] == 1 &&
+                timesteps_tensor.dim() == 1 && timesteps_tensor.numel() == 1 &&
+                batched_context.dim() == 3 && batched_context.shape()[2] == 2 &&
+                batched_y.dim() == 2 && batched_y.shape()[1] == 2;
+            if (controlnet_pair_enabled && !control_image.empty() && pair_shapes_ok &&
+                control_net != nullptr && !control_net->cfg_pair_minimum_allocation_possible(noised_input)) {
+                controlnet_pair_enabled = false;
+                LOG_WARN("ControlNet CFG pair skipped by minimum contiguous-span metadata check; remaining evaluations sequential");
+            }
+            if (controlnet_pair_enabled && !control_image.empty() && pair_shapes_ok) {
+                if (control_net == nullptr)
+                    throw std::runtime_error("Requested ControlNet runner is missing");
+                auto pair_timesteps = sd::ops::concat(timesteps_tensor, timesteps_tensor, 0);
+                const int64_t control_start = ggml_time_us();
+                auto pair_result = control_net->compute(n_threads, batched_x, control_image,
+                                                        pair_timesteps, batched_context, batched_y);
+                if (!pair_result.has_value()) {
+                    if (control_net->last_compute_status() != GGML_STATUS_ALLOC_FAILED)
+                        throw std::runtime_error("ControlNet CFG pair execution failed; sequential retry forbidden");
+                    require_cfg_allocation_fallback_safe("ControlNet_CFG_pair_allocation_fallback");
+                    controlnet_pair_enabled = false;
+                    LOG_WARN("ControlNet CFG pair allocation unavailable; GPU idle verified; remaining evaluations sequential");
+                } else {
+                    const int residual_count = static_cast<int>(pair_result->size());
+                    const uint64_t checked_values = control_cache.set_pair(condition, uncond, std::move(*pair_result), true);
+                    ps5_ai_controlnet_phase(residual_count, checked_values,
+                                           (ggml_time_us() - control_start) / 1000000.0);
+                }
+            }
+
+            ps5_ai_controlnet::Residuals combined_controls;
+            const ps5_ai_controlnet::Residuals* batched_controls = control_cache.pair(condition, uncond);
+            if (batched_controls == nullptr) {
+                const auto& positive_controls = get_controls(condition);
+                const auto& negative_controls = get_controls(uncond);
+                if (positive_controls.size() != negative_controls.size()) return {};
+                combined_controls.reserve(positive_controls.size());
+                for (size_t i = 0; i < positive_controls.size(); i++) {
+                    auto tensor = batch_two_condition_tensors(positive_controls[i], negative_controls[i]);
+                    if (tensor.empty()) return {};
+                    combined_controls.push_back(std::move(tensor));
+                }
+                batched_controls = &combined_controls;
+            }
 
             DiffusionParams batched_params = diffusion_params;
             batched_params.x               = &batched_x;
@@ -2803,11 +2839,14 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
             batched_params.c_concat        = batched_concat.empty() ? nullptr : &batched_concat;
             batched_params.y               = batched_y.empty() ? nullptr : &batched_y;
             batched_params.ref_latents     = nullptr;
-            batched_params.extra           = UNetDiffusionExtra{1, &batched_controls, control_strength};
+            batched_params.extra           = UNetDiffusionExtra{1, batched_controls, control_strength};
 
             sd::Tensor<float> output = work_diffusion_model->compute(n_threads, batched_params);
             if (output.empty()) {
-                LOG_ERROR("batched diffusion model compute failed");
+                if (work_diffusion_model->last_compute_status() != GGML_STATUS_ALLOC_FAILED)
+                    throw std::runtime_error("Batched UNet execution failed; sequential retry forbidden");
+                require_cfg_allocation_fallback_safe("UNet_CFG_pair_allocation_fallback");
+                LOG_WARN("Batched UNet allocation unavailable; GPU idle verified; reusing ControlNet residuals for sequential CFG");
             }
             return output;
         };
@@ -2874,6 +2913,8 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                 auto parts = sd::ops::chunk(batched_out, 2, 3);
                 cond_out   = std::move(parts[0]);
                 uncond_out = std::move(parts[1]);
+            } else if (!batched_out.empty()) {
+                throw std::runtime_error("Batched UNet returned an invalid CFG batch shape");
             }
         }
 

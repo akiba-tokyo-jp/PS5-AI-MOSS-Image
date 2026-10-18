@@ -66,6 +66,9 @@ static std::atomic<bool> parameter_loading{false};
 static std::string loaded_controlnet;
 static std::atomic<uint64_t> cpu_clip_pool_live_bytes{0};
 static std::atomic<uint64_t> cpu_clip_pool_peak_bytes{0};
+extern "C" uint64_t ps5_ai_cpu_clip_shared_direct_live_bytes(void) {
+    return cpu_clip_pool_live_bytes.load();
+}
 extern "C" void ps5_ai_native_config_mark(unsigned,const char*);
 extern "C" void ps5_ai_native_locale_snapshot(uint64_t[11]);
 extern "C" void ps5_ai_native_capacity_snapshot(const char*);

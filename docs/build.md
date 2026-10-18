@@ -118,7 +118,7 @@ API用ヘッダーは連続ローテーションとrename失敗時の上限維�
 
 ## 漫画LoRA版の追加モデル
 
-この版は7GiB Direct / Vulkan予算6.75GiBと、WAI v17専用変換LoRAを使います。元WAI・原作者imgeのGLoRAは別途取得し、作者の利用条件・クレジットを保持してください。重みはGitHubに同梱しません。
+初期の漫画LoRA版は7GiB Direct / Vulkan予算6.75GiBでした。現行プロファイルは9422MiB（約9.201GiB）Direct / Vulkan予算8.75GiBで、WAI v17専用変換LoRAを使います。元WAI・原作者imgeのGLoRAは別途取得し、作者の利用条件・クレジットを保持してください。重みはGitHubに同梱しません。
 
 ```powershell
 python -m pip install numpy
@@ -132,7 +132,17 @@ python tools/prepare_manga_lora_v1.py --base D:/PS5-AI/models/waiIllustriousSDXL
 
 ## ControlNet版の再ビルド・通信試験
 
-現行プロファイルはcoreの6メンバー（runner/image/diffusion_engine/model_manager/model_builders/photomaker_extension）を再コンパイルします。conditioning/conditioner.hppのCPU逐次ロードとCPU共有プール呼び出しを含むため、古いcoreメンバーを混在させないでください。Direct9GiBと512MiB領域、添付キャラクターのアイコンもソースへ反映しています。
+プロファイルはcoreの7メンバー（runner/image/diffusion_engine/model_manager/model_builders/photomaker_extension/ggml_graph_cut）を再コンパイルします。conditioning、CLIP、ControlNetのクラス定義を含むため、古いcoreメンバーを混在させないでください。model_managerの正本は上流と同じ`src/model_manager.cpp`です。Direct9422MiB（約9.201GiB）、18×512MiB＋206MiBの19領域、CPU初期予約1GiBです。CPU CLIPの重みグループは16MiBを目安にし、大きい単独tensorは分断しません。添付キャラクターの画像ファイルも反映しています。
+
+最適化候補にはCPU CLIP前のscratch所有権解放APIが含まれます。ビルドは固定GGML Vulkanアーカイブのコピーに、新しい`ggml-vulkan.cpp.o`だけを差し替えます。その他のメンバーと生成済みSPIR-Vは維持し、変更メンバーの検査と、engine・model_manager・GGML間のC API定義確認を行います。`GGML_SHADER_DIR`には固定生成ヘッダー`ggml-vulkan-shaders.hpp`のあるディレクトリを指定してください。`SPIRV_HEADERS`は`include/spirv/unified1/spirv.hpp`のある公開SPIRV-Headersのルートです。これらのSHA不一致は停止します。
+
+ControlNet batch-pairはプロファイルで`1`です。20 stepsで40回だったControlNet計算を20回にまとめます。採用したネイティブ版の256・1024生成、有限値、基準PNG一致を[今回の検証](optimization-20261019.md)に記録しました。公開ソースの再ビルドも確認しましたが、その公開ビルドのSELF自体をPS5で実行したという意味ではありません。
+
+```powershell
+python tests/optimization_build_profile.py --config .local/build.json --out D:/ps5-build/optimization-profile-check --expected-controlnet-batch-pair 1
+```
+
+これは構成、ソースハッシュ、API定義、archive差し替えの検査です。ネイティブビルドやPS5実行の代わりには扱いません。
 
 ```powershell
 python tools/build_controlnet_tests.py --config .local/build.json --out D:/ps5-build/protocol-fixtures

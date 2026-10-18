@@ -1,6 +1,93 @@
 {
-  "scope": "Approved CPU dashboard, native authenticated display-state health, and CPU gateway response-only metadata parser. Inference algorithms, GPU driver and memory settings unchanged. Public sanitized OpenAPI differs intentionally; public portable binaries remain separate from the console-executed build.",
+  "scope": "Historical verified sources and the verified native optimization profile; portable public rebuild is a separate artifact. LF normalization and recipe changes are marked.",
   "files": [
+    {
+      "file": ".gitattributes",
+      "sha256": "804eb245be5585fa3d1f1c38ef07ce63b289cf325db1d57c26cdd18dcbf5f854",
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "published_sha256": "f5cbc93b623e043d07fd2d35c9a3df11207a857152f6d026fc5d6b1c51130294",
+      "published_bytes": 622,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "README.md",
+      "sha256": "a5fc28e896cf59472ec69ba968b1552519b72821348dda4847413d5b4c25e49e",
+      "published_sha256": "a5fc28e896cf59472ec69ba968b1552519b72821348dda4847413d5b4c25e49e",
+      "published_bytes": 14648,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "build-profiles/native.json",
+      "published_sha256": "389505cf9e1831a5ed5a3f85e2b265c08dd3585566c2dca9684bc3c7399fc2dc",
+      "published_bytes": 26625,
+      "sha256": "389505cf9e1831a5ed5a3f85e2b265c08dd3585566c2dca9684bc3c7399fc2dc",
+      "identical_to_tested_input": false,
+      "validation_scope": "Portable public build/configuration wiring; runtime adoption evidence is recorded separately.",
+      "normalization_or_provider_update": true,
+      "bytes": 26625
+    },
+    {
+      "file": "config/build.json.example",
+      "published_sha256": "d30e32e9ae093df072c77262ea79c246a035a50d67f9b1421a17c6a6bba66622",
+      "published_bytes": 737,
+      "sha256": "7d74bb1b8459d28f2d6c5dd1a7ee174857246a28f3879578716fa2dab4be1b6a",
+      "identical_to_tested_input": false,
+      "validation_scope": "Git LF checkout normalization; model calculation sources unchanged.",
+      "normalization_or_provider_update": true
+    },
+    {
+      "file": "config/native.json.example",
+      "published_sha256": "b31a8ab18aa4c427e122cd011a2a8f831a0305a8616b4f448e5a009e073dbe49",
+      "published_bytes": 1212,
+      "normalization_or_provider_update": true,
+      "identical_to_tested_input": false,
+      "sha256": "b31a8ab18aa4c427e122cd011a2a8f831a0305a8616b4f448e5a009e073dbe49",
+      "bytes": 1212,
+      "validation_scope": "Portable public build/configuration wiring; runtime adoption evidence is recorded separately."
+    },
+    {
+      "file": "docs/build.md",
+      "sha256": "b1e29f5581730e1896261166d4e452df3f44124e15037f134a974cbb12f92a49",
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "published_sha256": "06e4c30a172e66830ce5eb7a7feb6213f4ca79dd89176121d64d9443af5d7492",
+      "published_bytes": 12410,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "docs/controlnet.md",
+      "sha256": "97d1d6f5577c6c0186448912d17a1aa7bb51981d560e737a6f81fc487eb1881e",
+      "published_sha256": "97d1d6f5577c6c0186448912d17a1aa7bb51981d560e737a6f81fc487eb1881e",
+      "published_bytes": 7931,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "docs/media/optimization-openpose1024.mp4",
+      "sha256": "36f94552bc4176e0c050d991f9d86c1bac1973733dd6e260cc31d97a03d2c933",
+      "published_sha256": "36f94552bc4176e0c050d991f9d86c1bac1973733dd6e260cc31d97a03d2c933",
+      "published_bytes": 67698,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "docs/optimization-20261019-evidence.json",
+      "sha256": "97a2c92dd2cc1f9b87f6360d7899669a62a9a9b3c738840591f45483ac498806",
+      "published_sha256": "4b00af2e09bc579cc60c391150c931164a2eead44bec5141ddbd219d1c7a55e6",
+      "published_bytes": 32577,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "docs/optimization-20261019.md",
+      "sha256": "a938750e1026a18a717c446744d6b98a118b6e3549d4f710f8fbd101626c2706",
+      "published_sha256": "a938750e1026a18a717c446744d6b98a118b6e3549d4f710f8fbd101626c2706",
+      "published_bytes": 11417,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
     {
       "file": "native/app/arena.h",
       "sha256": "01110dd93c490a4198748923db3a2f7e6b2b4d64fe3594910bb1d43f9cb73bb8",
@@ -26,6 +113,14 @@
       "published_bytes": 2199
     },
     {
+      "file": "native/app/bounded_stdio_log.h",
+      "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "published_bytes": 1408,
+      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "bytes": 1408,
+      "identical_to_tested_input": true
+    },
+    {
       "file": "native/app/direct_pool.h",
       "sha256": "45939d3512558590bbf7ac488a5167407aca084cc192aec1e42be18366cafd75",
       "bytes": 1257,
@@ -45,25 +140,27 @@
       "file": "native/app/engine.h",
       "sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
       "bytes": 1671,
-      "published_sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
+      "published_sha256": "20d04026e07f0fa489fe802e5568bd89952321cb6966421a731fc71706727927",
       "identical_to_tested_input": true,
-      "published_bytes": 1671
+      "published_bytes": 2582
     },
     {
       "file": "native/app/engine_config.h",
       "sha256": "fc17b2027053fe37115172691fdd9dbc41255b41f528109645820a117c7f6597",
       "bytes": 11402,
-      "published_sha256": "fc17b2027053fe37115172691fdd9dbc41255b41f528109645820a117c7f6597",
+      "published_sha256": "16d5061c306c4066431e309ad1e022d772c8c1c7026a4f759d2bc3cd13c964cb",
       "identical_to_tested_input": true,
-      "published_bytes": 11402
+      "published_bytes": 13214
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "sha256": "f50792e1f2827d0364120b46a63fffe1e4289dda179cfb127400527d615539e6",
+      "sha256": "f2a933481d5c430896bed4977c917e3d7cd1aeb549bedd3b6fc463ea7baac5dc",
       "bytes": 45903,
-      "published_sha256": "f50792e1f2827d0364120b46a63fffe1e4289dda179cfb127400527d615539e6",
-      "identical_to_tested_input": true,
-      "published_bytes": 45903
+      "published_sha256": "72ea7fe2124399724c2ab885d263f24fa2a689fa48f84ccbf9ef9189cdfb853a",
+      "identical_to_tested_input": false,
+      "published_bytes": 61753,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
       "file": "native/app/host_shim.h",
@@ -98,6 +195,14 @@
       "published_bytes": 8423
     },
     {
+      "file": "native/app/log_policy.h",
+      "published_sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
+      "published_bytes": 726,
+      "sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
+      "bytes": 726,
+      "identical_to_tested_input": true
+    },
+    {
       "file": "native/app/memory_plan.h",
       "sha256": "8d08d5b74d5ea665f737118d110ec3418fa2846b3966005caa4e42e6eef93216",
       "bytes": 1224,
@@ -123,35 +228,67 @@
     },
     {
       "file": "native/app/placement.h",
-      "sha256": "c9fae12a4367a137bf9be6ed4ff5a4200898830ffebc1df8062aa7556215f5c1",
-      "bytes": 1156,
-      "published_sha256": "c9fae12a4367a137bf9be6ed4ff5a4200898830ffebc1df8062aa7556215f5c1",
-      "identical_to_tested_input": true,
-      "published_bytes": 1156
+      "sha256": "30b47e02bec4d27b908b34535382521fba9075de102de5b8f14ce4729527a76a",
+      "bytes": 1212,
+      "published_sha256": "94be5fd7cb125d8f50c9dd6fb0cd2f5e0d682f117efa905413bce167efcf66be",
+      "identical_to_tested_input": false,
+      "published_bytes": 1193,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Reviewed v16 source after LF normalization; runtime adoption evidence is recorded separately."
     },
     {
       "file": "native/app/pool.c",
-      "sha256": "c296feca15ae4631bed85fd50b989c2c42d4904778cada4e6ccc3bb4408a0078",
+      "sha256": "b72aca2cdaa45e44ea81fa13320e2670f1815738ec8af34f30954c9414c1e44f",
       "bytes": 26652,
-      "published_sha256": "c296feca15ae4631bed85fd50b989c2c42d4904778cada4e6ccc3bb4408a0078",
-      "identical_to_tested_input": true,
-      "published_bytes": 26652
+      "published_sha256": "e4bbe60d799c15fe3d972763c990de09718400177dbc69f93e68275488d37ac0",
+      "identical_to_tested_input": false,
+      "published_bytes": 30635,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
       "file": "native/app/pool.h",
-      "sha256": "c8e686f83343db6804f99fe5233ce90a02918852517f7f40b2d2b445a8d298e8",
+      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
       "bytes": 2697,
-      "published_sha256": "c8e686f83343db6804f99fe5233ce90a02918852517f7f40b2d2b445a8d298e8",
-      "identical_to_tested_input": true,
-      "published_bytes": 2697
+      "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
+      "identical_to_tested_input": false,
+      "published_bytes": 3207,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
       "file": "native/app/pool_host_test.c",
-      "sha256": "ab5dba7e069d6dba9fbaac78a7d86584a33152f93edb75d345a7ecc3df20409b",
-      "bytes": 9235,
-      "published_sha256": "ab5dba7e069d6dba9fbaac78a7d86584a33152f93edb75d345a7ecc3df20409b",
+      "sha256": "6eb0fc90240d1305f00d8fedebdcef387203e562e75b5db231a22317709a9b17",
+      "bytes": 13271,
+      "published_sha256": "6eb0fc90240d1305f00d8fedebdcef387203e562e75b5db231a22317709a9b17",
       "identical_to_tested_input": true,
-      "published_bytes": 9235
+      "published_bytes": 13271,
+      "normalization_or_provider_update": true,
+      "validation_scope": "33 host ownership/admission cases on the actual pool source,9422MiB/19 regions/final206MiB; physical memory and GPU idle mocked. No model inference or PS5 execution."
+    },
+    {
+      "file": "native/app/precision_conv_gate.inc",
+      "sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
+      "bytes": 4787,
+      "published_sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
+      "published_bytes": 4787,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/app/precision_gate.inc",
+      "sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
+      "bytes": 5002,
+      "published_sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
+      "published_bytes": 5002,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/app/precision_mode.h",
+      "sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
+      "bytes": 80,
+      "published_sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
+      "published_bytes": 80,
+      "identical_to_tested_input": true
     },
     {
       "file": "native/app/probe.h",
@@ -181,9 +318,9 @@
       "file": "native/app/server.c",
       "sha256": "8806439060e8636d42d4aa664dbb79076ba13d2cb174d82d1e3dcd9323858e72",
       "bytes": 53539,
-      "published_sha256": "8806439060e8636d42d4aa664dbb79076ba13d2cb174d82d1e3dcd9323858e72",
+      "published_sha256": "27be907590442be8f4f608ecff81054f06da984c9bf379bc6d90378076479a1f",
       "identical_to_tested_input": true,
-      "published_bytes": 53539
+      "published_bytes": 58785
     },
     {
       "file": "native/app/shutdown_policy.h",
@@ -195,11 +332,13 @@
     },
     {
       "file": "native/app/startup.c",
-      "sha256": "3fb95cbc84d032fc9556bd7936c4232b36205ae216ceba24964c35dc5f0d56b1",
-      "bytes": 57549,
-      "published_sha256": "3fb95cbc84d032fc9556bd7936c4232b36205ae216ceba24964c35dc5f0d56b1",
-      "identical_to_tested_input": true,
-      "published_bytes": 57549
+      "sha256": "b6f9d9bae4dfbc75243daaa6daeee35a5e5e63182ebb64bb918a294c1846154f",
+      "bytes": 60849,
+      "published_sha256": "9aac9c4965e6b1450f47221e2222ab2ca005e2de5bda0c170606b5fc2f9bf71d",
+      "identical_to_tested_input": false,
+      "published_bytes": 59861,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Reviewed v16 source after LF normalization; runtime adoption evidence is recorded separately."
     },
     {
       "file": "native/app/status.h",
@@ -242,6 +381,159 @@
       "published_bytes": 659
     },
     {
+      "file": "native/app/vulkan_bridge.cpp",
+      "sha256": "a993ee224d76243bcb45d2a2928fecf7ae0379f0957d28d5726a6d9cb8245c0e",
+      "bytes": 12930,
+      "published_sha256": "a993ee224d76243bcb45d2a2928fecf7ae0379f0957d28d5726a6d9cb8245c0e",
+      "identical_to_tested_input": true,
+      "published_bytes": 12930
+    },
+    {
+      "file": "native/gateway/bounded_stdio_log.h",
+      "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "published_bytes": 1408,
+      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
+      "bytes": 1408,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/gateway/cpu_hooks.c",
+      "sha256": "7f3c6a2eaf2fad7d4bb663bbc7857cb7f14fa79d5b3d70f2d2df804e4b1f97fc",
+      "bytes": 495,
+      "published_sha256": "7f3c6a2eaf2fad7d4bb663bbc7857cb7f14fa79d5b3d70f2d2df804e4b1f97fc",
+      "identical_to_tested_input": true,
+      "published_bytes": 495
+    },
+    {
+      "file": "native/gateway/engine.h",
+      "sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
+      "bytes": 1671,
+      "published_sha256": "20d04026e07f0fa489fe802e5568bd89952321cb6966421a731fc71706727927",
+      "identical_to_tested_input": true,
+      "published_bytes": 2582
+    },
+    {
+      "file": "native/gateway/engine_bridge.inc",
+      "sha256": "c169bae103c68d22fc5de619b22d908352402632ef0ee89d4ea7ed2787ea440e",
+      "bytes": 13080,
+      "published_sha256": "3e5b6461ad70ffa6095504bac9bca943839ab28f6ff5620175fa6ada18a549ed",
+      "identical_to_tested_input": false,
+      "published_bytes": 16085,
+      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
+    },
+    {
+      "file": "native/gateway/openai.inc",
+      "sha256": "7cc9d3534ede1a50747d05002227840ab3ed40d038b5bc17e6ad03af8120400e",
+      "bytes": 13787,
+      "published_sha256": "0a6726d9ba3c8812561a37f4059a63ca1e44756ce85736ba81e24b61bde8dcc9",
+      "identical_to_tested_input": true,
+      "published_bytes": 16397
+    },
+    {
+      "file": "native/gateway/openapi_schema.inc",
+      "sha256": "8a390827d33ccdcb4d1cb69deefb0034f057617c3ea55a1edec33023e6927699",
+      "bytes": 8738,
+      "published_sha256": "afd72c5b64f503fc3875401e0b238d77ce89e4102256bf304b5f999db85b450f",
+      "identical_to_tested_input": false,
+      "published_bytes": 16926
+    },
+    {
+      "file": "native/gateway/server.c",
+      "sha256": "13d5d8453d7d4c9a4c568fa5648945d78296ca817a28a5952ca091edf9964124",
+      "bytes": 55144,
+      "published_sha256": "b9c2704602ec74a20ea89fa7a026246b7c9d391bc80caf93cb27df14e7138c07",
+      "identical_to_tested_input": true,
+      "published_bytes": 56174
+    },
+    {
+      "file": "native/gateway/status.h",
+      "sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
+      "bytes": 5386,
+      "published_sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
+      "identical_to_tested_input": true,
+      "published_bytes": 5386
+    },
+    {
+      "file": "native/gateway/test_failure_bridge.inc",
+      "sha256": "23d993b3739600b48ecabfce5480ae0403d7a297dadb969d447316de1c0ba89a",
+      "bytes": 754,
+      "published_sha256": "7f802f0d1ca600d60da8587c0c6088dcf85b5ac0f45ea05c034ba730dcc7c0f0",
+      "identical_to_tested_input": true,
+      "published_bytes": 1029
+    },
+    {
+      "file": "native/gateway/ui_hooks.h",
+      "sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
+      "bytes": 581,
+      "published_sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
+      "identical_to_tested_input": true,
+      "published_bytes": 581
+    },
+    {
+      "file": "native/gateway/v3_shutdown.h",
+      "sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
+      "bytes": 659,
+      "published_sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
+      "identical_to_tested_input": true,
+      "published_bytes": 659
+    },
+    {
+      "file": "native/link/agc_canary_link_stub.c",
+      "sha256": "c01388bcf00659a3c56d6afac705efb359b1b89c01f998fc5a72a7d5748dda75",
+      "bytes": 3430,
+      "published_sha256": "c01388bcf00659a3c56d6afac705efb359b1b89c01f998fc5a72a7d5748dda75",
+      "identical_to_tested_input": true,
+      "published_bytes": 3430
+    },
+    {
+      "file": "native/link/agc_driver_canary_link_stub.c",
+      "sha256": "601e1c7ef28bbba8a860d7bb65188690b5df9ca48da94ebcd79ddaf2bbbf103b",
+      "bytes": 1259,
+      "published_sha256": "601e1c7ef28bbba8a860d7bb65188690b5df9ca48da94ebcd79ddaf2bbbf103b",
+      "identical_to_tested_input": true,
+      "published_bytes": 1259
+    },
+    {
+      "file": "native/link/app-symbols.map",
+      "sha256": "470ce72a27a7be8e35dd7a25b485faa733d61570bdaf24d3c75bb4e3e3c63cf7",
+      "bytes": 284,
+      "published_sha256": "470ce72a27a7be8e35dd7a25b485faa733d61570bdaf24d3c75bb4e3e3c63cf7",
+      "identical_to_tested_input": true,
+      "published_bytes": 284
+    },
+    {
+      "file": "native/link/app_crt.cpp",
+      "sha256": "0c9d229f4053d87ff6b4f2fdbd7a86d6ae14fa3ec50f0535f63127b1408bb5db",
+      "bytes": 2585,
+      "published_sha256": "0c9d229f4053d87ff6b4f2fdbd7a86d6ae14fa3ec50f0535f63127b1408bb5db",
+      "identical_to_tested_input": true,
+      "published_bytes": 2585
+    },
+    {
+      "file": "native/link/platform-local.map",
+      "sha256": "109d87a036eafbe616acaeb99b7b89cbbf34314862f88a35c6aa9cc330f40be2",
+      "bytes": 1422,
+      "published_sha256": "109d87a036eafbe616acaeb99b7b89cbbf34314862f88a35c6aa9cc330f40be2",
+      "identical_to_tested_input": true,
+      "published_bytes": 1422
+    },
+    {
+      "file": "native/link/ps5-pie-unwind.ld",
+      "sha256": "fed519884d92e96b079e6b2b3421de06d192be474dd323e7e2b35ac25478adbf",
+      "bytes": 776,
+      "published_sha256": "fed519884d92e96b079e6b2b3421de06d192be474dd323e7e2b35ac25478adbf",
+      "identical_to_tested_input": true,
+      "published_bytes": 776
+    },
+    {
+      "file": "native/payload_crt/credential_preserving_patch.c",
+      "sha256": "6e84f21a71d4f3286053bcfd7aff5e05f3bc79277f814e6691947d427a82b5be",
+      "bytes": 1755,
+      "published_sha256": "6e84f21a71d4f3286053bcfd7aff5e05f3bc79277f814e6691947d427a82b5be",
+      "identical_to_tested_input": true,
+      "published_bytes": 1755
+    },
+    {
       "file": "native/runtime/cpp_allocation.cpp",
       "sha256": "c56c77b97e252b31b9ab1b76a16fe745c8be8ee11289f63527df0374493c6329",
       "bytes": 3638,
@@ -266,20 +558,53 @@
       "published_bytes": 13322
     },
     {
-      "file": "native/app/vulkan_bridge.cpp",
-      "sha256": "a993ee224d76243bcb45d2a2928fecf7ae0379f0957d28d5726a6d9cb8245c0e",
-      "bytes": 12930,
-      "published_sha256": "a993ee224d76243bcb45d2a2928fecf7ae0379f0957d28d5726a6d9cb8245c0e",
+      "file": "native/sha256/sha256.c",
+      "sha256": "a96b214e6d02d797eea1633009420ba3ea7dc894d3eb902875ea10d2580e273a",
+      "bytes": 3249,
+      "published_sha256": "a96b214e6d02d797eea1633009420ba3ea7dc894d3eb902875ea10d2580e273a",
       "identical_to_tested_input": true,
-      "published_bytes": 12930
+      "published_bytes": 3249
+    },
+    {
+      "file": "native/sha256/sha256.h",
+      "sha256": "a8f2383b877161375a0a644875a86c99054a995dde00085348da78319cb91203",
+      "bytes": 417,
+      "published_sha256": "a8f2383b877161375a0a644875a86c99054a995dde00085348da78319cb91203",
+      "identical_to_tested_input": true,
+      "published_bytes": 417
+    },
+    {
+      "file": "native/ui/dashboard.h",
+      "sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
+      "bytes": 8896,
+      "published_sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
+      "published_bytes": 8896,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/ui/dashboard_brand.h",
+      "sha256": "2c2b7683bcc97007aadca71c3c2bb04d2342831dc647df60feaee8e6e76dedad",
+      "bytes": 47416,
+      "published_sha256": "0888893e0a1bae091acce1ebb69709ace5848502439784120a6ea6efaab4f804",
+      "published_bytes": 46939,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "native/ui/dashboard_font.h",
+      "sha256": "87c20e4c90717fda7e2e8774c3fdfea07ffad010180b988dc4a4444880cf0f9f",
+      "bytes": 585475,
+      "published_sha256": "8f01c913b1a90934bd4d0d5091fe792ce34d9ac92fe84df08eb3f0f347b06649",
+      "published_bytes": 585496,
+      "identical_to_tested_input": false,
+      "publication_note": "License path comment corrected for the public tree; bitmap data and rendering code unchanged."
     },
     {
       "file": "native/ui/display.c",
       "sha256": "d7e67e97af63758dbaf3dad6d2b0bd9692fa3467c2978f3d7cc72d6432a46e7f",
       "bytes": 10335,
-      "published_sha256": "955c75c833bf33cc3099b11599cc3e864fa9e608918592882fd24c9b4cbe2287",
+      "published_sha256": "b625bbe628658cade35b78c34a8d137804cc72e0a7b0d5b4ddae2cf40f190069",
       "identical_to_tested_input": false,
-      "published_bytes": 10178,
+      "published_bytes": 10189,
       "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
     },
     {
@@ -316,157 +641,206 @@
       "publication_note": "Comment corrected to reflect integration; API and ABI unchanged."
     },
     {
-      "file": "native/gateway/cpu_hooks.c",
-      "sha256": "7f3c6a2eaf2fad7d4bb663bbc7857cb7f14fa79d5b3d70f2d2df804e4b1f97fc",
-      "bytes": 495,
-      "published_sha256": "7f3c6a2eaf2fad7d4bb663bbc7857cb7f14fa79d5b3d70f2d2df804e4b1f97fc",
-      "identical_to_tested_input": true,
-      "published_bytes": 495
-    },
-    {
-      "file": "native/gateway/engine.h",
-      "sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
-      "bytes": 1671,
-      "published_sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
-      "identical_to_tested_input": true,
-      "published_bytes": 1671
-    },
-    {
-      "file": "native/gateway/engine_bridge.inc",
-      "sha256": "c169bae103c68d22fc5de619b22d908352402632ef0ee89d4ea7ed2787ea440e",
-      "bytes": 13080,
-      "published_sha256": "166ba32796deb90f45f461600ebdf35f3b349036ec3aa9d6f40aca6d8ca9a4ff",
+      "file": "patches/mesa/overlay/src/amd/vulkan/pool.h",
+      "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
+      "published_bytes": 3207,
+      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
       "identical_to_tested_input": false,
-      "published_bytes": 12880,
-      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/gateway/openai.inc",
-      "sha256": "7cc9d3534ede1a50747d05002227840ab3ed40d038b5bc17e6ad03af8120400e",
-      "bytes": 13787,
-      "published_sha256": "7cc9d3534ede1a50747d05002227840ab3ed40d038b5bc17e6ad03af8120400e",
-      "identical_to_tested_input": true,
-      "published_bytes": 13787
-    },
-    {
-      "file": "native/gateway/openapi_schema.inc",
-      "sha256": "8a390827d33ccdcb4d1cb69deefb0034f057617c3ea55a1edec33023e6927699",
-      "bytes": 8738,
-      "published_sha256": "8055a1a24de2c2e7bb02ea8c91812a1f9e480248246965d7e4fb9529b9607424",
+      "file": "patches/stable-diffusion/changes.patch",
+      "sha256": "f27072cfaeae46883d7a32d21a7b098d5c8352607e147da1423c4ac409658bf9",
       "identical_to_tested_input": false,
-      "published_bytes": 8849
+      "normalization_or_provider_update": true,
+      "published_sha256": "d6bb4eb2808656814bb458e58e7fdb004d530eb2fd7969f5535d8bbb6963195c",
+      "published_bytes": 389104,
+      "bytes": 392526,
+      "validation_scope": "Git LF checkout normalization; model calculation sources unchanged."
     },
     {
-      "file": "native/gateway/server.c",
-      "sha256": "13d5d8453d7d4c9a4c568fa5648945d78296ca817a28a5952ca091edf9964124",
-      "bytes": 55144,
-      "published_sha256": "13d5d8453d7d4c9a4c568fa5648945d78296ca817a28a5952ca091edf9964124",
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c",
+      "sha256": "6f3b92df071bdb9469adeefda854efe3c1484c9de0a37afb43d27b9ee8e24f1c",
+      "bytes": 50330,
+      "published_sha256": "6f3b92df071bdb9469adeefda854efe3c1484c9de0a37afb43d27b9ee8e24f1c",
       "identical_to_tested_input": true,
-      "published_bytes": 55144
+      "published_bytes": 50330
     },
     {
-      "file": "native/gateway/status.h",
-      "sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "bytes": 5386,
-      "published_sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-plan-admission.h",
+      "sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
+      "bytes": 822,
+      "published_sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
       "identical_to_tested_input": true,
-      "published_bytes": 5386
+      "published_bytes": 822
     },
     {
-      "file": "native/gateway/test_failure_bridge.inc",
-      "sha256": "23d993b3739600b48ecabfce5480ae0403d7a297dadb969d447316de1c0ba89a",
-      "bytes": 754,
-      "published_sha256": "23d993b3739600b48ecabfce5480ae0403d7a297dadb969d447316de1c0ba89a",
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp",
+      "sha256": "0f6efc6cde616626f2881eed14541a064de42c19de414c5aab88739bfc8ed8d3",
+      "bytes": 33924,
+      "published_sha256": "0f6efc6cde616626f2881eed14541a064de42c19de414c5aab88739bfc8ed8d3",
       "identical_to_tested_input": true,
-      "published_bytes": 754
+      "published_bytes": 33924
     },
     {
-      "file": "native/gateway/ui_hooks.h",
-      "sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
-      "bytes": 581,
-      "published_sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
-      "identical_to_tested_input": true,
-      "published_bytes": 581
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-common.h",
+      "published_sha256": "6ee618834ccff51a9d7ee71e26e776016dc8e408366a6d3335feeb685abef619",
+      "published_bytes": 26734,
+      "sha256": "297b9def219df07377e16fd7567a9efd29afd17be3b1cbfcd4da4f765ef2ba00",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/gateway/v3_shutdown.h",
-      "sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
-      "bytes": 659,
-      "published_sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
-      "identical_to_tested_input": true,
-      "published_bytes": 659
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-push-constants.h",
+      "published_sha256": "688ed58f8ff94118c648d3d39404cc703806047c8f45ad50ad87d8715bceb973",
+      "published_bytes": 35729,
+      "sha256": "15700e6983c3bf58ab5970fc1f37cd34a2338fd1c5a87aefae585f18bb3b1538",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/sha256/sha256.c",
-      "sha256": "a96b214e6d02d797eea1633009420ba3ea7dc894d3eb902875ea10d2580e273a",
-      "bytes": 3249,
-      "published_sha256": "a96b214e6d02d797eea1633009420ba3ea7dc894d3eb902875ea10d2580e273a",
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-types.h",
+      "sha256": "8eee194fb2737a5bfa509535c02f03ff81ea0475b9c06afe79311dcca90942b2",
+      "bytes": 53902,
+      "published_sha256": "8eee194fb2737a5bfa509535c02f03ff81ea0475b9c06afe79311dcca90942b2",
       "identical_to_tested_input": true,
-      "published_bytes": 3249
+      "published_bytes": 53902
     },
     {
-      "file": "native/sha256/sha256.h",
-      "sha256": "a8f2383b877161375a0a644875a86c99054a995dde00085348da78319cb91203",
-      "bytes": 417,
-      "published_sha256": "a8f2383b877161375a0a644875a86c99054a995dde00085348da78319cb91203",
-      "identical_to_tested_input": true,
-      "published_bytes": 417
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp",
+      "sha256": "e57f0e80b07e616b2f0ba01d57daf05c620953a9ebc8367ac7df9306c890b116",
+      "bytes": 892364,
+      "published_sha256": "379a2c4da8f588c51e57ad42623c2c320e77ea3700a320af2021801fe4361aed",
+      "identical_to_tested_input": false,
+      "published_bytes": 883732,
+      "validation_scope": "36 synthetic host cases; final public native build and PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/payload_crt/credential_preserving_patch.c",
-      "sha256": "6e84f21a71d4f3286053bcfd7aff5e05f3bc79277f814e6691947d427a82b5be",
-      "bytes": 1755,
-      "published_sha256": "6e84f21a71d4f3286053bcfd7aff5e05f3bc79277f814e6691947d427a82b5be",
-      "identical_to_tested_input": true,
-      "published_bytes": 1755
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/pool.h",
+      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
+      "bytes": 1370,
+      "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
+      "identical_to_tested_input": false,
+      "published_bytes": 3207,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/link/app_crt.cpp",
-      "sha256": "0c9d229f4053d87ff6b4f2fdbd7a86d6ae14fa3ec50f0535f63127b1408bb5db",
-      "bytes": 2585,
-      "published_sha256": "0c9d229f4053d87ff6b4f2fdbd7a86d6ae14fa3ec50f0535f63127b1408bb5db",
-      "identical_to_tested_input": true,
-      "published_bytes": 2585
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/probe.h",
+      "sha256": "1eba9d8e70fb861f73824826986a3cc83e2057044c9ab265006a5e70eec5b8f3",
+      "bytes": 961,
+      "published_sha256": "1eba9d8e70fb861f73824826986a3cc83e2057044c9ab265006a5e70eec5b8f3",
+      "identical_to_tested_input": false,
+      "published_bytes": 1177,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending"
     },
     {
-      "file": "native/link/app-symbols.map",
-      "sha256": "470ce72a27a7be8e35dd7a25b485faa733d61570bdaf24d3c75bb4e3e3c63cf7",
-      "bytes": 284,
-      "published_sha256": "470ce72a27a7be8e35dd7a25b485faa733d61570bdaf24d3c75bb4e3e3c63cf7",
-      "identical_to_tested_input": true,
-      "published_bytes": 284
+      "file": "patches/stable-diffusion/overlay/src/conditioning/conditioner.hpp",
+      "published_sha256": "05b80e76e0d0deca06504513842d145753e8e9bed0ec59fd2a9f844c18c2f036",
+      "published_bytes": 188144,
+      "sha256": "9b2be86bf7d64e46a688b514335f181bcf2b6fc61162ab4d7dc3940cb57c5b83",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/link/ps5-pie-unwind.ld",
-      "sha256": "fed519884d92e96b079e6b2b3421de06d192be474dd323e7e2b35ac25478adbf",
-      "bytes": 776,
-      "published_sha256": "fed519884d92e96b079e6b2b3421de06d192be474dd323e7e2b35ac25478adbf",
-      "identical_to_tested_input": true,
-      "published_bytes": 776
+      "file": "patches/stable-diffusion/overlay/src/core/controlnet_cfg.hpp",
+      "published_sha256": "331aa5baa5042e823de5ec80d02ac9b6b33bb5888ced96c1b6105f767d687129",
+      "published_bytes": 3796,
+      "sha256": "331aa5baa5042e823de5ec80d02ac9b6b33bb5888ced96c1b6105f767d687129",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending"
     },
     {
-      "file": "native/link/platform-local.map",
-      "sha256": "109d87a036eafbe616acaeb99b7b89cbbf34314862f88a35c6aa9cc330f40be2",
-      "bytes": 1422,
-      "published_sha256": "109d87a036eafbe616acaeb99b7b89cbbf34314862f88a35c6aa9cc330f40be2",
+      "file": "patches/stable-diffusion/overlay/src/core/ggml-plan-admission.h",
+      "sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
+      "bytes": 822,
+      "published_sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
       "identical_to_tested_input": true,
-      "published_bytes": 1422
+      "published_bytes": 822
     },
     {
-      "file": "native/link/agc_canary_link_stub.c",
-      "sha256": "c01388bcf00659a3c56d6afac705efb359b1b89c01f998fc5a72a7d5748dda75",
-      "bytes": 3430,
-      "published_sha256": "c01388bcf00659a3c56d6afac705efb359b1b89c01f998fc5a72a7d5748dda75",
-      "identical_to_tested_input": true,
-      "published_bytes": 3430
+      "file": "patches/stable-diffusion/overlay/src/core/ggml_graph_cut.cpp",
+      "published_sha256": "c7419a9654531a296b979724ddf6a4e2aca5c9f55b34c22ee28472c790955fde",
+      "published_bytes": 48360,
+      "sha256": "f46b7ea809705f00a74fe78e174cfc1835b9a093aebcdd3b74276616540fc0e6",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/link/agc_driver_canary_link_stub.c",
-      "sha256": "601e1c7ef28bbba8a860d7bb65188690b5df9ca48da94ebcd79ddaf2bbbf103b",
-      "bytes": 1259,
-      "published_sha256": "601e1c7ef28bbba8a860d7bb65188690b5df9ca48da94ebcd79ddaf2bbbf103b",
+      "file": "patches/stable-diffusion/overlay/src/core/ggml_runner.cpp",
+      "sha256": "e86bbcadaa88b71aa64d7fe43043d05410fcbced72baaa17cb543e7f3b31b1c6",
+      "bytes": 43602,
+      "published_sha256": "18c0f6fe932b679aacbd21f346c1d2219e5dd37ab771f0931ebc5c5485957605",
       "identical_to_tested_input": true,
-      "published_bytes": 1259
+      "published_bytes": 44672
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/core/pool.h",
+      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
+      "bytes": 2697,
+      "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
+      "published_bytes": 3207,
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/core/runner_admission.hpp",
+      "sha256": "d2a3e83cebd44efbd24cfd66a9eb46ff4acf433c0acb5fed917db021389e2fe8",
+      "bytes": 9563,
+      "published_sha256": "d2a3e83cebd44efbd24cfd66a9eb46ff4acf433c0acb5fed917db021389e2fe8",
+      "identical_to_tested_input": true,
+      "published_bytes": 9563
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp",
+      "sha256": "6c08628a6e2a6174778d2e18ef117b5e8f7017de634c6b0034d64856113d1af8",
+      "bytes": 9176,
+      "published_sha256": "4cc429c865b6319ace745119086a00cb0d30dc27323688a1f1f5204b97c4fe92",
+      "published_bytes": 10061,
+      "identical_to_tested_input": true
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/model/common/block.hpp",
+      "sha256": "4b964432a9a488e0dd9a811422da494b9f86c235e1f01a32c172cd26e98bcb42",
+      "bytes": 28541,
+      "published_sha256": "4b964432a9a488e0dd9a811422da494b9f86c235e1f01a32c172cd26e98bcb42",
+      "identical_to_tested_input": true,
+      "published_bytes": 28541
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/model/diffusion/control.hpp",
+      "published_sha256": "2f3800ba066748c80f17595ed59d055ef80bc158d24849b4596fa87ece650292",
+      "published_bytes": 22683,
+      "sha256": "93d3f2b1ecc9cad54862de3383dfdfff78faf293de8f3a0cf6d2039576a35dc6",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/model/diffusion/unet.hpp",
+      "sha256": "3768a983ce96911f50eaf62ff7a61b5ff329c90193a6765e57f04c864296e397",
+      "bytes": 44302,
+      "published_sha256": "cdf3f05fb54a82dfff803d819a187b36b5382a639f3d289a84c5929322ec67aa",
+      "identical_to_tested_input": false,
+      "published_bytes": 44386,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/model/te/clip.hpp",
+      "published_sha256": "858a963e783e3eb78c362bc178aa6b6a5597871f8265e83aa58ad812ce7f41cb",
+      "published_bytes": 32524,
+      "sha256": "eb85e72a7b8fa1c088604ef1ff7c01cb9abe4d42585913e80f4d58cdd437e8cf",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model_loader.cpp",
@@ -478,198 +852,43 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model_manager.cpp",
-      "sha256": "089b5d797d786ed20d529002e5f8830fa8bddde3ee8cd922a3b9c1be4c842058",
-      "bytes": 82727,
-      "published_sha256": "089b5d797d786ed20d529002e5f8830fa8bddde3ee8cd922a3b9c1be4c842058",
-      "identical_to_tested_input": true,
-      "published_bytes": 82727
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/model/common/block.hpp",
-      "sha256": "4b964432a9a488e0dd9a811422da494b9f86c235e1f01a32c172cd26e98bcb42",
-      "bytes": 28541,
-      "published_sha256": "4b964432a9a488e0dd9a811422da494b9f86c235e1f01a32c172cd26e98bcb42",
-      "identical_to_tested_input": true,
-      "published_bytes": 28541
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/model/diffusion/unet.hpp",
-      "sha256": "2d4010fd1687cc1109735f5c82a34fcae3413f24ef90cd0b466dee943b58c992",
-      "bytes": 44302,
-      "published_sha256": "2d4010fd1687cc1109735f5c82a34fcae3413f24ef90cd0b466dee943b58c992",
-      "identical_to_tested_input": true,
-      "published_bytes": 44302
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/core/ggml_runner.cpp",
-      "sha256": "e86bbcadaa88b71aa64d7fe43043d05410fcbced72baaa17cb543e7f3b31b1c6",
-      "bytes": 43602,
-      "published_sha256": "e86bbcadaa88b71aa64d7fe43043d05410fcbced72baaa17cb543e7f3b31b1c6",
-      "identical_to_tested_input": true,
-      "published_bytes": 43602
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c",
-      "sha256": "6f3b92df071bdb9469adeefda854efe3c1484c9de0a37afb43d27b9ee8e24f1c",
-      "bytes": 50330,
-      "published_sha256": "6f3b92df071bdb9469adeefda854efe3c1484c9de0a37afb43d27b9ee8e24f1c",
-      "identical_to_tested_input": true,
-      "published_bytes": 50330
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp",
-      "sha256": "df05999e60a109ba8184da2f861e2210a8430535a91bc3930b5b479c934de9a1",
-      "bytes": 892364,
-      "published_sha256": "df05999e60a109ba8184da2f861e2210a8430535a91bc3930b5b479c934de9a1",
-      "identical_to_tested_input": true,
-      "published_bytes": 892364
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp",
-      "sha256": "0f6efc6cde616626f2881eed14541a064de42c19de414c5aab88739bfc8ed8d3",
-      "bytes": 33924,
-      "published_sha256": "0f6efc6cde616626f2881eed14541a064de42c19de414c5aab88739bfc8ed8d3",
-      "identical_to_tested_input": true,
-      "published_bytes": 33924
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-types.h",
-      "sha256": "8eee194fb2737a5bfa509535c02f03ff81ea0475b9c06afe79311dcca90942b2",
-      "bytes": 53902,
-      "published_sha256": "8eee194fb2737a5bfa509535c02f03ff81ea0475b9c06afe79311dcca90942b2",
-      "identical_to_tested_input": true,
-      "published_bytes": 53902
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/core/runner_admission.hpp",
-      "sha256": "d2a3e83cebd44efbd24cfd66a9eb46ff4acf433c0acb5fed917db021389e2fe8",
-      "bytes": 9563,
-      "published_sha256": "d2a3e83cebd44efbd24cfd66a9eb46ff4acf433c0acb5fed917db021389e2fe8",
-      "identical_to_tested_input": true,
-      "published_bytes": 9563
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/core/ggml-plan-admission.h",
-      "sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "bytes": 822,
-      "published_sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "identical_to_tested_input": true,
-      "published_bytes": 822
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-plan-admission.h",
-      "sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "bytes": 822,
-      "published_sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "identical_to_tested_input": true,
-      "published_bytes": 822
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/pool.h",
-      "sha256": "d6d84a89bc4746d2a7bcb99b82bbaa159bdd422a6c3c024ccef2617d045c309e",
-      "bytes": 1370,
-      "published_sha256": "d6d84a89bc4746d2a7bcb99b82bbaa159bdd422a6c3c024ccef2617d045c309e",
-      "identical_to_tested_input": true,
-      "published_bytes": 1370
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/probe.h",
-      "sha256": "1c98d036730806fc03867664bd64840ba5361f6653b9e80d8f524f39abca0af7",
-      "bytes": 961,
-      "published_sha256": "1c98d036730806fc03867664bd64840ba5361f6653b9e80d8f524f39abca0af7",
-      "identical_to_tested_input": true,
-      "published_bytes": 961
-    },
-    {
-      "file": "native/app/precision_mode.h",
-      "sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
-      "bytes": 80,
-      "published_sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
-      "published_bytes": 80,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/app/precision_gate.inc",
-      "sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
-      "bytes": 5002,
-      "published_sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
-      "published_bytes": 5002,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp",
-      "sha256": "6c08628a6e2a6174778d2e18ef117b5e8f7017de634c6b0034d64856113d1af8",
-      "bytes": 9176,
-      "published_sha256": "6c08628a6e2a6174778d2e18ef117b5e8f7017de634c6b0034d64856113d1af8",
-      "published_bytes": 9176,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "patches/stable-diffusion/overlay/src/core/pool.h",
-      "sha256": "c8e686f83343db6804f99fe5233ce90a02918852517f7f40b2d2b445a8d298e8",
-      "bytes": 2697,
-      "published_sha256": "c8e686f83343db6804f99fe5233ce90a02918852517f7f40b2d2b445a8d298e8",
-      "published_bytes": 2697,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/app/precision_conv_gate.inc",
-      "sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
-      "bytes": 4787,
-      "published_sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
-      "published_bytes": 4787,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/app/log_policy.h",
-      "published_sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
-      "published_bytes": 726,
-      "sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
-      "bytes": 726,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/app/bounded_stdio_log.h",
-      "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
-      "published_bytes": 1408,
-      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
-      "bytes": 1408,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/gateway/bounded_stdio_log.h",
-      "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
-      "published_bytes": 1408,
-      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
-      "bytes": 1408,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/ui/dashboard.h",
-      "sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
-      "bytes": 8896,
-      "published_sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
-      "published_bytes": 8896,
-      "identical_to_tested_input": true
-    },
-    {
-      "file": "native/ui/dashboard_font.h",
-      "sha256": "87c20e4c90717fda7e2e8774c3fdfea07ffad010180b988dc4a4444880cf0f9f",
-      "bytes": 585475,
-      "published_sha256": "8f01c913b1a90934bd4d0d5091fe792ce34d9ac92fe84df08eb3f0f347b06649",
-      "published_bytes": 585496,
+      "sha256": "5c5a09f249db961e6f93ef7fe427070d339387db4aed2c9f41fdc70300215c74",
+      "bytes": 88170,
+      "published_sha256": "ef483eb67ee07aa203d2c0d0e9ee6150ac94e941d34eb53bd2b2a72911814068",
       "identical_to_tested_input": false,
-      "publication_note": "License path comment corrected for the public tree; bitmap data and rendering code unchanged."
+      "published_bytes": 86129,
+      "validation_scope": "Reviewed v16 source after LF normalization; runtime adoption evidence is recorded separately.",
+      "normalization_or_provider_update": true
     },
     {
-      "file": "native/ui/dashboard_brand.h",
-      "sha256": "2c2b7683bcc97007aadca71c3c2bb04d2342831dc647df60feaee8e6e76dedad",
-      "bytes": 47416,
-      "published_sha256": "2c2b7683bcc97007aadca71c3c2bb04d2342831dc647df60feaee8e6e76dedad",
-      "published_bytes": 47416,
-      "identical_to_tested_input": true
+      "file": "patches/stable-diffusion/overlay/src/pipeline/diffusion_engine.cpp",
+      "published_sha256": "b56851cd3e17d686681921954549879647f4206507e7e8f6df0b9716d05ab42b",
+      "published_bytes": 156579,
+      "sha256": "db11832e6fab740f985cdba67987858b76adecd1df945455f43606faa106ff31",
+      "identical_to_tested_input": false,
+      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "normalization_or_provider_update": true
+    },
+    {
+      "file": "tests/optimization_build_profile.py",
+      "published_sha256": "5dc341f3a145fd4793fed851aa89377a6816f69ed1dfbbd1ac0dcf2ee2647e7a",
+      "published_bytes": 4892,
+      "sha256": "5dc341f3a145fd4793fed851aa89377a6816f69ed1dfbbd1ac0dcf2ee2647e7a",
+      "identical_to_tested_input": false,
+      "validation_scope": "Portable build wiring; no PS5 execution implied"
+    },
+    {
+      "file": "tools/build.py",
+      "published_sha256": "ccaf8eabb9aadc4315a010265329b589c6822165293e31785dac20c8ff381122",
+      "published_bytes": 13147,
+      "sha256": "ccaf8eabb9aadc4315a010265329b589c6822165293e31785dac20c8ff381122",
+      "identical_to_tested_input": false,
+      "validation_scope": "Portable build wiring; no PS5 execution implied"
     }
   ],
   "actual_console_native_eboot_sha256": "be1067a7520dce661129a2a1cab8c85fd92bd01be17d1d82b91917199679fac6",
-  "actual_console_gateway_elf_sha256": "d9976a1e8885bd455c80f46c7b2872341001a057c059ec6ad7764e2b3e2d16e2"
+  "actual_console_gateway_elf_sha256": "d9976a1e8885bd455c80f46c7b2872341001a057c059ec6ad7764e2b3e2d16e2",
+  "optimization_native_SELF_sha256": "8c018da85427c927d95d9f33e585b1bb73d64c26ba92a3ab13609ff4f61ef921",
+  "public_rebuild_SELF_sha256": "74660e4b0ad92785fdca326908d265f308469ba3cab00eeee891c1625934bda7",
+  "public_rebuild_SELF_PS5_executed": false
 }

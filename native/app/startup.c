@@ -8,6 +8,7 @@
 #include "shutdown_policy.h"
 #include "journal_metrics.h"
 #include "pool.h"
+#include "placement.h"
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -742,8 +743,8 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     struct ps5_ai_memory_plan plan = {0};
     ps5_ai_native_config_mark(1,"memory_plan_before");
     if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size) ||
-        plan.gpu_pool_bytes != (UINT64_C(9)<<30) || plan.working_reserve_bytes != UINT64_C(1073741824))
-        return init_error(error,error_size,"Candidate native Direct9GiB/initial working reserve1GiB configuration required");
+        plan.gpu_pool_bytes != PS5_AI_DATA_VA_BYTES || plan.working_reserve_bytes != UINT64_C(1073741824))
+        return init_error(error,error_size,"Candidate native Direct9422MiB/initial working reserve1GiB configuration required");
     ps5_ai_native_config_mark(16,"memory_plan_returned");
     ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=536870912 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
         (unsigned long long)plan.gpu_pool_bytes,(unsigned long long)plan.working_reserve_bytes);
@@ -777,10 +778,10 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     struct ps5_ai_flex_stats pool=report_direct("native_prepared");
     if (!direct.ready || direct.ownership_uncertain || direct.physical_owned_bytes!=plan.gpu_pool_bytes ||
         direct.mapped_bytes!=plan.gpu_pool_bytes || direct.largest_region_bytes!=UINT64_C(536870912) ||
-        direct.region_count!=plan.gpu_pool_bytes/UINT64_C(536870912) || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
+        direct.region_count!=plan.gpu_pool_bytes/UINT64_C(536870912)+(plan.gpu_pool_bytes%UINT64_C(536870912)!=0) || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
         !pool.gpu_access_granted || pool.fault_retained || !pool.log_healthy || !log_healthy)
         return init_error(error,error_size,"Native owned region accounting incomplete");
-    ps5_ai_native_capacity_snapshot("candidate_9GiB_pool_prepared");
+    ps5_ai_native_capacity_snapshot("candidate_9422MiB_pool_prepared");
     int rc=__real_ps5_ai_engine_init(config_path,error,error_size);
     if (rc) return init_error(error,error_size,"Native real engine initialization failed");
     ps5_ai_ggml_graph_phase(1);
@@ -799,7 +800,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     if (gate) return init_error(error,error_size,"Native same-context Direct GPU gate failed");
     engine_started=true;
     native_ui_start_after_real_gate();
-    ps5_ai_native_capacity_snapshot("native_9GiB_ready_after_GPU_gate");
+    ps5_ai_native_capacity_snapshot("native_9422MiB_ready_after_GPU_gate");
     ps5_ai_ggml_report("NATIVE_ENGINE_READY pid=%d Direct_data_reserved=%llu single_SCALE_tensor_verified_bytes=67108864 whole_pool_GPU_verified=0 model_loaded=0 GPU_UNet_image_verified=0 engine_ready=1",
         (int)probe_pid,(unsigned long long)pool.reserved_bytes);
     if (!log_healthy) ps5_ai_ggml_retain("native_ready_receipt_failed");

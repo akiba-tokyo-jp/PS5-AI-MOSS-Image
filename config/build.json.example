@@ -11,5 +11,7 @@
   "NATIVE_TOOL": "D:/ps5-dev/ps5-native-tool.exe",
   "HOST_BIN": "D:/ps5-dev/msys-clang64/bin",
   "PAYLOAD_SDK": "D:/ps5-dev/payload-sdk-v0.44/ps5-payload-sdk",
-  "SDK_SOURCE": "D:/ps5-dev/sources/sdk"
+  "SDK_SOURCE": "D:/ps5-dev/sources/sdk",
+  "GGML_SHADER_DIR": "D:/ps5-dev/build/ggml/src/ggml-vulkan",
+  "SPIRV_HEADERS": "D:/ps5-dev/sources/SPIRV-Headers"
 }

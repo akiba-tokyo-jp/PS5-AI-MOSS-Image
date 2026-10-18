@@ -1,5 +1,7 @@
 # ControlNet Canny / OpenPose 実機検証（2026-10-18）
 
+現行の9422MiB予約・CPU CLIP分割・ControlNetバッチ化と1024の結果は[2026-10-19の検証](optimization-20261019.md)を参照してください。以下の9GiBや時間は当時の実測です。
+
 FW12.40のPS5で、WAI v17.0にCanny・OpenPoseを接続し、両方の256×256 /1024×1024生成とWindowsからのPNG取得を確認しました。各条件1枚の機能検証です。長期安定性や画質最適化の完了を意味しません。
 
 | 条件 | 漫画LoRA強度 | PS5内生成 | Windows API応答 |

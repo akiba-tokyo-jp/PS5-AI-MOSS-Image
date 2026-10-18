@@ -356,6 +356,22 @@ int ps5_ai_flex_prepare_sized(uint64_t requested, uint64_t reserve) {
     return same ? ps5_ai_flex_prepare() : -1;
 }
 static int bit(uint32_t page) { return (int)((bitmap[page / 64] >> (page % 64)) & 1); }
+uint64_t ps5_ai_flex_largest_free_span_bytes(void) {
+    acquire(&lock);
+    uint64_t maximum = 0;
+    if (direct.ready && state.mapping_owned && state.gpu_access_granted &&
+        !state.fault_retained && atomic_load(&log_ok)) {
+        for (uint32_t n = 0; n < direct.region_count; ++n) {
+            uint64_t run = 0;
+            for (uint32_t page = 0; page < regions[n].pages; ++page) {
+                if (bit(regions[n].page_first + page)) run = 0;
+                else { run += PAGE; if (run > maximum) maximum = run; }
+            }
+        }
+    }
+    release(&lock);
+    return maximum;
+}
 static struct claim *find(void *address, uint64_t bytes) {
     for (uint32_t i = 0; i < claim_capacity; ++i) {
         struct claim *c = &claims[i];
@@ -386,18 +402,39 @@ void *ps5_ai_flex_alloc(uint64_t bytes, uint64_t alignment) {
     if (rounded > direct.largest_region_bytes || rounded > state.free_bytes) { state.denied_allocations++; release(&lock); return NULL; }
     uint32_t pages = (uint32_t)(rounded / PAGE), slot = unused_claim();
     uint32_t found_region = UINT32_MAX, found_page = 0;
+    uint32_t best_free = UINT32_MAX, best_span = UINT32_MAX;
+    /* Pack the fullest viable existing mapping, then its smallest fitting
+     * hole. Global hole best-fit alone regressed a recorded large workspace;
+     * the mapping-level choice preserves emptier mappings for large claims.
+     * Alignment prefixes stay free; ties retain region/page order. This only
+     * selects unused pages: no move, extra Direct allocation or cross-region
+     * claim. Ownership, journal and GPU-idle gates below remain unchanged. */
     if (slot != UINT32_MAX) for (uint32_t n = 0; n < direct.region_count; ++n) {
         struct region *r = &regions[n];
         if (pages > r->pages) continue;
-        for (uint32_t first = 0; first <= r->pages - pages; ++first) {
+        uint32_t free_pages = 0, local_span = UINT32_MAX, local_page = 0;
+        for (uint32_t first = 0; first < r->pages;) {
+            if (bit(r->page_first + first)) { ++first; continue; }
+            uint32_t end = first + 1;
+            while (end < r->pages && !bit(r->page_first + end)) ++end;
             uint64_t address = (uint64_t)(uintptr_t)r->cpu + (uint64_t)first * PAGE;
-            if (address % alignment) continue;
-            uint32_t run = 0;
-            while (run < pages && !bit(r->page_first + first + run)) ++run;
-            if (run == pages) { found_region = n; found_page = first; break; }
-            first += run;
+            uint64_t padding = (UINT64_C(0) - address) & (alignment - 1);
+            /* PAGE and alignment are powers of two; page-aligned starts make
+             * padding an exact number of pages even when alignment < PAGE. */
+            uint64_t aligned_first = (uint64_t)first + padding / PAGE;
+            uint32_t span = end - first;
+            free_pages += span;
+            if (aligned_first <= end && pages <= end - aligned_first && span < local_span) {
+                local_page = (uint32_t)aligned_first; local_span = span;
+            }
+            first = end;
         }
-        if (found_region != UINT32_MAX) break;
+        if (local_span != UINT32_MAX &&
+            (free_pages < best_free || (free_pages == best_free && local_span < best_span))) {
+            found_region = n; found_page = local_page;
+            best_free = free_pages; best_span = local_span;
+            if (free_pages == pages) break; /* No viable region can be fuller. */
+        }
     }
     if (found_region == UINT32_MAX) {
         uint64_t maximum=0,total_free=state.free_bytes,largest=direct.largest_region_bytes;

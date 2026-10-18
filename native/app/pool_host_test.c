@@ -6,7 +6,9 @@
 static int allocs, maps, unmaps, frees, held, pending, wait_ok = 1;
 static int allocation_mode, map_mode, query_corrupt, query_fail, protect_corrupt, sync_fail, fail_sync_after_map;
 static int fail_unmap, fail_release, short_writes, write_calls;
-static uint64_t mock_owned;
+static uint64_t mock_owned, other_owned;
+static int host_partial_refusal;
+static int64_t host_direct_bytes = INT64_C(12) << 30;
 static struct { int64_t physical; void *address; uint64_t bytes; int mapped, owned; } mock[32];
 int host_open_journal(void) { return 42; }
 ssize_t host_write(int fd, const void *p, size_t n) {
@@ -16,27 +18,28 @@ ssize_t host_write(int fd, const void *p, size_t n) {
     return (ssize_t)n;
 }
 int host_fsync(int fd) { assert(fd == 42); return sync_fail ? -1 : 0; }
-int64_t sceKernelGetDirectMemorySize(void) { return INT64_C(12) << 30; }
+int64_t sceKernelGetDirectMemorySize(void) { return host_direct_bytes; }
 int32_t sceKernelAvailableDirectMemorySize(int64_t start, int64_t end, size_t alignment, int64_t *physical, size_t *available) {
-    assert(!start && end == (INT64_C(12) << 30) && alignment == UNIT);
-    *physical = UNIT; *available = (UINT64_C(12) << 30) - mock_owned - UNIT;
+    assert(!start && end == host_direct_bytes && alignment == UNIT);
+    *physical = UNIT; *available = (uint64_t)host_direct_bytes - mock_owned - other_owned - UNIT;
+    if (host_partial_refusal && allocs == 18) *available = (UINT64_C(1)<<30) + (UINT64_C(206)<<20) - UNIT;
     if (query_corrupt) available[1] = 0;
     return query_fail ? -1 : 0;
 }
 int32_t sceKernelAllocateDirectMemory(int64_t start, int64_t end, size_t bytes, size_t alignment, int type, int64_t *physical) {
-    assert(!start && end == (INT64_C(12) << 30) && alignment == UNIT && type == 12 && bytes % UNIT == 0);
+    assert(!start && end == host_direct_bytes && alignment == UNIT && type == 12 && bytes % UNIT == 0);
     int index = allocs++; assert(index < 32);
-    if (allocation_mode == 1 && index == 1) return -1;
+    if ((allocation_mode == 1 && index == 1) || (allocation_mode == 6 && index == 18)) return -1;
     if (allocation_mode == 2) { *physical = 0; return 0; }
     if (allocation_mode == 3) { *physical = UNIT; return -1; }
     if (allocation_mode == 4) { *physical = UNIT; physical[1] = 0; return 0; }
     if (allocation_mode == 5 && index == 1) *physical = mock[0].physical;
-    else *physical = (int64_t)(UNIT + (uint64_t)index * bytes);
+    else *physical = (int64_t)(UNIT + mock_owned);
     mock[index].physical = *physical; mock[index].bytes = bytes; mock[index].owned = 1; mock_owned += bytes;
     return 0;
 }
 int32_t sceKernelMapDirectMemory(void **address, size_t bytes, int protection, int flags, int64_t physical, size_t alignment) {
-    assert((uintptr_t)*address == PS5_AI_DATA_VA_BASE+(uint64_t)maps*bytes && protection == 0x33 && !flags && alignment == UNIT);
+    assert((uintptr_t)*address == PS5_AI_DATA_VA_BASE+direct.mapped_bytes && protection == 0x33 && !flags && alignment == UNIT);
     int index = maps++; assert(index < 32 && physical == mock[index].physical && bytes == mock[index].bytes);
     if (map_mode == 1) { *address = NULL; return 0; }
     if (map_mode == 2) { *address = (void *)UINTPTR_MAX; return 0; }
@@ -105,10 +108,29 @@ int main(int argc, char **argv) {
     if (!strcmp(name, "query_error")) query_fail = 1;
     if (!strcmp(name, "map_log_failure")) fail_sync_after_map = 1;
     if (!strcmp(name, "short_write_EINTR")) short_writes = 1;
+    int pressure = !strcmp(name, "cpu_headroom_refusal");
+    if (pressure || !strcmp(name, "near_capacity_success")) {
+        host_direct_bytes = INT64_C(12280922112);
+        other_owned = (pressure ? UINT64_C(3) : UINT64_C(1)) << 30;
+    }
+    host_partial_refusal = !strcmp(name, "partial_fresh_reserve_refusal");
+    if (!strcmp(name, "partial_tail_allocation_refusal")) allocation_mode = 6;
     uint64_t target = PS5_AI_DATA_VA_BYTES;
-    uint64_t piece = UINT64_C(256) << 20;
-    assert(!ps5_ai_direct_pool_configure(target, piece, MIN_RESERVE));
+    uint64_t piece = UINT64_C(512) << 20;
+    uint64_t count = target / piece + (target % piece != 0);
+    assert(target == UINT64_C(9879683072) && count == 19);
+    assert(target % piece == (UINT64_C(206)<<20));
+    assert(PS5_AI_DATA_VA_BASE == UINT64_C(0x7db3200000));
+    assert(PS5_AI_REFERENCE_VA_BASE + PS5_AI_DRIVER_VA_BYTES == PS5_AI_DATA_VA_BASE);
+    assert(PS5_AI_DRIVER_VA_BYTES + target == PS5_AI_REFERENCE_VA_BYTES);
+    assert(!ps5_ai_direct_pool_configure(target, piece, UINT64_C(1)<<30));
     int rc = ps5_ai_flex_prepare();
+    if (pressure || host_partial_refusal || allocation_mode == 6) {
+        assert(rc == -1 && !held && !mock_owned && !direct.ready && !direct.ownership_uncertain);
+        if (pressure) assert(allocs > 0 && allocs < 19 && unmaps == allocs && frees == allocs);
+        else assert(maps == 18 && unmaps == 18 && frees == 18 && allocs == (allocation_mode == 6 ? 19 : 18));
+        return 0;
+    }
     if (query_corrupt || query_fail) { assert(rc == -1 && !allocs && !maps); return 0; }
     if (allocation_mode == 1) { assert(rc == -1 && allocs == 2 && maps == 1 && frees == 1 && unmaps == 1 && !mock_owned && !held); return 0; }
     if (allocation_mode || map_mode || protect_corrupt || fail_sync_after_map) {
@@ -117,20 +139,57 @@ int main(int argc, char **argv) {
                              (uintptr_t)regions[0].cpu==UINT64_C(0x200000000));
         assert(!ps5_ai_flex_pool_bytes() && !ps5_ai_flex_alloc(PAGE, PAGE)); return 0;
     }
-    assert(!rc && direct.ready && ps5_ai_flex_pool_bytes() == target && direct.region_count == 28);
-    assert((uintptr_t)mock[0].address==PS5_AI_DATA_VA_BASE && (uintptr_t)mock[27].address+piece==PS5_AI_DATA_VA_END);
-    assert(ps5_ai_flex_prepare() == -1 && allocs == 28);
+    assert(!rc && direct.ready && ps5_ai_flex_pool_bytes() == target && direct.region_count == count);
+    assert(region_capacity == count && maps == (int)count && allocs == (int)count);
+    for (unsigned i = 0; i < count; ++i) {
+        uint64_t bytes = i + 1 == count ? target - (uint64_t)i * piece : piece;
+        assert(mock[i].bytes == bytes && regions[i].bytes == bytes);
+        assert((uintptr_t)mock[i].address == PS5_AI_DATA_VA_BASE + (uint64_t)i * piece);
+        assert(regions[i].physical_owned && regions[i].mapped && mock[i].owned && mock[i].mapped);
+    }
+    assert((uintptr_t)mock[count-1].address + mock[count-1].bytes == PS5_AI_DATA_VA_END);
+    assert(direct.physical_owned_bytes == target && direct.mapped_bytes == target && state.free_bytes == target);
+    assert(ps5_ai_flex_prepare() == -1 && allocs == (int)count);
     assert(!ps5_ai_flex_alloc(piece + PAGE, PAGE)); /* Cannot span two mappings. */
     if (!strcmp(name, "claim_growth")) {
         for (unsigned i = 0; i < 4097; ++i) assert(ps5_ai_flex_alloc(PAGE, PAGE));
         assert(claim_capacity == 8192 && state.allocations == 4097); return 0;
     }
     if (!strcmp(name, "region_fragmentation")) {
-        void *a[28];for(unsigned i=0;i<28;i++){a[i]=ps5_ai_flex_alloc(piece-UNIT,PAGE);assert(a[i]==mock[i].address);}
-        assert(state.free_bytes==28*UNIT && !ps5_ai_flex_alloc(3*MIB,PAGE));
-        for(unsigned i=0;i<28;i++)assert(!ps5_ai_flex_free(a[i],piece-UNIT));
+        void *a[32];
+        for (unsigned i = 0; i < count; ++i) {
+            a[i] = ps5_ai_flex_alloc(regions[i].bytes - UNIT, PAGE);
+            assert(a[i] == mock[i].address);
+        }
+        assert(state.free_bytes == count * UNIT && !ps5_ai_flex_alloc(3*MIB, PAGE));
+        for (unsigned i = 0; i < count; ++i) assert(!ps5_ai_flex_free(a[i], regions[i].bytes - UNIT));
     }
-    void *p = ps5_ai_flex_alloc(PAGE, PAGE); assert(p == mock[0].address);
+    if (!strcmp(name, "partial_full_ownership") || !strcmp(name, "partial_pending_gate")) {
+        void *full[18];
+        for (unsigned i = 0; i < 18; ++i) { full[i] = ps5_ai_flex_alloc(piece, PAGE); assert(full[i] == regions[i].cpu); }
+        assert(ps5_ai_flex_largest_free_span_bytes() == (UINT64_C(206)<<20));
+        assert(!ps5_ai_flex_alloc((UINT64_C(206)<<20) + PAGE, PAGE));
+        void *tail = ps5_ai_flex_alloc(UINT64_C(206)<<20, PAGE);
+        assert(tail == regions[18].cpu && !state.free_bytes && !ps5_ai_flex_alloc(PAGE, PAGE));
+        assert(ps5_ai_flex_grant_gpu(tail, UINT64_C(206)<<20));
+        assert(!ps5_ai_flex_import_committed(tail, UINT64_C(206)<<20));
+        if (!strcmp(name, "partial_pending_gate")) {
+            pending = 1;
+            assert(ps5_ai_flex_free(tail, UINT64_C(206)<<20) == -1 && held && state.fault_retained && !frees && !unmaps);
+            assert(state.active_imports == 1 && state.allocations == count && mock_owned == target);
+            return 0;
+        }
+        assert(!ps5_ai_flex_free(tail, UINT64_C(206)<<20));
+        for (unsigned i = 0; i < 18; ++i) assert(!ps5_ai_flex_free(full[i], piece));
+        assert(state.free_bytes == target && !state.used_bytes && !state.allocations && !state.active_imports && !frees && !unmaps);
+    }
+    void *p = ps5_ai_flex_alloc(PAGE, PAGE); assert(p);
+    struct claim *owner = find(p, PAGE);
+    assert(owner && owner->region < count && owner->first + owner->pages <= regions[owner->region].pages);
+    if (!strcmp(name, "partial_live_release_refused")) {
+        assert(ps5_ai_direct_pool_release_if_idle() == 1 && direct.ready && !held && !frees && !unmaps);
+        assert(state.allocations == 1 && state.used_bytes == PAGE && mock_owned == target);
+    }
     if (!strcmp(name, "pending")) pending = 1;
     if (!strcmp(name, "quiet_failure")) wait_ok = 0;
     if (pending || !wait_ok) {
@@ -149,6 +208,10 @@ int main(int argc, char **argv) {
         assert(ps5_ai_direct_pool_release_if_idle() == -1 && held && direct.ownership_uncertain && mock_owned == target);
         assert(unmaps == 1 && frees == (fail_release ? 1 : 0)); return 0;
     }
-    assert(!ps5_ai_direct_pool_release_if_idle() && !mock_owned && unmaps == 28 && frees == 28 && !ps5_ai_flex_pool_bytes());
+    assert(!ps5_ai_direct_pool_release_if_idle() && !mock_owned && unmaps == (int)count && frees == (int)count && !ps5_ai_flex_pool_bytes());
     return 0;
 }
+
+int ps5_ai_profile_enabled(void){return 0;}
+void ps5_ai_profile_add(unsigned i,uint64_t n,uint64_t b,int valid){(void)i;(void)n;(void)b;(void)valid;}
+bool ps5_ai_native_journal_debug_enabled(void){return false;}

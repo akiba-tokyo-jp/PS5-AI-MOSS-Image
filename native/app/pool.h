@@ -40,6 +40,8 @@ struct ps5_ai_flex_prepare_stats {
  * user-space hard timeout. No signal or foreign-process action. */
 int ps5_ai_flex_cancel_cpu_prefault(void);
 void ps5_ai_flex_prepare_snapshot(struct ps5_ai_flex_prepare_stats *out);
+/* Fullest viable mapping, then best-fit hole; no move/extra allocation.
+ * Ownership, alignment limits, GPU-idle free gate and ABI are unchanged. */
 void *ps5_ai_flex_alloc(uint64_t bytes, uint64_t alignment);
 /* Import callback accepts exactly one current owned allocation. */
 bool ps5_ai_flex_grant_gpu(void *address, uint64_t bytes);
@@ -50,6 +52,10 @@ int ps5_ai_flex_free(void *address, uint64_t bytes);
 int ps5_ai_direct_pool_log_checkpoint(void);
 void ps5_ai_flex_snapshot(struct ps5_ai_flex_stats *out);
 uint64_t ps5_ai_flex_pool_bytes(void);
+/* Metadata-only instantaneous upper bound within one region. Does not account
+ * for requested alignment or reserve future ownership; allocation can still
+ * fail after this snapshot. Returns 0 when the pool is unavailable/faulted. */
+uint64_t ps5_ai_flex_largest_free_span_bytes(void);
 void ps5_ai_flex_retain_fault(const char *reason);
 #ifdef __cplusplus
 }

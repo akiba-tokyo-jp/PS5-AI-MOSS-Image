@@ -455,7 +455,7 @@ struct FrozenCLIPEmbedderWithCustomWords : public Conditioner {
                                              int height,
                                              bool zero_out_masked = false) {
         int64_t t0 = ggml_time_ms();
-        if (stream_cpu_clip) LOG_INFO("CPU CLIP stream: release L/G runner workspace and disk-backed params after each owned output");
+        if (stream_cpu_clip) LOG_INFO("CPU CLIP stream: release L/G workspace and disk-backed params after each graph; first G chunk shares hidden/pooled encoder");
         sd::Tensor<float> hidden_states;  // [n_token, hidden_size] or [n_token, hidden_size + hidden_size2]
         sd::Tensor<float> pooled;
 
@@ -501,7 +501,22 @@ struct FrozenCLIPEmbedderWithCustomWords : public Conditioner {
                                                                stream_cpu_clip);
                 if(chunk_hidden_states.empty()) throw std::runtime_error("CLIP-L compute/weight preparation failed");
                 if (sd_version_is_sdxl(version)) {
-                    auto chunk_hidden_states2 = text_model2->compute(n_threads,
+                    sd::Tensor<float> chunk_hidden_states2;
+                    if (stream_cpu_clip && chunk_idx == 0) {
+                        auto outputs = text_model2->compute_hidden_pooled(n_threads,
+                                                                         input_ids2,
+                                                                         num_custom_embeddings,
+                                                                         token_embed_custom2.data(),
+                                                                         max_token_idx,
+                                                                         clip_skip,
+                                                                         true);
+                        chunk_hidden_states2 = std::move(outputs.first);
+                        pooled = std::move(outputs.second);
+                        if (chunk_hidden_states2.empty() || pooled.empty()) {
+                            throw std::runtime_error("CLIP-G shared hidden/pooled compute/weight preparation failed");
+                        }
+                    } else {
+                        chunk_hidden_states2 = text_model2->compute(n_threads,
                                                                      input_ids2,
                                                                      num_custom_embeddings,
                                                                      token_embed_custom2.data(),
@@ -509,10 +524,11 @@ struct FrozenCLIPEmbedderWithCustomWords : public Conditioner {
                                                                      false,
                                                                      clip_skip,
                                                                      stream_cpu_clip);
+                    }
                     if(chunk_hidden_states2.empty()) throw std::runtime_error("CLIP-G hidden compute/weight preparation failed");
                     chunk_hidden_states = sd::ops::concat(chunk_hidden_states, chunk_hidden_states2, 0);
 
-                    if (chunk_idx == 0) {
+                    if (chunk_idx == 0 && !stream_cpu_clip) {
                         pooled = text_model2->compute(n_threads,
                                                       input_ids2,
                                                       num_custom_embeddings,

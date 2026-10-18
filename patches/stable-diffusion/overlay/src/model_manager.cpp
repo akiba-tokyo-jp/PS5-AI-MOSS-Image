@@ -1,3 +1,4 @@
+#include "phase_profile.h"
 #include "model_manager.h"
 
 #include <algorithm>
@@ -10,6 +11,10 @@
 #include "core/ggml_extend_backend.h"
 #include "core/util.h"
 #include "model/adapter/lora.hpp"
+
+extern "C" ggml_backend_buffer_t ps5_ai_cpu_clip_params_buffer(size_t);
+extern "C" uint64_t ps5_ai_cpu_clip_shared_direct_live_bytes(void);
+extern "C" int ps5_ai_ggml_release_idle_scratch(ggml_backend_t);
 
 static size_t aligned_offset(const void* buffer, size_t offset, size_t alignment) {
     GGML_ASSERT(alignment != 0 && (alignment & (alignment - 1)) == 0);
@@ -577,13 +582,13 @@ bool ModelManager::stage_tensors_to_compute_backend(const std::vector<TensorStat
                 TensorState* state          = staged_tensor.first;
                 ggml_tensor* managed_tensor = state->tensor;
                 ggml_tensor* staging_tensor = staged_tensor.second;
-                ggml_backend_tensor_copy(managed_tensor, staging_tensor);
+                ps5_ai_profile_call(24,ggml_nbytes(managed_tensor),[&]{ggml_backend_tensor_copy(managed_tensor, staging_tensor);});
                 std::swap(managed_tensor->buffer, staging_tensor->buffer);
                 std::swap(managed_tensor->data, staging_tensor->data);
                 std::swap(managed_tensor->extra, staging_tensor->extra);
                 state->staged_to_compute_backend = true;
             }
-            ggml_backend_synchronize(compute_backend);
+            ps5_ai_profile_call(25,0,[&]{ggml_backend_synchronize(compute_backend);});
 
             auto block             = std::make_unique<ComputeStagingBlock>();
             block->compute_backend = compute_backend;
@@ -867,6 +872,7 @@ bool ModelManager::can_mmap_storage(const TensorState& state) const {
 
 bool ModelManager::alloc_params_buffers(const std::vector<TensorState*>& states,
                                         std::vector<ParamsStorageBlock*>& created_storage_blocks) {
+    bool native_cpu_scratch_checked = false;
     std::map<std::pair<ggml_backend_buffer_type_t, int>, std::vector<TensorState*>> states_by_buffer_type;
     for (TensorState* state : states) {
         if (state == nullptr || state->tensor == nullptr) {
@@ -884,9 +890,23 @@ bool ModelManager::alloc_params_buffers(const std::vector<TensorState*>& states,
         const std::vector<TensorState*>& states = pair.second;
         size_t alignment                        = ggml_backend_buft_get_alignment(params_buft);
         size_t max_size                         = ggml_backend_buft_get_max_size(params_buft);
-        if (!ggml_backend_buft_is_host(params_buft) &&
-            (max_size == 0 || max_size > MAX_RESIDENCY_BLOCK_BYTES)) {
-            max_size = MAX_RESIDENCY_BLOCK_BYTES;
+        // The PS5 CPU heap and GPU pool share physical Direct memory. A single
+        // 1.43GiB CLIP-G allocation can fail after earlier jobs despite enough
+        // aggregate space. Keep CPU weight blocks bounded as GPU blocks are;
+        // each tensor still has one buffer and unchanged dtype/data.
+        // Only CPU CLIP and its CPU text LoRA group use the smaller preference.
+        // Preserve tensor order/dtype and normal owner allocation/free. A single
+        // tensor above the preference remains alone (e.g.120.625MiB embedding).
+        const bool cpu_clip_chunk_group = ggml_backend_buft_is_host(params_buft) && !states.empty() &&
+            std::all_of(states.begin(), states.end(), [](const TensorState* state) {
+                return state && state->compute_backend && sd_backend_is_cpu(state->compute_backend) &&
+                    ((state->component == ModelComponent::Conditioner && state->name.rfind("cond_stage_model.",0) == 0) ||
+                     (state->component == ModelComponent::LoRA && state->name.rfind("lora.cond_stage_model.",0) == 0));
+            });
+        const size_t residency_block_limit = cpu_clip_chunk_group ? (static_cast<size_t>(16)<<20) :
+            (ggml_backend_buft_is_host(params_buft) ? (static_cast<size_t>(256)<<20) : MAX_RESIDENCY_BLOCK_BYTES);
+        if (max_size == 0 || max_size > residency_block_limit) {
+            max_size = residency_block_limit;
         }
 
         auto alloc_chunk = [&](const std::vector<TensorState*>& chunk, size_t chunk_size) -> bool {
@@ -894,7 +914,43 @@ bool ModelManager::alloc_params_buffers(const std::vector<TensorState*>& states,
                 return true;
             }
 
-            ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(params_buft, chunk_size);
+            // CPU CLIP and its CPU LoRA tensors share a host-buffer group.
+            // Select by compute backend: a LoRA tensor name must not force
+            // the whole CLIP chunk back onto the physical CPU heap.
+            const bool cpu_clip = ggml_backend_buft_is_host(params_buft) &&
+                std::all_of(chunk.begin(), chunk.end(), [](const TensorState* state) {
+                    return state && state->compute_backend && sd_backend_is_cpu(state->compute_backend);
+                });
+            if (cpu_clip && !native_cpu_scratch_checked) {
+                native_cpu_scratch_checked = true;
+                /* This is before the first CPU weight claim in this group.
+                 * Native integration holds the single SD execution mutex and
+                 * disables prefetch. A nested/mid-group request skips trimming. */
+                if (prefetch_disabled_ && ps5_ai_cpu_clip_shared_direct_live_bytes() == 0 && prefetch_blocks_.empty()) {
+                    bool any_gpu_params_pinned = false;
+                    std::set<ggml_backend_t> gpu_backends;
+                    for (const auto& registered : tensor_states_) {
+                        if (!registered) continue;
+                        auto backend = registered->compute_backend;
+                        if (backend && !sd_backend_is_cpu(backend)) {
+                            gpu_backends.insert(backend);
+                            if (registered->pin_count) any_gpu_params_pinned = true;
+                        }
+                    }
+                    if (!any_gpu_params_pinned) for (auto backend : gpu_backends) {
+                        if (ps5_ai_ggml_release_idle_scratch(backend) < 0) {
+                            LOG_ERROR("native CPU CLIP scratch owner gate unhealthy; no CPU claim attempted");
+                            return false;
+                        }
+                    }
+                }
+            }
+            if(ggml_backend_buft_is_host(params_buft))
+                LOG_INFO("native CPU params: shared_Direct=%d tensors=%zu first=%.100s bytes=%zu",
+                         cpu_clip?1:0,chunk.size(),chunk.front()->name.c_str(),chunk_size);
+            ggml_backend_buffer_t buffer = cpu_clip
+                ? ps5_ai_cpu_clip_params_buffer(chunk_size)
+                : ggml_backend_buft_alloc_buffer(params_buft, chunk_size);
             if (buffer == nullptr) {
                 LOG_ERROR("model manager alloc params backend buffer failed, size = %.2fMB",
                           chunk_size / (1024.0 * 1024.0));
@@ -1014,7 +1070,7 @@ bool ModelManager::load_tensor_parts(TensorState& state) {
     }
     if (!buffer.empty()) {
         // Upload the assembled tensor once, including for row-split backend buffers.
-        ggml_backend_tensor_set(state.tensor, buffer.data(), 0, size);
+        ps5_ai_profile_call(24,size,[&]{ggml_backend_tensor_set(state.tensor, buffer.data(), 0, size);});
     }
     state.loaded_to_params_backend = true;
     return true;
@@ -1071,7 +1127,7 @@ bool ModelManager::load_tensors(const std::vector<TensorState*>& states) {
                 auto* first = entry.second.front()->tensor;
                 for (auto* state : entry.second) {
                     if (state->tensor != first)
-                        ggml_backend_tensor_copy(first, state->tensor);
+                        ps5_ai_profile_call(24,ggml_nbytes(first),[&]{ggml_backend_tensor_copy(first, state->tensor);});
                     state->loaded_to_params_backend = true;
                 }
             }
@@ -1600,16 +1656,6 @@ void ModelManager::release_compute_backend_params(const std::vector<ggml_tensor*
         return;
     }
     finish_compute_backend_usage(required_states);
-    // Segment callers synchronize before unpinning. Disk-backed weights are
-    // reloadable; avoid retaining them as fragmented LRU blocks between cuts.
-    // The existing eviction path rechecks pins, staging, and block ownership.
-    std::vector<ggml_tensor*> retired_disk_tensors;
-    for (TensorState* state : required_states) {
-        if (state != nullptr && state->residency_mode == ResidencyMode::Disk && state->pin_count == 0) {
-            retired_disk_tensors.push_back(state->tensor);
-        }
-    }
-    evict_compute_backend_params(retired_disk_tensors);
 }
 
 void ModelManager::evict_compute_backend_params(const std::vector<ggml_tensor*>& tensors) {
@@ -1742,7 +1788,7 @@ ModelManager::CapacityCheck ModelManager::check_capacity(
     auto add             = [](size_t a, size_t b) { return b > SIZE_MAX - a ? SIZE_MAX : a + b; };
     const size_t missing = compute_backend_alloc_size(states, true);
     // Backend scratch buffers and pipelines are not included in graph measurements.
-    constexpr size_t safety_margin = 8ULL * 1024ULL * 1024ULL;
+    constexpr size_t safety_margin = 512ULL * 1024ULL * 1024ULL;
     result.required_device_bytes   = add(add(request.pending_allocation_bytes, missing), safety_margin);
     result.required_budget_bytes   = add(request.runtime_peak_bytes(), missing);
     auto available_device_bytes    = [&](ggml_backend_t backend) {

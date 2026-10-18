@@ -18,7 +18,7 @@
     "flash_attn_mode": "auto,unet=on,controlnet=on",
     "batched_cfg": true,
     "conditioning_cache_size": 2,
-    "gpu_pool_bytes": 9663676416,
+    "gpu_pool_bytes": 9879683072,
     "working_reserve_bytes": 1073741824,
     "manga_lora_path": "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors",
     "clip_vision_path": "/app0/models/clip-vision-vit-h-f16.safetensors",

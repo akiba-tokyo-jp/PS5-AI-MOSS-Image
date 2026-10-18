@@ -1,0 +1,921 @@
+{
+  "schema": 1,
+  "as_of": "2026-10-19",
+  "scope": "Filtered extract of eleven saved successful receipts: nine 256x256 and two 1024x1024. No new PS5 operation or generation. Private paths, tokens, prompts and job identifiers are omitted.",
+  "conditions": {
+    "model": "WAI-Illustrious-SDXL v17.0",
+    "steps": 20,
+    "cfg_scale": 5,
+    "seed": 20261018,
+    "sampler": "euler_a",
+    "manga_strength": 1,
+    "manga_monochrome": false,
+    "controlnet": "openpose",
+    "control_strength": 1,
+    "backend": "CPU CLIP; Vulkan UNet/ControlNet/TAESD",
+    "Direct_reservation_is_per_record": true,
+    "size_is_per_record": true,
+    "generation_settings_match_except_size_and_uploaded_control_identifier": true,
+    "control_image_is_identical_to_reference_for_each_size": true
+  },
+  "timing_caveats": [
+    "Each row is one measured image, not an average.",
+    "Cold rows record model_loaded_before=false and include initial model loading.",
+    "256 warm row has conditioning/weight cache hits and cannot isolate the ControlNet optimization.",
+    "The 1024 size-change row has model_loaded_before=true but CLIP recomputation; it is not comparable to a fully cold 1024 run as a speedup ratio.",
+    "Phase metrics are CPU wall time including internal waits, not pure GPU timestamp measurements; nested durations must not be added.",
+    "The final V16 cold256 improvement is about 7.0%; the CLIP-only 8.9% improvement describes an earlier intermediate variant."
+  ],
+  "records": [
+    {
+      "id": "base-cold",
+      "receipt_sha256": "73d5d8bf97c4838101227b87b5ca46ade7f60d8841fd4455683eeb2e17def640",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 124.567433,
+      "Windows_API_seconds": 125.78100000001723,
+      "actual_steps": 20,
+      "CLIP_seconds": 23.46,
+      "controlnet_seconds": 14.523882,
+      "controlnet_evals": 40,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8242790400,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 66.293589215
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.357037694
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 6.486626878
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 7.339399709
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.029142509
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 80,
+          "invalid_clock_samples": 0,
+          "seconds": 0.050740769
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 88881,
+          "invalid_clock_samples": 0,
+          "seconds": 0.354596853
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "allocator-cold",
+      "receipt_sha256": "2101d7abd24e8fb276ceedfae5e41745697f60249037a59c190af38d9b821498",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 124.02601,
+      "Windows_API_seconds": 125.21799999999348,
+      "actual_steps": 20,
+      "CLIP_seconds": 23.43,
+      "controlnet_seconds": 14.486982,
+      "controlnet_evals": 40,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8242790400,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 66.209729137
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.077559988
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 6.473766738
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 7.324239691
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.02901974
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 80,
+          "invalid_clock_samples": 0,
+          "seconds": 0.050778788
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 88881,
+          "invalid_clock_samples": 0,
+          "seconds": 0.354871741
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "scratch-cold",
+      "receipt_sha256": "fc2dc795ac02d2f52b9da860ff0eb73d80c493b2c07275e063d53e12fb2b0aa5",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 124.148003,
+      "Windows_API_seconds": 124.71899999998277,
+      "actual_steps": 20,
+      "CLIP_seconds": 23.48,
+      "controlnet_seconds": 14.493066,
+      "controlnet_evals": 40,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8242790400,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 66.326127334
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.023158591
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 6.482064407
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 7.314844609
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.028959849
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 80,
+          "invalid_clock_samples": 0,
+          "seconds": 0.051204171
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 88881,
+          "invalid_clock_samples": 0,
+          "seconds": 0.363624559
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "clip-cold",
+      "receipt_sha256": "cc3905f9e6f5e22342ab07862c5652ccb93e453c35d639f5a3b93eb13a74952e",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 113.543048,
+      "Windows_API_seconds": 114.70300000003772,
+      "actual_steps": 20,
+      "CLIP_seconds": 12.7,
+      "controlnet_seconds": 14.530869,
+      "controlnet_evals": 40,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8242790400,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 66.495506689
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.046508907
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 6.471222932
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 7.362507865
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.02909095
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 80,
+          "invalid_clock_samples": 0,
+          "seconds": 0.050031451
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 88869,
+          "invalid_clock_samples": 0,
+          "seconds": 0.357646486
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "unet-cold",
+      "receipt_sha256": "2ab124028e50379af56451653e439dccbda1d8e9ee128eb41f784ab47ee10842",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 112.924386,
+      "Windows_API_seconds": 113.68800000002375,
+      "actual_steps": 20,
+      "CLIP_seconds": 12.7,
+      "controlnet_seconds": 14.51671,
+      "controlnet_evals": 40,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8242790400,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 65.698298266
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.190670988
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 6.469904528
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 7.357548314
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.028857457
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 80,
+          "invalid_clock_samples": 0,
+          "seconds": 0.049936912
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 88869,
+          "invalid_clock_samples": 0,
+          "seconds": 0.352946026
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "controlnet-cold",
+      "receipt_sha256": "f0313078323203d6b596e666558b44c8f76850f195620cee16423a553b4d23a7",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 113.568241,
+      "Windows_API_seconds": 114.65599999995902,
+      "actual_steps": 20,
+      "CLIP_seconds": 13.57,
+      "controlnet_seconds": 13.063797,
+      "controlnet_evals": 20,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8262451200,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 67.089235629
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.097927728
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 5.380339657
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 7.317282882
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.012455202
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.026573049
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 75399,
+          "invalid_clock_samples": 0,
+          "seconds": 0.299188933
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "controlnet-warm",
+      "receipt_sha256": "1959ddc8663906e665a9d8e1fcf264e33c548afb241ec38ec737f35436d6fc3a",
+      "job_status": "completed",
+      "model_loaded_before": true,
+      "generation_seconds": 14.766708,
+      "Windows_API_seconds": 15.5,
+      "actual_steps": 20,
+      "CLIP_seconds": 0.0,
+      "controlnet_seconds": 3.489921,
+      "controlnet_evals": 20,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 22,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9663676416,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8265039872,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 9.250565968
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.069379153
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 3.081528125
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.008871717
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.023019393
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.028002268
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 75062,
+          "invalid_clock_samples": 0,
+          "seconds": 0.278652392
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "memory-v15-cold",
+      "receipt_sha256": "619ed0aeba3fa08ff368df275279fdaf62a190782038a9252c8e9e4d706f42f4",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 112.884536,
+      "Windows_API_seconds": 113.65599999995902,
+      "actual_steps": 20,
+      "CLIP_seconds": 13.54,
+      "controlnet_seconds": 13.05127,
+      "controlnet_evals": 20,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535475712,
+      "Direct_reserved_bytes": 9879683072,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8262451200,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 66.417608717
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.116250659
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 5.377727057
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 7.308191942
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.012578286
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.026422461
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 75399,
+          "invalid_clock_samples": 0,
+          "seconds": 0.297813867
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "initialization_GPU_readback": {
+        "startup_receipt_sha256": "4182b8a5f52f1a07bfff3d7e301f1c8ee23efdf61315abaf5aa5e6380bc3c8d2",
+        "compared_values": 16777216,
+        "mismatches": 0,
+        "dispatch_delta": 1,
+        "submit_delta": 1,
+        "fence_delta": 1,
+        "verified_tensor_bytes": 67108864,
+        "whole_pool_GPU_verified": false,
+        "scope": "single SCALE graph; model generation validated separately by this result"
+      },
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "memory-v16-cold",
+      "receipt_sha256": "30f4cd66caf28097e558f421d05745511cd0d4ddfbc29e39a86a695646946e74",
+      "job_status": "completed",
+      "model_loaded_before": false,
+      "generation_seconds": 115.814617,
+      "Windows_API_seconds": 116.71899999998277,
+      "actual_steps": 20,
+      "CLIP_seconds": 13.3,
+      "controlnet_seconds": 13.053857,
+      "controlnet_evals": 20,
+      "PNG_sha256": "b92fd8fba79b3d2cd3e76c4c1b218ecf1383b2d5de4431d66d852ad512f34a8a",
+      "PNG_bytes": 38471,
+      "saved_PNG_hash_verified": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 28,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535901696,
+      "Direct_reserved_bytes": 9879683072,
+      "Direct_end_used_bytes": 8171094016,
+      "Direct_peak_used_bytes": 8262451200,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 69.614860925
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 16.087300276
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 5.37203421
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 7.314445047
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.012561207
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.026411874
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 75607,
+          "invalid_clock_samples": 0,
+          "seconds": 0.307184769
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "initialization_GPU_readback": {
+        "startup_receipt_sha256": "712a494008937dd0a0063cb40cdd7176c098988bca23ef2cbdd5aca1ba764894",
+        "compared_values": 16777216,
+        "mismatches": 0,
+        "dispatch_delta": 1,
+        "submit_delta": 1,
+        "fence_delta": 1,
+        "verified_tensor_bytes": 67108864,
+        "whole_pool_GPU_verified": false,
+        "scope": "single SCALE graph; model generation validated separately by this result"
+      },
+      "size": "256x256",
+      "control_image_sha256": "79b2cfc465d4ace14978a67c52d8df66a3a304bdfa5c0eaa73caa1d8738cea7e"
+    },
+    {
+      "id": "memory-v16-after256-1024",
+      "size": "1024x1024",
+      "control_image_sha256": "9c23032f84e9c5b7080db6892631f9f78adab2ddec91ab554230b588cdbdd5da",
+      "receipt_sha256": "7e9c880734643dbc377bcc21cd0321e3dddc40b9bf4835608aec9f001b250305",
+      "job_status": "completed",
+      "model_loaded_before": true,
+      "generation_seconds": 132.951936,
+      "Windows_API_seconds": 133.89000000001397,
+      "actual_steps": 20,
+      "CLIP_seconds": 15.0,
+      "controlnet_seconds": 32.385884,
+      "controlnet_evals": 20,
+      "PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "PNG_bytes": 505949,
+      "saved_PNG_hash_verified": true,
+      "reference_PNG_equal": true,
+      "reference_PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "reference_receipt_sha256": "73cc6ae8e8d59cb7ab09b26550e084d9ef9343b65e73bd1cc6ef06cca9c523cc",
+      "reference_bytes_compared": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 124,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535901696,
+      "Direct_reserved_bytes": 9879683072,
+      "Direct_end_used_bytes": 8170323968,
+      "Direct_peak_used_bytes": 9705029632,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 340,
+          "invalid_clock_samples": 0,
+          "seconds": 76.81412756
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 340,
+          "invalid_clock_samples": 0,
+          "seconds": 0.112659148
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 30.933490685
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.014545794
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.024718759
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.028141154
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 87883,
+          "invalid_clock_samples": 0,
+          "seconds": 0.335303767
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false,
+      "visual_display_confirmed_by_primary_agent": true
+    },
+    {
+      "id": "memory-v16-warm1024",
+      "size": "1024x1024",
+      "control_image_sha256": "9c23032f84e9c5b7080db6892631f9f78adab2ddec91ab554230b588cdbdd5da",
+      "receipt_sha256": "07db984d257f377b3cdb79d3a8364e40c89e6f49153506ad2b5a4eb82662d637",
+      "job_status": "completed",
+      "model_loaded_before": true,
+      "generation_seconds": 117.599516,
+      "Windows_API_seconds": 118.875,
+      "actual_steps": 20,
+      "CLIP_seconds": 0.0,
+      "controlnet_seconds": 32.135005,
+      "controlnet_evals": 20,
+      "PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "PNG_bytes": 505949,
+      "saved_PNG_hash_verified": true,
+      "reference_PNG_equal": true,
+      "reference_PNG_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "reference_receipt_sha256": "73cc6ae8e8d59cb7ab09b26550e084d9ef9343b65e73bd1cc6ef06cca9c523cc",
+      "reference_bytes_compared": true,
+      "OpenAI_native_PNG_equal": true,
+      "nonfinite_values": 0,
+      "finite_checked_outputs": 118,
+      "CPU_CLIP_shared_direct_live_bytes": 0,
+      "CPU_CLIP_shared_direct_peak_bytes": 1535901696,
+      "Direct_reserved_bytes": 9879683072,
+      "Direct_end_used_bytes": 8170323968,
+      "Direct_peak_used_bytes": 9705029632,
+      "Direct_fault_retained": false,
+      "CFG_fallback_observed": false,
+      "GPU_UNet_completed_witness": true,
+      "GPU_ControlNet_verified": true,
+      "phase_metrics_CPU_wall": {
+        "unet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 340,
+          "invalid_clock_samples": 0,
+          "seconds": 76.812511649
+        },
+        "unet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 340,
+          "invalid_clock_samples": 0,
+          "seconds": 0.113065936
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 30.682161109
+        },
+        "controlnet.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.01498008
+        },
+        "controlnet.activation_upload": {
+          "bytes": 0,
+          "calls": 20,
+          "invalid_clock_samples": 0,
+          "seconds": 0.025893959
+        },
+        "controlnet.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 40,
+          "invalid_clock_samples": 0,
+          "seconds": 0.028243229
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 87650,
+          "invalid_clock_samples": 0,
+          "seconds": 0.328350251
+        }
+      },
+      "generation_POSTs": 1,
+      "automatic_retries": 0,
+      "Windows_inference": false
+    }
+  ],
+  "memory_caveats": [
+    "CPU_CLIP_shared_direct_peak_bytes is the process lifetime maximum simultaneous live loan, not accumulated allocation volume.",
+    "Warm rows can inherit a maximum observed during an earlier generation.",
+    "Direct end/peak and CPU CLIP peak need not occur at the same instant and must not be added as VRAM totals."
+  ],
+  "all_256_PNGs_identical": true,
+  "1024_PNG_identical_to_existing_1024_reference": true,
+  "final_validation_summary": {
+    "selected_variant": "V16",
+    "requested_optimization_1_to_4_validation_complete": true,
+    "final_cold256_generation_seconds": 115.814617,
+    "baseline_cold256_generation_seconds": 124.567433,
+    "final_cold256_reduction_percent": 7.026568493227275,
+    "CLIP_only_cold256_generation_seconds": 113.543048,
+    "CLIP_only_reduction_percent": 8.850134208031722,
+    "size_change1024_generation_seconds": 132.951936,
+    "warm1024_generation_seconds": 117.599516,
+    "old_cold1024_speed_ratio_reported": false,
+    "long_running_catalog_validated": false,
+    "TV_color_user_confirmation_complete": false,
+    "home_icon_cache_is_separate_issue": true,
+    "mask_inpainting_changes_deployed": false
+  }
+}

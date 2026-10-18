@@ -1,4 +1,5 @@
 * text=auto
+.gitattributes text eol=lf
 *.c text eol=lf
 *.cpp text eol=lf
 *.h text eol=lf
@@ -6,7 +7,15 @@
 *.inc text eol=lf
 *.py text eol=lf
 *.json text eol=lf
+*.json.example text eol=lf
+*.map text eol=lf
+*.ld text eol=lf
 *.md text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.mp4 binary
+*.patch text eol=lf whitespace=-blank-at-eol
+
+# Preserve pinned upstream Vulkan header bytes, including their final blank line.
+patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-common.h whitespace=-blank-at-eof
+patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-push-constants.h whitespace=-blank-at-eof
