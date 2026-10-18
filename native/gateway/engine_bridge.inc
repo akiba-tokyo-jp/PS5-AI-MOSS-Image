@@ -100,12 +100,21 @@ static int backend_http_bytes(const char *method,const char *path,const void *bo
 static int backend_http(const char *method,const char *path,const char *body,char *json,size_t cap,const char *png,int *status){
     return backend_http_bytes(method,path,body,body?strlen(body):0,"application/json",json,cap,png,status);
 }
-static int backend_upload_image(const unsigned char *data,size_t size,const char *type,char id[33],char *error,size_t cap){
+static int backend_upload_asset(const unsigned char *data,size_t size,const char *type,const char *path,char id[33],char *error,size_t cap){
     char raw[1024];int code=0;object *o=malloc(sizeof(*o));
-    int ok=o && backend_http_bytes("POST","/api/inputs",data,size,type,raw,sizeof(raw),NULL,&code) && code==201 && parse_object(raw,o);
+    int ok=o && backend_http_bytes("POST",path,data,size,type,raw,sizeof(raw),NULL,&code) && code==201 && parse_object(raw,o);
     field *f=ok?find_field(o,"image_id"):NULL;ok=f && f->type==1 && valid_id(f->value);
     if(ok)strcpy(id,f->value);else snprintf(error,cap,"Native image upload unconfirmed or rejected (HTTP%d); generation was not submitted",code);
     free(o);return ok;
+}
+static int backend_upload_image(const unsigned char *data,size_t size,const char *type,char id[33],char *error,size_t cap){return backend_upload_asset(data,size,type,"/api/inputs",id,error,cap);}
+static int backend_upload_mask(const unsigned char *data,size_t size,const char *type,int grayscale,char id[33],char *error,size_t cap){return backend_upload_asset(data,size,type,grayscale?"/api/masks/grayscale":"/api/masks",id,error,cap);}
+static int backend_input_dimensions(const char *id,uint32_t *w,uint32_t *h){
+    char path[64],raw[1024];int code=0;int64_t x,y;object *o=malloc(sizeof(*o));
+    snprintf(path,sizeof(path),"/api/inputs/%s",id);
+    int ok=o && valid_id(id) && backend_http("GET",path,NULL,raw,sizeof(raw),NULL,&code) && code==200 && parse_object(raw,o) &&
+        get_int(find_field(o,"width"),1,2048,&x) && get_int(find_field(o,"height"),1,2048,&y);
+    if(ok){*w=(uint32_t)x;*h=(uint32_t)y;}free(o);return ok;
 }
 static void backend_delete_input(const char *id){
     if(!valid_id(id))return;char path[64],raw[1024];int code=0;
@@ -169,8 +178,16 @@ static int parse_backend_health_object(const char *p, object *obj) {
     }
 }
 
+static int parse_backend_response_object(const char *path,const char *raw,object *o) {
+    if(!strcmp(path,"/health"))return parse_backend_health_object(raw,o);
+    /* Native202 admission and GET job snapshots now contain36 fields. This
+     * private flat parser cap must not relax public request admission. */
+    if(!strcmp(path,"/api/generate") || !strncmp(path,"/api/jobs/",10))
+        return parse_object_limit(raw,o,MAX_BACKEND_JOB_FIELDS);
+    return parse_object(raw,o);
+}
 static int backend_json(const char *method,const char *path,const char *body,object *o,int *code) {
-    char *raw=malloc(16385);if(!raw)return 0;int ok=backend_http(method,path,body,raw,16385,NULL,code) && (!strcmp(path,"/health")?parse_backend_health_object(raw,o):parse_object(raw,o));free(raw);return ok;
+    char *raw=malloc(16385);if(!raw)return 0;int ok=backend_http(method,path,body,raw,16385,NULL,code) && parse_backend_response_object(path,raw,o);free(raw);return ok;
 }
 static int backend_true(object *o,const char *key){field *f=find_field(o,key);return f && f->type==3;}
 static const char *backend_text(object *o,const char *key){field *f=find_field(o,key);return f && f->type==1?f->value:"";}
@@ -185,6 +202,27 @@ static void backend_status(ps5_ai_engine_status *s) {
 }
 int ps5_ai_engine_init(const char *config,char *error,size_t n){(void)config;ps5_ai_engine_status s;backend_status(&s);if(!s.available){snprintf(error,n,"%s",s.reason);return -1;}return 0;}
 void ps5_ai_engine_get_status(ps5_ai_engine_status *s){backend_status(s);}
+/* A full-edit latent mask legitimately skips the blend expression. Its zero
+ * blend-evaluation count is not a missing GPU generation: require completed
+ * native GPU proof, prepared mask and sane, nonempty final composition stats.
+ * The same applies when NearestMax removes a tiny preserved pixel region. */
+static int backend_mask_completion_verified(const ps5_ai_request *r,object *o,ps5_ai_stats *stats){
+    if(!r->mask_image_id[0])return 1;
+    int64_t evaluations,preserved,changed;
+    if(strcmp(backend_text(o,"status"),"completed") || !backend_true(o,"gpu_used") ||
+       !backend_true(o,"inpainting") || !backend_true(o,"mask_prepared") ||
+       !get_int(find_field(o,"mask_denoise_evaluations"),0,INT_MAX,&evaluations) ||
+       !get_int(find_field(o,"mask_preserved_pixels"),0,INT64_MAX,&preserved) ||
+       !get_int(find_field(o,"mask_changed_pixels"),1,INT64_MAX,&changed) ||
+       r->width<=0 || r->height<=0)return 0;
+    const uint64_t pixels=(uint64_t)r->width*(uint64_t)r->height;
+    if((uint64_t)preserved>pixels || (uint64_t)changed>pixels-(uint64_t)preserved)return 0;
+    stats->mask_prepared=1;
+    stats->mask_denoise_evaluations=(int)evaluations;
+    stats->mask_preserved_pixels=(uint64_t)preserved;
+    stats->mask_changed_pixels=(uint64_t)changed;
+    return 1;
+}
 int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_stats *stats,ps5_ai_progress_cb cb,void *user,char *error,size_t cap){
     memset(stats,0,sizeof(*stats));char *body=malloc(51000),*prompt=malloc(24585),*negative=malloc(24585);object *o=malloc(sizeof(*o));int ok=0,code=0;
     if(!body || !prompt || !negative || !o){snprintf(error,cap,"Insufficient memory forwarding request");goto done;}
@@ -193,6 +231,7 @@ int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_sta
     if(n<0 || n>MAX_BODY){snprintf(error,cap,"Encoded request too large");goto done;}
     if(r->init_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"init_image_id\":\"%s\",\"denoise_strength\":%.17g",r->init_image_id,r->denoise_strength);
     if(r->reference_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"reference_image_id\":\"%s\",\"ip_adapter_strength\":%.17g",r->reference_image_id,r->ip_adapter_strength);
+    if(r->mask_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"mask_image_id\":\"%s\"",r->mask_image_id);
     if(r->controlnet[0])n+=snprintf(body+n,51000-(size_t)n,",\"controlnet\":\"%s\",\"control_image_id\":\"%s\",\"control_strength\":%.17g",r->controlnet,r->control_image_id,r->control_strength);
     n+=snprintf(body+n,51000-(size_t)n,"}");
     if(n<0 || n>MAX_BODY){snprintf(error,cap,"Encoded native request exceeds24KiB");goto done;}
@@ -220,6 +259,9 @@ int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_sta
             if(r->controlnet[0] && (!stats->gpu_controlnet_verified || stats->controlnet_evals<1 || stats->controlnet_tensors!=10)){
                 snprintf(error,cap,"Native job lacks actual ControlNet GPU/residual proof");goto done;
             }
+            if(!backend_mask_completion_verified(r,o,stats)){
+                snprintf(error,cap,"Native job lacks actual masked diffusion/composition proof");goto done;
+            }
             snprintf(path,sizeof(path),"/api/images/%s",native_id);
             if(!backend_http("GET",path,NULL,NULL,0,output,&code) || code!=200){snprintf(error,cap,"Native PNG retrieval failed");goto done;}
             ok=1;break;
@@ -230,7 +272,10 @@ done:
     if(r->transient_inputs){
         if(r->init_image_id[0])backend_delete_input(r->init_image_id);
         if(r->reference_image_id[0] && strcmp(r->init_image_id,r->reference_image_id))backend_delete_input(r->reference_image_id);
-        if(r->control_image_id[0] && strcmp(r->control_image_id,r->init_image_id) && strcmp(r->control_image_id,r->reference_image_id))backend_delete_input(r->control_image_id);
+        if(r->mask_image_id[0] && strcmp(r->mask_image_id,r->init_image_id) && strcmp(r->mask_image_id,r->reference_image_id))backend_delete_input(r->mask_image_id);
+        /* control_image_id is an existing caller-owned asset, never uploaded
+         * by this multipart endpoint. Its native lease must be released there;
+         * the gateway must not delete that persistent prepared control map. */
     }
     free(body);free(prompt);free(negative);free(o);return ok?0:-1;
 }

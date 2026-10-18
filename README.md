@@ -1,5 +1,7 @@
 # PS5 AI WAI
 
+2026-10-19：**マスク付きimg2img／Inpaintingを実機へ反映しました。** 白黒256は63.217秒、透過PNG＋漫画LoRA＋OpenPoseの1024は172.897秒。マスク外のRGBは全画素が元画像と一致し、WindowsのOpenAI互換APIからPNGを取得しました。指定色の変更は未達で、画質合格とはしていません。[検証範囲と制約](docs/masked-inpainting-20261019.md)・[API仕様](docs/mask-api.md)。今後の検証動画は撮影しません。
+
 2026-10-19追加測定：**モデル未読み込みからの1024×1024生成は184.026→161.397秒、22.629秒（約12.3%）短縮しました。** 同じWAI＋漫画LoRA＋OpenPose、20stepsで、基準PNGと全バイト一致。アプリ再起動後の各1枚で、OSファイルキャッシュは消去していません。[比較条件と実測](docs/optimization-20261019.md)・[初回生成の成功動画12秒](docs/media/optimization-openpose1024-cold.mp4)。
 
 2026-10-19：**CLIPの重複計算削減・UNet共通計算の再利用・ControlNetのCFGバッチ化・メモリ割当を反映しました。** 最終構成はDirect 9422MiB（約9.201GiB）、CPU CLIPの重みグループは16MiB目安です。OpenPose＋漫画LoRA1／20stepsの256初回は124.567→115.815秒。同じプロセスで256→1024の切替132.952秒、同じ1024の繰返し117.600秒、基準PNGと一致しました。132.952秒と117.600秒はconditioning cache条件が異なるため、この2値から改修による高速化率は算出しません。[比較・メモリ・検証範囲](docs/optimization-20261019.md)・[成功動画12秒](docs/media/optimization-openpose1024.mp4)。
@@ -157,7 +159,7 @@ client.close()
 ```
 
 対応範囲は **OpenAI Images APIの生成機能の一部**です。PNG・1枚・非ストリーミングに対応します。
-img2img/IP-Adapterの参照入力とimages/editsは実験機能です。mask/inpainting、複数枚、透過、JPEG/WebP出力、ComfyUIやA1111のAPIは未対応です。
+img2img/IP-Adapterの参照入力は実験機能です。マスク付きimages/editsは白黒256と透過1024＋OpenPoseで領域保持を検証済みですが、人物同一性・編集画質は調整が必要です。複数枚、透過出力、JPEG/WebP出力、ComfyUIやA1111のAPIは未対応です。
 詳しくは [API仕様](docs/api.md) と [OpenAPI 3.1](docs/openapi.json) を参照してください。
 
 ## 実装とビルド

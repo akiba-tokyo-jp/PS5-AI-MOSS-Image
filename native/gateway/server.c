@@ -67,13 +67,14 @@ static void pause_ms(unsigned ms) {
 #define MAX_HEADER 8192
 #define MAX_BODY 24576
 #define MAX_JOBS 32
-#define MAX_FIELDS 32
+#define MAX_FIELDS 32 /* Public requests remain capped at32. */
+#define MAX_BACKEND_JOB_FIELDS 64
 #define MAX_JSON_STRING 8192
 #define JOB_JSON_SIZE 8192
 
 typedef struct { char key[64]; char value[MAX_JSON_STRING + 1]; int type; } field;
 /* type: 1 string, 2 JSON number, 3 true, 4 false, 5 null */
-typedef struct { field values[MAX_FIELDS]; size_t count; } object;
+typedef struct { field values[MAX_BACKEND_JOB_FIELDS]; size_t count; } object;
 typedef struct {
     char id[33], status[16], error[768];
     ps5_ai_request request;
@@ -249,13 +250,14 @@ static int parse_number(const char **p, char *out, size_t cap) {
     memcpy(out, start, n); out[n] = 0; return 1;
 }
 /* Strict flat JSON objects only. No dependency parser, nesting, or coercion. */
-static int parse_object(const char *p, object *obj) {
+static int parse_object_limit(const char *p, object *obj, size_t limit) {
+    if(!limit || limit>MAX_BACKEND_JOB_FIELDS)return 0;
     memset(obj, 0, sizeof(*obj)); skip_space(&p);
     if (*p++ != '{') return 0;
     skip_space(&p);
     if (*p == '}') { ++p; skip_space(&p); return *p == 0; }
     for (;;) {
-        if (obj->count == MAX_FIELDS || *p != '"') return 0;
+        if (obj->count == limit || *p != '"') return 0;
         field *f = &obj->values[obj->count];
         if (!parse_string(&p, f->key, sizeof(f->key))) return 0;
         for (size_t i = 0; i < obj->count; ++i)
@@ -277,6 +279,7 @@ static int parse_object(const char *p, object *obj) {
         skip_space(&p);
     }
 }
+static int parse_object(const char *p,object *obj){return parse_object_limit(p,obj,MAX_FIELDS);}
 static field *find_field(object *obj, const char *name) {
     for (size_t i = 0; i < obj->count; ++i)
         if (!strcmp(name, obj->values[i].key)) return &obj->values[i];
@@ -324,9 +327,9 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else if (!strcmp(f->key, "manga_monochrome")) {
             if (f->type != 3 && f->type != 4) { snprintf(error, cap, "manga_monochrome must be boolean"); goto done; }
             r->manga_monochrome = f->type == 3;
-        } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id")) {
+        } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id") || !strcmp(f->key,"mask_image_id")) {
             if(f->type != 1 || !valid_id(f->value)){snprintf(error,cap,"Image IDs must be32 lowercase hexadecimal characters");goto done;}
-            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:r->reference_image_id,f->value);
+            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:!strcmp(f->key,"reference_image_id")?r->reference_image_id:r->mask_image_id,f->value);
         } else if (!strcmp(f->key, "denoise_strength")) {
             if(!get_double(f,0.01,1,&r->denoise_strength)){snprintf(error,cap,"denoise_strength must be finite0.01..1");goto done;}
         } else if (!strcmp(f->key, "ip_adapter_strength")) {
@@ -344,6 +347,7 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
        (find_field(obj,"ip_adapter_strength") && !r->reference_image_id[0])){
         snprintf(error,cap,"Image strength requires its matching input image ID");goto done;
     }
+    if(r->mask_image_id[0] && !r->init_image_id[0]){snprintf(error,cap,"Mask requires an init image");goto done;}
     ok = 1;
 done:
     free(obj); return ok;

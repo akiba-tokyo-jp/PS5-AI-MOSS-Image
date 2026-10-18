@@ -1,0 +1,192 @@
+{
+  "state": "PS5_masked_generation_functionally_verified",
+  "date_JST": "2026-10-19",
+  "model": "WAI-Illustrious-SDXL v17.0",
+  "Direct_pool_bytes": 9879683072,
+  "Direct_pool_MiB": 9422,
+  "model_manager_budget_GiB": 8.75,
+  "CPU_initial_reserve_GiB": 1,
+  "CPU_CLIP_preferred_MiB": 16,
+  "GPU_driver_changed": false,
+  "configuration_changed": false,
+  "Windows_inference": false,
+  "UNet_full_frame_GPU": true,
+  "latent_mask_blend_PS5_CPU": true,
+  "final_RGB_composite_PS5_CPU": true,
+  "dedicated_inpainting_weights": false,
+  "ROI_speedup_claim": false,
+  "visual_review_completed": true,
+  "visual_quality_verified": false,
+  "video_recorded": false,
+  "tests": [
+    {
+      "case": "mask256",
+      "width": 256,
+      "height": 256,
+      "mask_mode": "grayscale",
+      "requested_steps": 20,
+      "actual_steps": 17,
+      "denoise_strength": 0.8,
+      "sampler": "euler_a",
+      "cfg_scale": 5,
+      "seed": 20261018,
+      "manga_strength": 1,
+      "manga_monochrome": false,
+      "controlnet": null,
+      "generation_seconds": 63.217038,
+      "Windows_API_seconds": 63.71799999999348,
+      "model_loaded_before": false,
+      "init_encode_seconds": 0.517,
+      "mask_denoise_evaluations": 17,
+      "outside_pixels": 59009,
+      "outside_changed_pixels": 0,
+      "inside_pixels": 6527,
+      "inside_changed_pixels": 6527,
+      "exact_outside_RGB_equal": true,
+      "OpenAI_native_PNG_equal": true,
+      "UNet_completed_GPU_witness": true,
+      "UNet_finite_outputs": 34,
+      "nonfinite_values": 0,
+      "controlnet_GPU_witness": false,
+      "controlnet_evaluations": 0,
+      "controlnet_residual_tensors": 0,
+      "controlnet_seconds_inside_sampling": 0.0,
+      "CPU_CLIP_shared_Direct_live_after_bytes": 0,
+      "CPU_CLIP_shared_Direct_peak_bytes": 1535901696,
+      "owned_data_pool_process_peak_bytes": 5727617024,
+      "owned_pools_reported_process_peak_bytes": 5771198464,
+      "process_peak_RSS_bytes": 10947002368,
+      "memory_peaks_are_process_lifetime": true,
+      "owned_data_pool_peak_includes_CPU_CLIP": true,
+      "artifact_sha256": {
+        "source": "750e418ec3690f7b891e82d767a2f18b3c10b9da92246752c72cef80dbe4c416",
+        "mask": "96fb7eaf7226a832c84e7275ae25a9462e5b0d0e871886607337137abeb537c8",
+        "output": "ec60748eef1b1cc78b3ebc8faa8ea38900378b291599d71463a045b1c113ca83"
+      },
+      "source_receipt_sha256": "d04b1cf7cf4835a57d8837fb806e63a86a691de131ae3aec395b69665cb36052",
+      "source_request_sha256": "19e4181fd54f7f886f5a7499f9744ee7b13d0387579d3e5038780476be45b2b0",
+      "phase_metrics": {
+        "unet.graph_total": {
+          "seconds": 39.721993379,
+          "calls": 34,
+          "bytes": 0
+        },
+        "unet.graph_call_including_internal_wait": {
+          "seconds": 21.702158471,
+          "calls": 34,
+          "bytes": 0
+        },
+        "unet.weight_prepare_including_capacity": {
+          "seconds": 16.182196673,
+          "calls": 34,
+          "bytes": 0
+        },
+        "unet.cleanup_including_wait": {
+          "seconds": 0.051060863,
+          "calls": 68,
+          "bytes": 0
+        },
+        "controlnet.graph_total": {
+          "seconds": 0.0,
+          "calls": 0,
+          "bytes": 0
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "seconds": 0.0,
+          "calls": 0,
+          "bytes": 0
+        }
+      },
+      "phase_metrics_are_CPU_wall_time": true,
+      "pure_GPU_timestamps": false,
+      "nested_phase_times_must_not_be_summed": true,
+      "generation_POSTs": 1,
+      "automatic_retries": 0
+    },
+    {
+      "case": "mask1024",
+      "width": 1024,
+      "height": 1024,
+      "mask_mode": "alpha",
+      "requested_steps": 20,
+      "actual_steps": 17,
+      "denoise_strength": 0.8,
+      "sampler": "euler_a",
+      "cfg_scale": 5,
+      "seed": 20261018,
+      "manga_strength": 1,
+      "manga_monochrome": false,
+      "controlnet": "openpose",
+      "generation_seconds": 172.896925,
+      "Windows_API_seconds": 174.4220000000205,
+      "model_loaded_before": true,
+      "init_encode_seconds": 0.939,
+      "mask_denoise_evaluations": 17,
+      "outside_pixels": 944203,
+      "outside_changed_pixels": 0,
+      "inside_pixels": 104373,
+      "inside_changed_pixels": 104352,
+      "exact_outside_RGB_equal": true,
+      "OpenAI_native_PNG_equal": true,
+      "UNet_completed_GPU_witness": true,
+      "UNet_finite_outputs": 34,
+      "nonfinite_values": 0,
+      "controlnet_GPU_witness": true,
+      "controlnet_evaluations": 34,
+      "controlnet_residual_tensors": 10,
+      "controlnet_seconds_inside_sampling": 35.33491,
+      "CPU_CLIP_shared_Direct_live_after_bytes": 0,
+      "CPU_CLIP_shared_Direct_peak_bytes": 1535901696,
+      "owned_data_pool_process_peak_bytes": 8972369920,
+      "owned_pools_reported_process_peak_bytes": 9055223808,
+      "process_peak_RSS_bytes": 11564564480,
+      "memory_peaks_are_process_lifetime": true,
+      "owned_data_pool_peak_includes_CPU_CLIP": true,
+      "artifact_sha256": {
+        "source": "ce3e7b2a8706022fbc7b35d270b0b807e13bc90bba1064a3c30d4885637cac79",
+        "mask": "fd7056d4cb7eca38b3d83767d496d4fee474c2fcaae39b6e9c24d8557aebffe4",
+        "output": "eab0808ae5d11e7087a4e3d262f9fed4d7b20d85e00a3cb3b1a7f4d616a93602"
+      },
+      "source_receipt_sha256": "4d7e9d176adf0da4bb29794ab33269ad41395bcae9f22f1d4f10227733a0ca15",
+      "source_request_sha256": "d215f0953a444e51d032cb561c1acfbb5dcade623df80f12f4463203784cd8e2",
+      "phase_metrics": {
+        "unet.graph_total": {
+          "seconds": 109.867249429,
+          "calls": 34,
+          "bytes": 0
+        },
+        "unet.graph_call_including_internal_wait": {
+          "seconds": 102.589639402,
+          "calls": 34,
+          "bytes": 0
+        },
+        "unet.weight_prepare_including_capacity": {
+          "seconds": 4.941333541,
+          "calls": 34,
+          "bytes": 0
+        },
+        "unet.cleanup_including_wait": {
+          "seconds": 0.063180979,
+          "calls": 68,
+          "bytes": 0
+        },
+        "controlnet.graph_total": {
+          "seconds": 34.860076762,
+          "calls": 34,
+          "bytes": 0
+        },
+        "controlnet.graph_call_including_internal_wait": {
+          "seconds": 26.632483677,
+          "calls": 34,
+          "bytes": 0
+        }
+      },
+      "phase_metrics_are_CPU_wall_time": true,
+      "pure_GPU_timestamps": false,
+      "nested_phase_times_must_not_be_summed": true,
+      "generation_POSTs": 1,
+      "automatic_retries": 0
+    }
+  ],
+  "comparison_artifact_sha256": "3c13454d17d40763d996f6e010c86a3413754458dfa8785aad134f83886e6523"
+}

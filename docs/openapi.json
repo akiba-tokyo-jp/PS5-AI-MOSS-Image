@@ -2,12 +2,18 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PS5 AI WAI Images API",
-    "version": "1.2.0-controlnet-candidate",
-    "description": "OpenAI Images generation protocol subset. The CPU gateway on PS5 forwards to the same console native GPU engine8188. No cloud or Windows inference. n=1, PNG, non-streaming. LAN /24 only. Legacy async API remains on8188. URL results are image-only signed capabilities valid up to1hour; the API secret is never put in URLs. Multipart edits support img2img, IP-Adapter Plus or combined mode. No masks/inpainting, remote image URLs, streaming or multi-image batch. WAI extensions controlnet/control_image_id/control_strength select one same-console Vulkan ControlNet and an authenticated prepared edge/pose map. No automatic pose detector."
+    "version": "1.4.0-mask-controlnet-candidate",
+    "description": "OpenAI Images generation protocol subset. The CPU gateway on PS5 forwards to the same console native GPU engine8188. No cloud or Windows inference. n=1, PNG, non-streaming. LAN /24 only. Legacy async API remains on8188. URL results are image-only signed capabilities valid up to1hour; the API secret is never put in URLs. Multipart edits support img2img, IP-Adapter Plus or combined mode. No remote image URLs, streaming or multi-image batch. WAI extensions controlnet/control_image_id/control_strength select one same-console Vulkan ControlNet and an authenticated prepared edge/pose map. No automatic pose detector. PNG alpha/grayscale masks use the existing WAI checkpoint; masked source, mask and output dimensions must match. Mask evaluation counts are latent blend evaluations; zero is valid when the reduced latent mask edits the whole latent. Completed native GPU verification, a prepared mask and valid nonzero changed-pixel composition counts remain required. Original zero-valued mask pixels are preserved exactly by final CPU composition."
   },
   "servers": [
     {
-      "url": "http://192.168.68.67:8189"
+      "url": "http://{ps5_host}:8189",
+      "variables": {
+        "ps5_host": {
+          "default": "192.168.1.100",
+          "description": "Your PS5 private LAN IPv4 address"
+        }
+      }
     }
   ],
   "security": [
@@ -265,6 +271,14 @@
             "minimum": 0.01,
             "maximum": 1.5,
             "default": 1
+          },
+          "mask_image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "WAI extension: authenticated native mask ID from POST /api/masks or /api/masks/grayscale; requires init_image_id"
           }
         }
       },
@@ -482,10 +496,54 @@
             "enum": [
               "img2img",
               "ip_adapter",
-              "combined"
+              "combined",
+              "inpaint"
             ],
             "default": "img2img",
-            "description": "WAI extension: source becomes init image, IP reference, or both"
+            "description": "WAI extension: source becomes init image, IP reference, or both; inpaint is an img2img alias requiring mask"
+          },
+          "mask": {
+            "type": "string",
+            "format": "binary",
+            "description": "PNG below4MiB, same dimensions as image and requested output. Optional for img2img/combined; required for reference_mode=inpaint. Alpha zero means edit; alpha255 means preserve. Full PNG file, no remote URL."
+          },
+          "mask_mode": {
+            "type": "string",
+            "enum": [
+              "alpha",
+              "grayscale"
+            ],
+            "default": "alpha",
+            "description": "WAI extension. alpha: inverse PNG alpha, transparent means edit. grayscale: RGB luminance, white means edit and black means preserve. Intermediate values feather final composition; latent mask is rounded at0.5."
+          },
+          "controlnet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "canny",
+              "openpose",
+              null
+            ],
+            "description": "WAI extension: one ControlNet model at a time"
+          },
+          "control_image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "WAI extension: RGB edge/pose map uploaded to authenticated native8188 /api/inputs; dimensions must match requested size"
+          },
+          "control_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "maximum": 1.5,
+            "default": 1
           }
         }
       }
@@ -1006,7 +1064,7 @@
     "/v1/images/edits": {
       "post": {
         "operationId": "editImage",
-        "description": "OpenAI multipart response protocol subset backed by same-console WAI. WAI reference_mode selects image conditioning. All feature inference runs onPS5.",
+        "description": "OpenAI multipart response protocol subset backed by same-console WAI. WAI reference_mode selects image conditioning. All feature inference runs onPS5. Supports PNG alpha/grayscale masks and an existing control_image_id; control_image file uploads are unsupported.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1020,6 +1078,9 @@
                 },
                 "reference_image": {
                   "contentType": "image/png, image/jpeg"
+                },
+                "mask": {
+                  "contentType": "image/png"
                 }
               }
             }

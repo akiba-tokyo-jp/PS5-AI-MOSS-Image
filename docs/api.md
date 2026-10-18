@@ -41,7 +41,7 @@ Windowsやクラウドへ推論を転送する実装はありません。
 | sampler | 拡張、euler / euler_a（既定） / dpm++2m |
 
 任意項目のnullは既定値を使います。body上限24KiB。
-未対応パラメーター・編集・batch・透過・JPEG/WebP・streamingは400などで拒否します。
+未対応パラメーター・batch・透過出力・JPEG/WebP・streamingは400などで拒否します。マスク付き編集は [仕様](mask-api.md) を参照してください。
 成功は `{"created":...,"data":[{"b64_json":"..."}]}` または`url`です。
 `x-request-id`はアダプターのID、`X-PS5-Native-Job-ID`は実際のネイティブ生成IDです。
 失敗は`error.message/type/param/code`を持つOpenAI形式です。
@@ -67,6 +67,6 @@ IDを取得済みならジョブを確認し、不明なPOSTを自動再送し�
 
 OpenAI互換`POST :8189/v1/images/generations`に`controlnet:canny|openpose`、`control_image_id`、`control_strength`（有限0.01..1.5、既定1）を渡します。入力は出力と同じ寸法の完成済みedge/pose mapです。自動OpenPose検出はありません。SDKでは`extra_body`を使います。これらはOpenAI標準ではなくWAI拡張です。
 
-`init_image_id`と`denoise_strength`はimg2img、`reference_image_id`と`ip_adapter_strength`はIP-Adapter経路です。multipart `POST /v1/images/edits`も対応しますが、これらの参照画像経路は画質・人物同一性の課題が残る実験機能です。今回のControlNet検証はその品質検証を兼ねません。mask/inpaintingは現行未対応です。
+`init_image_id`と`denoise_strength`はimg2img、`reference_image_id`と`ip_adapter_strength`はIP-Adapter経路です。multipart `POST /v1/images/edits`も対応しますが、これらの参照画像経路は画質・人物同一性の課題が残る実験機能です。今回のControlNet検証はその品質検証を兼ねません。マスク付きimg2img/inpaintingは実機へ反映し、白黒256と透過1024＋OpenPoseの領域保持を確認しました。指定した色や画質の合格とは分けて扱います。[マスク仕様](mask-api.md)・[実測](masked-inpainting-20261019.md)。
 
 `scripts/Invoke-WaiControlNet.ps1`を使用できます。タイムアウト時に自動再送しないでください。ネイティブjobsの`controlnet_evals`、`controlnet_tensors`、`gpu_controlnet_verified`で実行結果を確認できます。詳細な全フィールドは[OpenAPI文書](openapi.json)を参照してください。

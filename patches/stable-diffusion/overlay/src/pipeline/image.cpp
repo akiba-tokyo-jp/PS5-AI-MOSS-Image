@@ -196,6 +196,7 @@ namespace sd::pipeline {
         if (sd_img_gen_params->mask_image.data != nullptr) {
             mask_image_tensor = sd_image_to_tensor(sd_img_gen_params->mask_image, request->width, request->height);
             mask_image_tensor = sd::ops::round(mask_image_tensor);
+            ps5_ai_reference_phase(4,1,0);
         }
 
         if (sd_img_gen_params->control_image.data != nullptr) {

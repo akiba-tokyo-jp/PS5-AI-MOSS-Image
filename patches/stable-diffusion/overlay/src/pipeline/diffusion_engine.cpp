@@ -1,4 +1,5 @@
 #include "diffusion_engine.h"
+extern "C" void ps5_ai_reference_phase(int, int, double);
 
 #include <algorithm>
 #include <cinttypes>
@@ -2460,6 +2461,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
     RunnerEndOnExit sample_control_runner_end{!control_image.empty() && control_net != nullptr ? control_net.get() : nullptr};
     bool controlnet_pair_enabled = PS5_AI_CONTROLNET_BATCH_PAIR != 0;
 
+    int mask_denoise_evaluations=0;
     const bool apply_denoise_mask = !denoise_mask.empty() &&
                                     std::any_of(denoise_mask.values().begin(), denoise_mask.values().end(),
                                                 [](float value) { return value != 1.f; });
@@ -2609,6 +2611,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
             cache_runtime.spectrum.predict(&denoised);
             if (apply_denoise_mask) {
                 denoised = denoised * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
+                ++mask_denoise_evaluations;
             }
             if (preview_needed && sd_should_preview_denoised()) {
                 preview_image(step, denoised, version, preview.mode, preview.callback, preview.data, false);
@@ -3001,6 +3004,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
         }
         if (apply_denoise_mask) {
             denoised = denoised * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
+            ++mask_denoise_evaluations;
         }
         if (preview_needed && sd_should_preview_denoised()) {
             preview_image(step, denoised, version, preview.mode, preview.callback, preview.data, false);
@@ -3019,6 +3023,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
         return {};
     }
 
+    if(apply_denoise_mask)ps5_ai_reference_phase(3,mask_denoise_evaluations,0);
     auto x0 = std::move(x0_opt);
     sd_sample::log_sample_cache_summary(cache_runtime, steps);
     if (inverse_noise_scaling) {

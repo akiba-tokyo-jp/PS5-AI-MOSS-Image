@@ -378,18 +378,20 @@ extern "C" void ps5_ai_reference_phase(int phase, int value, double seconds) {
         o->requested_steps=value;o->stats->actual_steps=value;
     }else if(phase==1 && value==1){o->init_encoded=true;o->stats->init_encode_seconds=seconds;}
     else if(phase==2 && value==16){o->stats->ip_adapter_tokens=value;o->stats->ip_adapter_seconds=seconds;}
+    else if(phase==3 && value>=0){o->stats->mask_denoise_evaluations=value;}
+    else if(phase==4 && value==1){o->stats->mask_prepared=1;}
     try{write_event({{"event","reference_phase"},{"phase",phase},{"value",value},{"seconds",seconds}});}
     catch(...){fallback_log("reference phase logging unavailable");}
 }
 
-static unsigned char* load_reference_input(const char* path,const char* expected_sha,sd_image_t& image) {
+static unsigned char* load_reference_input(const char* path,const char* expected_sha,sd_image_t& image,bool mask=false) {
     const std::string name(path);
     if(name.rfind("/app0/ai-runtime/inputs/",0)!=0 || name.find("..")!=std::string::npos)
         throw std::runtime_error("Reference input path was not resolved by native admission");
     unsigned char* rgb=nullptr;uint32_t w,h;uint64_t bytes;char hash[65];
-    if(!ps5_ai_input_info(path,&w,&h,&bytes,hash) || std::strcmp(hash,expected_sha) ||
-       !ps5_ai_input_read(path,&rgb,&w,&h))throw std::runtime_error("Pinned reference input is missing or its SHA changed");
-    image={w,h,3,rgb};return rgb;
+    if(!(mask?ps5_ai_mask_info(path,&w,&h,&bytes,hash):ps5_ai_input_info(path,&w,&h,&bytes,hash)) || std::strcmp(hash,expected_sha) ||
+       !(mask?ps5_ai_mask_read(path,&rgb,&w,&h):ps5_ai_input_read(path,&rgb,&w,&h)))throw std::runtime_error("Pinned reference input is missing or its SHA changed");
+    image={w,h,mask?1U:3U,rgb};return rgb;
 }
 
 static const char* unet_weight_name(const ggml_tensor* tensor) {
@@ -746,12 +748,14 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     unsigned char* init_rgb=nullptr;
     unsigned char* reference_rgb=nullptr;
     unsigned char* control_rgb=nullptr;
+    unsigned char* mask_gray=nullptr;
     struct GenerationCleanup {
         sd_image_t** images;
         int* count;
         unsigned char** init_rgb;
         unsigned char** reference_rgb;
         unsigned char** control_rgb;
+        unsigned char** mask_gray;
         ~GenerationCleanup() noexcept {
             try {
                 sd_set_backend_eval_callback(nullptr, nullptr);
@@ -759,12 +763,13 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                 if (*images) free_sd_images(*images, *count);
                 std::free(*init_rgb);std::free(*reference_rgb);
                 std::free(*control_rgb);
+                std::free(*mask_gray);
                 active_reference_observation=nullptr;
             } catch (...) {
                 fallback_log("ps5-ai: generation cleanup failed; reload title");
             }
         }
-    } cleanup = {&images, &image_count, &init_rgb, &reference_rgb, &control_rgb};
+    } cleanup = {&images, &image_count, &init_rgb, &reference_rgb, &control_rgb, &mask_gray};
     const auto start = std::chrono::steady_clock::now();
     int result = -1;
     try {
@@ -834,8 +839,15 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             reference_rgb=load_reference_input(request->reference_image_path,request->reference_image_sha256,params.ip_adapter_image);
             params.ip_adapter_strength=static_cast<float>(request->ip_adapter_strength);
         }
+        if(request->mask_image_id[0]){
+            if(!request->init_image_id[0])throw std::runtime_error("Mask requires init image");
+            mask_gray=load_reference_input(request->mask_image_path,request->mask_image_sha256,params.mask_image,true);
+            if(params.mask_image.width!=params.init_image.width || params.mask_image.height!=params.init_image.height ||
+               params.mask_image.width!=(uint32_t)request->width || params.mask_image.height!=(uint32_t)request->height)
+                throw std::runtime_error("Masked input, mask and output dimensions must match");
+        }
         write_event({{"event","reference_request"},{"init_image_sha256",request->init_image_sha256},
-                     {"reference_image_sha256",request->reference_image_sha256},
+                     {"reference_image_sha256",request->reference_image_sha256},{"mask_image_sha256",request->mask_image_sha256},
                      {"denoise_strength",request->init_image_id[0]?request->denoise_strength:0},
                      {"ip_adapter_strength",request->reference_image_id[0]?request->ip_adapter_strength:0},
                      {"clip_vision_compute","PS5 CPU"},{"clip_vision_params","disk; release after compute"}});
@@ -895,6 +907,14 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if(!ps5_ai_direct_pool_log_checkpoint())
             throw std::runtime_error("Direct pool log checkpoint failed; image not published");
         const auto& image = images[0];
+        if(request->mask_image_id[0]){
+            if(!stats->mask_prepared || image.channel!=3 || image.width!=(uint32_t)request->width || image.height!=(uint32_t)request->height ||
+               !ps5_ai_mask_composite(image.data,init_rgb,mask_gray,image.width,image.height,&stats->mask_preserved_pixels,&stats->mask_changed_pixels))
+                throw std::runtime_error("Image rejected: genuine mask pipeline or exact outside preservation failed");
+            write_event({{"event","mask_composite"},{"mask_sha256",request->mask_image_sha256},
+                {"mask_denoise_evaluations",stats->mask_denoise_evaluations},{"preserved_pixels",stats->mask_preserved_pixels},
+                {"changed_pixels",stats->mask_changed_pixels},{"location","PS5 CPU after GPU masked diffusion"}});
+        }
         const std::string temporary_path = std::string(output_path) + ".partial";
         if (!stbi_write_png(temporary_path.c_str(), image.width, image.height, image.channel,
                             image.data, image.width * image.channel)) {
@@ -937,6 +957,8 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_flex_snapshot(&pool);
     write_event({{"event", "generation_result"}, {"success", result == 0},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
+                 {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},
+                 {"mask_preserved_pixels",stats->mask_preserved_pixels},{"mask_changed_pixels",stats->mask_changed_pixels},
                  {"init_encoded",observation.init_encoded},{"init_encode_seconds",stats->init_encode_seconds},
                  {"ip_adapter_tokens",stats->ip_adapter_tokens},{"ip_adapter_seconds",stats->ip_adapter_seconds},
                  {"gpu_ip_attention_verified",stats->gpu_ip_attention_verified!=0},

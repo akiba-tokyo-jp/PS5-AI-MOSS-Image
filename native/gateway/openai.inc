@@ -54,7 +54,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
     if(!parse_object(body,o)){snprintf(err,cap,"Malformed, duplicate, nested, or oversized JSON field");goto done;}
     for(size_t i=0;i<o->count;i++){
         field *f=&o->values[i];snprintf(param,64,"%s",f->key);
-        const char *keys[]={"prompt","negative_prompt","model","n","size","response_format","quality","background","output_format","stream","user","safety_identifier","steps","cfg_scale","seed","sampler","manga_strength","manga_monochrome","init_image_id","reference_image_id","denoise_strength","ip_adapter_strength","controlnet","control_image_id","control_strength"};
+        const char *keys[]={"prompt","negative_prompt","model","n","size","response_format","quality","background","output_format","stream","user","safety_identifier","steps","cfg_scale","seed","sampler","manga_strength","manga_monochrome","init_image_id","reference_image_id","mask_image_id","denoise_strength","ip_adapter_strength","controlnet","control_image_id","control_strength"};
         int known=0;for(size_t k=0;k<sizeof(keys)/sizeof(keys[0]);k++)known|=!strcmp(f->key,keys[k]);
         if(!known){snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
         if(f->type==5 && strcmp(f->key,"prompt")) continue;
@@ -92,9 +92,9 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
             if(!get_double(f,0,1.5,&r->manga_strength)){snprintf(err,cap,"manga_strength must be finite0..1.5");goto done;}
         }else if(!strcmp(f->key,"manga_monochrome")){
             if(f->type!=3 && f->type!=4){snprintf(err,cap,"manga_monochrome must be boolean");goto done;}r->manga_monochrome=f->type==3;
-        }else if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id")){
+        }else if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id")){
             if(f->type!=1 || !valid_id(f->value)){snprintf(err,cap,"Invalid input image ID");goto done;}
-            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:r->reference_image_id,f->value);
+            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:!strcmp(f->key,"reference_image_id")?r->reference_image_id:r->mask_image_id,f->value);
         }else if(!strcmp(f->key,"denoise_strength")){
             if(!get_double(f,0.01,1,&r->denoise_strength)){snprintf(err,cap,"denoise_strength must be finite0.01..1");goto done;}
         }else if(!strcmp(f->key,"ip_adapter_strength")){
@@ -116,6 +116,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
        (find_field(o,"ip_adapter_strength") && find_field(o,"ip_adapter_strength")->type!=5 && !r->reference_image_id[0])){
         snprintf(err,cap,"Image strength requires its matching input image");goto done;
     }
+    if(r->mask_image_id[0] && !r->init_image_id[0]){strcpy(param,"mask_image_id");snprintf(err,cap,"Mask requires an init image");goto done;}
     if((r->controlnet[0]!=0)!=(r->control_image_id[0]!=0) ||
        (find_field(o,"control_strength") && find_field(o,"control_strength")->type!=5 && !r->controlnet[0])){
         snprintf(err,cap,"ControlNet requires both its model name and prepared control image ID");goto done;

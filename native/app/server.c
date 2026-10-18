@@ -69,13 +69,14 @@ static void pause_ms(unsigned ms) {
 #define MAX_HEADER 8192
 #define MAX_BODY 24576
 #define MAX_JOBS 32
-#define MAX_FIELDS 32
+#define MAX_FIELDS 32 /* External request field limit remains unchanged. */
+#define MAX_JOB_FIELDS 64 /* Bounded internal saved-job metadata capacity. */
 #define MAX_JSON_STRING 8192
 #define JOB_JSON_SIZE 8192
 
 typedef struct { char key[64]; char value[MAX_JSON_STRING + 1]; int type; } field;
 /* type: 1 string, 2 JSON number, 3 true, 4 false, 5 null */
-typedef struct { field values[MAX_FIELDS]; size_t count; } object;
+typedef struct { field values[MAX_JOB_FIELDS]; size_t count; } object;
 typedef struct {
     char id[33], status[16], error[768];
     ps5_ai_request request;
@@ -254,13 +255,14 @@ static int parse_number(const char **p, char *out, size_t cap) {
     memcpy(out, start, n); out[n] = 0; return 1;
 }
 /* Strict flat JSON objects only. No dependency parser, nesting, or coercion. */
-static int parse_object(const char *p, object *obj) {
+static int parse_object_limit(const char *p, object *obj, size_t limit) {
+    if(limit>MAX_JOB_FIELDS)return 0;
     memset(obj, 0, sizeof(*obj)); skip_space(&p);
     if (*p++ != '{') return 0;
     skip_space(&p);
     if (*p == '}') { ++p; skip_space(&p); return *p == 0; }
     for (;;) {
-        if (obj->count == MAX_FIELDS || *p != '"') return 0;
+        if (obj->count == limit || *p != '"') return 0;
         field *f = &obj->values[obj->count];
         if (!parse_string(&p, f->key, sizeof(f->key))) return 0;
         for (size_t i = 0; i < obj->count; ++i)
@@ -282,6 +284,8 @@ static int parse_object(const char *p, object *obj) {
         skip_space(&p);
     }
 }
+static int parse_object(const char *p, object *obj) {return parse_object_limit(p,obj,MAX_FIELDS);}
+static int parse_job_object(const char *p, object *obj) {return parse_object_limit(p,obj,MAX_JOB_FIELDS);}
 static field *find_field(object *obj, const char *name) {
     for (size_t i = 0; i < obj->count; ++i)
         if (!strcmp(name, obj->values[i].key)) return &obj->values[i];
@@ -330,9 +334,9 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else if (!strcmp(f->key, "manga_monochrome")) {
             if (f->type != 3 && f->type != 4) { snprintf(error, cap, "manga_monochrome must be boolean"); goto done; }
             r->manga_monochrome = f->type == 3;
-        } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id")) {
+        } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id") || !strcmp(f->key, "mask_image_id")) {
             if(f->type != 1 || !valid_id(f->value)){snprintf(error,cap,"Image IDs must be32 lowercase hexadecimal characters");goto done;}
-            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:r->reference_image_id,f->value);
+            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:!strcmp(f->key,"reference_image_id")?r->reference_image_id:r->mask_image_id,f->value);
         } else if (!strcmp(f->key, "denoise_strength")) {
             if(!get_double(f,0.01,1,&r->denoise_strength)){snprintf(error,cap,"denoise_strength must be finite0.01..1");goto done;}
         } else if (!strcmp(f->key, "ip_adapter_strength")) {
@@ -361,6 +365,7 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
     if((r->controlnet[0]!=0)!=(r->control_image_id[0]!=0) || (find_field(obj,"control_strength") && !r->controlnet[0])){
         snprintf(error,cap,"ControlNet requires both its model name and prepared control image ID");goto done;
     }
+    if(r->mask_image_id[0] && !r->init_image_id[0]){snprintf(error,cap,"Mask requires an init image");goto done;}
     ok = 1;
 done:
     free(obj); return ok;
@@ -400,7 +405,9 @@ static int serialize_job(const job *j, char *out, size_t cap) {
         "\"ip_adapter_tokens\":%d,\"gpu_ip_attention_verified\":%s,"
         "\"init_encode_seconds\":%.6f,\"ip_adapter_seconds\":%.6f,"
         "\"controlnet\":\"%s\",\"control_image_sha256\":\"%s\",\"control_strength\":%.6f,"
-        "\"gpu_controlnet_verified\":%s,\"controlnet_evals\":%d,\"controlnet_tensors\":%d,\"controlnet_seconds\":%.6f}", j->id, j->status, j->progress,
+        "\"gpu_controlnet_verified\":%s,\"controlnet_evals\":%d,\"controlnet_tensors\":%d,\"controlnet_seconds\":%.6f,"
+        "\"inpainting\":%s,\"mask_prepared\":%s,\"mask_image_sha256\":\"%s\",\"mask_denoise_evaluations\":%d,"
+        "\"mask_preserved_pixels\":%" PRIu64 ",\"mask_changed_pixels\":%" PRIu64 "}", j->id, j->status, j->progress,
         error, url, j->created, j->updated, j->stats.gpu_used ? "true" : "false",
         j->stats.generation_seconds, cpu, gpu,
         j->request.init_image_id[0]?(j->request.reference_image_id[0]?"combined":"img2img"):(j->request.reference_image_id[0]?"ip_adapter":"txt2img"),
@@ -409,7 +416,9 @@ static int serialize_job(const job *j, char *out, size_t cap) {
         j->stats.actual_steps,j->stats.ip_adapter_tokens,j->stats.gpu_ip_attention_verified?"true":"false",
         j->stats.init_encode_seconds,j->stats.ip_adapter_seconds,
         j->request.controlnet,j->request.control_image_sha256,j->request.controlnet[0]?j->request.control_strength:0,
-        j->stats.gpu_controlnet_verified?"true":"false",j->stats.controlnet_evals,j->stats.controlnet_tensors,j->stats.controlnet_seconds);
+        j->stats.gpu_controlnet_verified?"true":"false",j->stats.controlnet_evals,j->stats.controlnet_tensors,j->stats.controlnet_seconds,
+        j->request.mask_image_id[0]?"true":"false",j->stats.mask_prepared?"true":"false",j->request.mask_image_sha256,
+        j->stats.mask_denoise_evaluations,j->stats.mask_preserved_pixels,j->stats.mask_changed_pixels);
     return n >= 0 && (size_t)n < cap;
 }
 static int atomic_write(const char *folder, const char *name, const char *data, size_t len) {
@@ -505,7 +514,7 @@ static void recover_one(const char *name) {
     if (!load_job_json(id, data, sizeof(data))) return;
     object *obj = malloc(sizeof(*obj));
     if (!obj) return;
-    if (parse_object(data, obj)) {
+    if (parse_job_object(data, obj)) {
         field *state = find_field(obj, "status");
         if (state && (!strcmp(state->value, "running") || !strcmp(state->value, "queued"))) {
             job j; memset(&j, 0, sizeof(j)); strcpy(j.id, id); strcpy(j.status, "failed");
@@ -708,7 +717,8 @@ static void submit(socket_t fd, const char *body) {
             (!j || jobs[i].updated < j->updated)) j = &jobs[i];
     }
     if (!j) { unlock_state(); send_error(fd, 429, "Job queue is full"); return; }
-    if(!input_pin_request(&request)){unlock_state();send_error(fd,404,"Referenced input image is missing or expired");return;}
+    int pinned=input_pin_request(&request);
+    if(pinned!=1){unlock_state();send_error(fd,pinned<0?400:404,pinned<0?"Input/mask kinds or required input/output dimensions do not match":"Referenced input image is missing or expired");return;}
     memset(j, 0, sizeof(*j)); j->occupied = 1; j->request = request;
     j->created = j->updated = (int64_t)time(NULL);
     char existing[JOB_JSON_SIZE];
@@ -744,7 +754,7 @@ static void get_image(socket_t fd, const char *id) {
     if (!completed && load_job_json(id, data, sizeof(data))) {
         object *obj = malloc(sizeof(*obj));
         if (obj) {
-            if (parse_object(data, obj)) {
+            if (parse_job_object(data, obj)) {
                 field *s = find_field(obj, "status"), *g = find_field(obj, "gpu_used");
                 completed = s && s->type == 1 && !strcmp(s->value, "completed") && g && g->type == 3;
             }
@@ -901,8 +911,9 @@ static void handle_client(socket_t fd, uint64_t deadline) {
     }
     int public_ui = !strcmp(method, "GET") && (!strcmp(path, "/") || !strcmp(path, "/index.html"));
     if (!public_ui && !authorized(authorization)) { send_error(fd, 401, "Valid Bearer token required"); goto done; }
-    int input_upload=!strcmp(method,"POST") && !strcmp(path,"/api/inputs");
-    size_t body_limit=input_upload?PS5_AI_INPUT_MAX_BYTES:MAX_BODY;
+    int mask_upload=!strcmp(method,"POST") && (!strcmp(path,"/api/masks") || !strcmp(path,"/api/masks/grayscale"));
+    int input_upload=mask_upload || (!strcmp(method,"POST") && !strcmp(path,"/api/inputs"));
+    size_t body_limit=mask_upload?PS5_AI_MASK_MAX_BYTES-1:input_upload?PS5_AI_INPUT_MAX_BYTES:MAX_BODY;
     if(content_length>body_limit){send_error(fd,413,"Request body too large");goto done;}
     if(input_upload){
         char *larger=realloc(buffer,MAX_HEADER+content_length+1);
@@ -926,10 +937,10 @@ static void handle_client(socket_t fd, uint64_t deadline) {
         if (strcmp(method, "POST")) send_error(fd, 405, "Use POST");
         else if (!has_length || content_length) send_error(fd, 400, "Shutdown requires Content-Length: 0 and an empty body");
         else admin_shutdown(fd);
-    } else if (!strcmp(path,"/api/inputs")) {
+    } else if (!strcmp(path,"/api/inputs") || !strcmp(path,"/api/masks") || !strcmp(path,"/api/masks/grayscale")) {
         if(strcmp(method,"POST"))send_error(fd,405,"Use POST");
         else if(!has_length || !content_length)send_error(fd,400,"Image bytes and Content-Length required");
-        else upload_input(fd,(const unsigned char *)body,content_length,content_type);
+        else upload_input(fd,(const unsigned char *)body,content_length,content_type,!strcmp(path,"/api/masks")?1:!strcmp(path,"/api/masks/grayscale")?2:0);
     } else if (!strncmp(path,"/api/inputs/",12)) {
         if(strcmp(method,"GET") && strcmp(method,"DELETE"))send_error(fd,405,"Use GET or DELETE");
         else if(content_length)send_error(fd,400,"Input metadata/deletion requires empty body");

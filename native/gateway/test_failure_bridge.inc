@@ -7,3 +7,7 @@ int ps5_ai_engine_shutdown_checked(char *e,size_t n){(void)e;(void)n;return 0;}
 
 static int backend_upload_image(const unsigned char *d,size_t n,const char *t,char id[33],char *e,size_t c){(void)d;(void)n;(void)t;(void)id;snprintf(e,c,"Host fixture does not upload or run inference");return 0;}
 static void backend_delete_input(const char *id){(void)id;}
+static int backend_upload_mask(const unsigned char *data,size_t size,const char *type,int grayscale,char id[33],char *error,size_t cap){
+    (void)data;(void)size;(void)type;(void)grayscale;(void)id;snprintf(error,cap,"Host protocol fixture does not run masked inference");return 0;
+}
+static int backend_input_dimensions(const char *id,uint32_t *w,uint32_t *h){(void)id;(void)w;(void)h;return 0;}

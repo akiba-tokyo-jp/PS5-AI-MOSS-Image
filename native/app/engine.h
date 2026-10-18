@@ -29,6 +29,8 @@ typedef struct ps5_ai_request {
     char controlnet[16], control_image_id[33];
     char control_image_path[1024], control_image_sha256[65];
     double control_strength;
+    /* Mask IDs/paths use the authenticated input-store lease, never client paths. */
+    char mask_image_id[33], mask_image_path[1024], mask_image_sha256[65];
 } ps5_ai_request;
 
 typedef struct ps5_ai_engine_status {
@@ -52,6 +54,8 @@ typedef struct ps5_ai_stats {
     double init_encode_seconds, ip_adapter_seconds;
     int gpu_controlnet_verified, controlnet_evals, controlnet_tensors;
     double controlnet_seconds;
+    int mask_denoise_evaluations, mask_prepared;
+    uint64_t mask_preserved_pixels, mask_changed_pixels;
 } ps5_ai_stats;
 
 typedef void (*ps5_ai_progress_cb)(double progress, void *user);

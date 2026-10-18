@@ -13,10 +13,10 @@
     {
       "file": "README.md",
       "sha256": "a5fc28e896cf59472ec69ba968b1552519b72821348dda4847413d5b4c25e49e",
-      "published_sha256": "e295fb0901160f6e943a8fecf6189f3c63fa1c5f1ee775c937bcf7a66e4a23e6",
-      "published_bytes": 15168,
+      "published_sha256": "52c8b8c1cfc61a138e7eed33a63ac7aa0472cd7b4eb9ac255fbf9dd729a8bbd0",
+      "published_bytes": 15797,
       "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
     },
     {
       "file": "build-profiles/native.json",
@@ -65,6 +65,16 @@
       "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
     },
     {
+      "file": "docs/mask-api.md",
+      "sha256": "14830d09216e3c01e65eb7b373b820b61f49f782a25d95774a9a895224ae351d",
+      "bytes": 3556,
+      "published_sha256": "14830d09216e3c01e65eb7b373b820b61f49f782a25d95774a9a895224ae351d",
+      "published_bytes": 3556,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
       "file": "docs/media/optimization-openpose1024-cold.mp4",
       "sha256": "8d5dab6794ee63c08fd4fb41d00a335dd7f5638560e32313adae17b5057d01e6",
       "published_sha256": "8d5dab6794ee63c08fd4fb41d00a335dd7f5638560e32313adae17b5057d01e6",
@@ -79,6 +89,16 @@
       "published_bytes": 67698,
       "identical_to_tested_input": false,
       "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+    },
+    {
+      "file": "docs/openapi.json",
+      "sha256": "df5bba11c343b6cfab7276ade2679dae9e05420e3a6bd6f0acfbbd90f0de6144",
+      "bytes": 37748,
+      "published_sha256": "df5bba11c343b6cfab7276ade2679dae9e05420e3a6bd6f0acfbbd90f0de6144",
+      "published_bytes": 37748,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
     },
     {
       "file": "docs/optimization-20261019-evidence.json",
@@ -146,11 +166,13 @@
     },
     {
       "file": "native/app/engine.h",
-      "sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
-      "bytes": 1671,
-      "published_sha256": "20d04026e07f0fa489fe802e5568bd89952321cb6966421a731fc71706727927",
-      "identical_to_tested_input": true,
-      "published_bytes": 2582
+      "sha256": "ff3fed361903f100db9386aacb806ab4270d9d5ba0c0c57e8b3c97fcbcccacec",
+      "bytes": 2924,
+      "published_sha256": "f1a33afdb3a457acfc5f781f9bf17b3f650b16bb3810afa21b888a5a4aaa916b",
+      "identical_to_tested_input": false,
+      "published_bytes": 2848,
+      "normalization_or_provider_update": true,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/app/engine_config.h",
@@ -162,12 +184,12 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "sha256": "f2a933481d5c430896bed4977c917e3d7cd1aeb549bedd3b6fc463ea7baac5dc",
-      "bytes": 45903,
-      "published_sha256": "72ea7fe2124399724c2ab885d263f24fa2a689fa48f84ccbf9ef9189cdfb853a",
+      "sha256": "6cec6d69e75934d21b4a35afecf0c54ed5a53e0634b43df7133b808a06376f3e",
+      "bytes": 64900,
+      "published_sha256": "43c47078c73ea85bc5d3612cb6c5cae034d49c81ed983ae018c59a2a624a6e02",
       "identical_to_tested_input": false,
-      "published_bytes": 61753,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
+      "published_bytes": 63833,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply.",
       "normalization_or_provider_update": true
     },
     {
@@ -315,6 +337,36 @@
       "published_bytes": 18887
     },
     {
+      "file": "native/app/reference_image.c",
+      "sha256": "1972b5cec30ce701cc55080bd9988fcabce07fa1eb700844a475f6536a53837a",
+      "bytes": 9718,
+      "published_sha256": "1972b5cec30ce701cc55080bd9988fcabce07fa1eb700844a475f6536a53837a",
+      "published_bytes": 9718,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+    },
+    {
+      "file": "native/app/reference_image.h",
+      "sha256": "ab4e1d21198445b196a3f2df5a869e18408276f47861dd04478a1f70fed45256",
+      "bytes": 1527,
+      "published_sha256": "ab4e1d21198445b196a3f2df5a869e18408276f47861dd04478a1f70fed45256",
+      "published_bytes": 1527,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+    },
+    {
+      "file": "native/app/reference_store.inc",
+      "sha256": "2f6c986d4334a4f560de9a8ce4fc7247d160b33c2f9e788e75cacc85d39b273b",
+      "bytes": 8729,
+      "published_sha256": "2f6c986d4334a4f560de9a8ce4fc7247d160b33c2f9e788e75cacc85d39b273b",
+      "published_bytes": 8729,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+    },
+    {
       "file": "native/app/retained_fault.inc",
       "sha256": "1e6758af2e4c61e741a8237bc1b924ec097d4ec495804582a6767da1e497f067",
       "bytes": 1594,
@@ -324,11 +376,13 @@
     },
     {
       "file": "native/app/server.c",
-      "sha256": "8806439060e8636d42d4aa664dbb79076ba13d2cb174d82d1e3dcd9323858e72",
-      "bytes": 53539,
-      "published_sha256": "27be907590442be8f4f608ecff81054f06da984c9bf379bc6d90378076479a1f",
+      "sha256": "3f39292cdd056b65e4262f72dda909363488755a0674fcd623661ca88a58b79c",
+      "bytes": 60234,
+      "published_sha256": "3f39292cdd056b65e4262f72dda909363488755a0674fcd623661ca88a58b79c",
       "identical_to_tested_input": true,
-      "published_bytes": 58785
+      "published_bytes": 60234,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/app/shutdown_policy.h",
@@ -414,44 +468,64 @@
     },
     {
       "file": "native/gateway/engine.h",
-      "sha256": "15056631ebb6306f2236ace79cb405a045a1d18f31200d8ef3587d36ccedf868",
-      "bytes": 1671,
-      "published_sha256": "20d04026e07f0fa489fe802e5568bd89952321cb6966421a731fc71706727927",
-      "identical_to_tested_input": true,
-      "published_bytes": 2582
+      "sha256": "ff3fed361903f100db9386aacb806ab4270d9d5ba0c0c57e8b3c97fcbcccacec",
+      "bytes": 2924,
+      "published_sha256": "f1a33afdb3a457acfc5f781f9bf17b3f650b16bb3810afa21b888a5a4aaa916b",
+      "identical_to_tested_input": false,
+      "published_bytes": 2848,
+      "normalization_or_provider_update": true,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/gateway/engine_bridge.inc",
-      "sha256": "c169bae103c68d22fc5de619b22d908352402632ef0ee89d4ea7ed2787ea440e",
-      "bytes": 13080,
-      "published_sha256": "3e5b6461ad70ffa6095504bac9bca943839ab28f6ff5620175fa6ada18a549ed",
-      "identical_to_tested_input": false,
-      "published_bytes": 16085,
-      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
+      "sha256": "98496b32777a6fc79f15106e563f031ff0d5dfa51b8a0ffd478261f45a8f2756",
+      "bytes": 19291,
+      "published_sha256": "98496b32777a6fc79f15106e563f031ff0d5dfa51b8a0ffd478261f45a8f2756",
+      "identical_to_tested_input": true,
+      "published_bytes": 19291,
+      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input.",
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+    },
+    {
+      "file": "native/gateway/multipart.inc",
+      "sha256": "4acbd6f4c7aee1af55ee1a4259082f13e6614c87d9512e494fa7692afb443851",
+      "bytes": 13707,
+      "published_sha256": "4acbd6f4c7aee1af55ee1a4259082f13e6614c87d9512e494fa7692afb443851",
+      "published_bytes": 13707,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/gateway/openai.inc",
-      "sha256": "7cc9d3534ede1a50747d05002227840ab3ed40d038b5bc17e6ad03af8120400e",
-      "bytes": 13787,
-      "published_sha256": "0a6726d9ba3c8812561a37f4059a63ca1e44756ce85736ba81e24b61bde8dcc9",
+      "sha256": "de7dd0415347855d75d39fe854b6f21f59997ece82dea837a2fdb7ed40efa7d5",
+      "bytes": 16644,
+      "published_sha256": "de7dd0415347855d75d39fe854b6f21f59997ece82dea837a2fdb7ed40efa7d5",
       "identical_to_tested_input": true,
-      "published_bytes": 16397
+      "published_bytes": 16644,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/gateway/openapi_schema.inc",
-      "sha256": "8a390827d33ccdcb4d1cb69deefb0034f057617c3ea55a1edec33023e6927699",
-      "bytes": 8738,
-      "published_sha256": "afd72c5b64f503fc3875401e0b238d77ce89e4102256bf304b5f999db85b450f",
+      "sha256": "6d7e0fd8c2296dd142fa0b14bb9a396a8c3597d5d0b7d6c264b76a74deb633b6",
+      "bytes": 18873,
+      "published_sha256": "db04750671a2ea73511e34c1b67ab69ff73bf353d951ce119dc0327da86fcd0c",
       "identical_to_tested_input": false,
-      "published_bytes": 16926
+      "published_bytes": 18967,
+      "normalization_or_provider_update": true,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/gateway/server.c",
-      "sha256": "13d5d8453d7d4c9a4c568fa5648945d78296ca817a28a5952ca091edf9964124",
-      "bytes": 55144,
-      "published_sha256": "b9c2704602ec74a20ea89fa7a026246b7c9d391bc80caf93cb27df14e7138c07",
+      "sha256": "74ddd72f56ae02fe4d14cb416287aef59d698d3f583108bae138d91f8cbf426f",
+      "bytes": 56633,
+      "published_sha256": "74ddd72f56ae02fe4d14cb416287aef59d698d3f583108bae138d91f8cbf426f",
       "identical_to_tested_input": true,
-      "published_bytes": 56174
+      "published_bytes": 56633,
+      "normalization_or_provider_update": false,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/gateway/status.h",
@@ -463,11 +537,13 @@
     },
     {
       "file": "native/gateway/test_failure_bridge.inc",
-      "sha256": "23d993b3739600b48ecabfce5480ae0403d7a297dadb969d447316de1c0ba89a",
-      "bytes": 754,
-      "published_sha256": "7f802f0d1ca600d60da8587c0c6088dcf85b5ac0f45ea05c034ba730dcc7c0f0",
-      "identical_to_tested_input": true,
-      "published_bytes": 1029
+      "sha256": "9a68734b6544c6ac4cd95c865c47326c17162a9c529a85f89b6a6f7bbbefc29d",
+      "bytes": 1439,
+      "published_sha256": "3e2f90c66ed9072b568f809684fbd3698d38fa856d7ca6f7b71528d027a1dc83",
+      "identical_to_tested_input": false,
+      "published_bytes": 1426,
+      "normalization_or_provider_update": true,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
     },
     {
       "file": "native/gateway/ui_hooks.h",
@@ -659,13 +735,13 @@
     },
     {
       "file": "patches/stable-diffusion/changes.patch",
-      "sha256": "f27072cfaeae46883d7a32d21a7b098d5c8352607e147da1423c4ac409658bf9",
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "published_sha256": "d6bb4eb2808656814bb458e58e7fdb004d530eb2fd7969f5535d8bbb6963195c",
-      "published_bytes": 389104,
-      "bytes": 392526,
-      "validation_scope": "Git LF checkout normalization; model calculation sources unchanged."
+      "sha256": "44459b8b66f7886e629abecc5acb9acf117db4e7c59e6f0767f1430e74657c07",
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "published_sha256": "44459b8b66f7886e629abecc5acb9acf117db4e7c59e6f0767f1430e74657c07",
+      "published_bytes": 128986,
+      "bytes": 128986,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c",
@@ -870,12 +946,113 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/src/pipeline/diffusion_engine.cpp",
-      "published_sha256": "b56851cd3e17d686681921954549879647f4206507e7e8f6df0b9716d05ab42b",
-      "published_bytes": 156579,
-      "sha256": "db11832e6fab740f985cdba67987858b76adecd1df945455f43606faa106ff31",
+      "published_sha256": "b0bc131c18e1264584404c2f23450af676aee72611164188fbcd53d1509c263b",
+      "published_bytes": 156837,
+      "sha256": "fe48886a995f5229db542ea32dff6872671bcd3aa581b3e7c7bfbf6a8e8035e8",
       "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply.",
+      "normalization_or_provider_update": true,
+      "bytes": 160235
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/pipeline/image.cpp",
+      "sha256": "df7874ae25d82c41878ea1868eb141ec618350e13d67b2c0a7d52dec8f8b05b4",
+      "bytes": 55141,
+      "published_sha256": "4fdf0066286b39b79b79e4fe03032c9632a705b5f74d86631042a169641ee0e2",
+      "published_bytes": 54059,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+    },
+    {
+      "file": "scripts/Invoke-WaiReference.ps1",
+      "sha256": "b3dc9e1df357a8dfdb89efc6b8289358b87cb1ff15d33f393878e8ad19449545",
+      "bytes": 7561,
+      "published_sha256": "0e145f7c7bea70ed2c156d7e10b0b6df944e08fea9f1f3888f1b47353958244c",
+      "published_bytes": 7664,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "CRLF checkout per existing PowerShell attributes; protocol-tested script content unchanged after newline normalization."
+    },
+    {
+      "file": "tests/mask_api_protocol.py",
+      "sha256": "9665122172a4e18badf7e1442ff2f53d11f16916af8ea4443521d9db2ed4196f",
+      "bytes": 23766,
+      "published_sha256": "9665122172a4e18badf7e1442ff2f53d11f16916af8ea4443521d9db2ed4196f",
+      "published_bytes": 23766,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_completion_contract.c",
+      "sha256": "4b2629241a6d26cfefe838aa9ece929f9877766eb76f7e7f4ec6429cdbda2f3d",
+      "bytes": 3345,
+      "published_sha256": "4b2629241a6d26cfefe838aa9ece929f9877766eb76f7e7f4ec6429cdbda2f3d",
+      "published_bytes": 3345,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_composite.c",
+      "sha256": "6add45bf60ae41ecf5dc9712fb1c3cadbb9e57da8e9d96f72323806a7daf80ec",
+      "bytes": 1414,
+      "published_sha256": "6add45bf60ae41ecf5dc9712fb1c3cadbb9e57da8e9d96f72323806a7daf80ec",
+      "published_bytes": 1414,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_controlnet_protocol.py",
+      "sha256": "196411216d19c7a6c512f20e12a8f130abf6fba01da8d46ae3fbec752fe81251",
+      "bytes": 7403,
+      "published_sha256": "196411216d19c7a6c512f20e12a8f130abf6fba01da8d46ae3fbec752fe81251",
+      "published_bytes": 7403,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_export_profile.py",
+      "sha256": "c5c203c9005aa22bee0a526dce5f21e07ea126dab164864c1ce34bdc78f77a94",
+      "bytes": 2701,
+      "published_sha256": "c5c203c9005aa22bee0a526dce5f21e07ea126dab164864c1ce34bdc78f77a94",
+      "published_bytes": 2701,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_native_owner.c",
+      "sha256": "b43385fea55cb830d835a10bcf14600c1737a6010126147a74b0b11dd6520c06",
+      "bytes": 4138,
+      "published_sha256": "b43385fea55cb830d835a10bcf14600c1737a6010126147a74b0b11dd6520c06",
+      "published_bytes": 4138,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_native_restart.py",
+      "sha256": "649b3c5f95ca62baf19a4b0351f41351c02983848fd87d272c6f1f9ab7f9280b",
+      "bytes": 8167,
+      "published_sha256": "649b3c5f95ca62baf19a4b0351f41351c02983848fd87d272c6f1f9ab7f9280b",
+      "published_bytes": 8167,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "tests/mask_powershell_client.py",
+      "sha256": "a99d7bcd2050dbff7d67dcf055eeec0c2951615845e7017633aa257f4efca569",
+      "bytes": 3520,
+      "published_sha256": "a99d7bcd2050dbff7d67dcf055eeec0c2951615845e7017633aa257f4efca569",
+      "published_bytes": 3520,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
     },
     {
       "file": "tests/optimization_build_profile.py",
@@ -892,6 +1069,55 @@
       "sha256": "ccaf8eabb9aadc4315a010265329b589c6822165293e31785dac20c8ff381122",
       "identical_to_tested_input": false,
       "validation_scope": "Portable build wiring; no PS5 execution implied"
+    },
+    {
+      "file": "tools/build_mask_controlnet_tests.py",
+      "sha256": "fee8760cf8189b9e5a8733c12f735a2b4c7981b8e6660b4c147285db3fb272a4",
+      "bytes": 2353,
+      "published_sha256": "fee8760cf8189b9e5a8733c12f735a2b4c7981b8e6660b4c147285db3fb272a4",
+      "published_bytes": 2353,
+      "identical_to_tested_input": true,
+      "normalization_or_provider_update": false,
+      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "docs/masked-inpainting-20261019.md",
+      "sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
+      "published_sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
+      "published_bytes": 3832,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+    },
+    {
+      "file": "docs/masked-inpainting-20261019-evidence.json",
+      "sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
+      "published_sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
+      "published_bytes": 6635,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+    },
+    {
+      "file": "docs/api.md",
+      "sha256": "c10a3550be00c9c45a812a9c7e933acfb61d51174ef1d1f93acadc7f822ba927",
+      "published_sha256": "c10a3550be00c9c45a812a9c7e933acfb61d51174ef1d1f93acadc7f822ba927",
+      "published_bytes": 5874,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+    },
+    {
+      "file": "docs/status.md",
+      "sha256": "e56a7fc53f8c0326a42e61a9abaa76dbceecba12961e8fc1b39e612410e3ac6f",
+      "published_sha256": "e56a7fc53f8c0326a42e61a9abaa76dbceecba12961e8fc1b39e612410e3ac6f",
+      "published_bytes": 609,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+    },
+    {
+      "file": "tools/check_publication.py",
+      "published_sha256": "2bbf24c26b24494e0670ac84ae7d53c1fb7041f684ff1f8c8a160d5a57966371",
+      "published_bytes": 3116,
+      "identical_to_tested_input": false,
+      "validation_scope": "Verify exact index/checkout sources with explicit eol=crlf conversion for PowerShell; no inference."
     }
   ],
   "actual_console_native_eboot_sha256": "be1067a7520dce661129a2a1cab8c85fd92bd01be17d1d82b91917199679fac6",

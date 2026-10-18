@@ -3,9 +3,12 @@
  * Filenames are never interpreted. No remote URLs or automatic generation retry.
  */
 #define EDIT_IMAGE_LIMIT (8U*1024U*1024U)
-#define MAX_EDIT_BODY (2U*EDIT_IMAGE_LIMIT+MAX_BODY)
+#define EDIT_MASK_LIMIT (4U*1024U*1024U)
+#define MAX_EDIT_BODY (2U*EDIT_IMAGE_LIMIT+EDIT_MASK_LIMIT+MAX_BODY)
 typedef struct {char name[64],type[64];const unsigned char *data;size_t size;int file;} edit_part;
 static int backend_upload_image(const unsigned char *,size_t,const char *,char[33],char *,size_t);
+static int backend_upload_mask(const unsigned char *,size_t,const char *,int,char[33],char *,size_t);
+static int backend_input_dimensions(const char *,uint32_t *,uint32_t *);
 static void backend_delete_input(const char *);
 static const unsigned char *find_bytes(const unsigned char *p,size_t n,const char *needle,size_t size) {
     if(size>n)return NULL;
@@ -87,7 +90,9 @@ static int multipart_parts(const char *type,const unsigned char *body,size_t siz
         if(!next){snprintf(error,cap,"Missing closing multipart boundary");return 0;}
         part->data=p;part->size=(size_t)(next-p);p=next+n+4;
         if(part->file){
-            if(!part->size || part->size>EDIT_IMAGE_LIMIT || (strcmp(part->type,"image/png") && strcmp(part->type,"image/jpeg"))){snprintf(error,cap,"PNG/JPEG image must be1..8MiB");return 0;}
+            int mask=!strcmp(part->name,"mask");
+            if(!part->size || (mask?part->size>=EDIT_MASK_LIMIT:part->size>EDIT_IMAGE_LIMIT) ||
+               (mask?strcmp(part->type,"image/png"):(strcmp(part->type,"image/png") && strcmp(part->type,"image/jpeg")))){snprintf(error,cap,"Image requires PNG/JPEG up to8MiB; mask requires PNG below4MiB");return 0;}
         }else if(part->size>4096 || memchr(part->data,0,part->size)){snprintf(error,cap,"Invalid/oversized text field");return 0;}
         if(end-p>=2 && !memcmp(p,"--",2)){
             p+=2;if(end-p==2 && !memcmp(p,"\r\n",2))p+=2;
@@ -98,15 +103,15 @@ static int multipart_parts(const char *type,const unsigned char *body,size_t siz
     }
     snprintf(error,cap,"Truncated multipart body");return 0;
 }
-static int multipart_json(edit_part *parts,unsigned count,const char *init,const char *reference,char *json,size_t cap,char *error,size_t error_cap) {
+static int multipart_json(edit_part *parts,unsigned count,const char *init,const char *reference,const char *mask,char *json,size_t cap,char *error,size_t error_cap) {
     size_t used=1;json[0]='{';int fields=0;
     for(unsigned i=0;i<count;i++){
-        edit_part *p=&parts[i];if(p->file || !strcmp(p->name,"reference_mode"))continue;
-        if(!strcmp(p->name,"init_image_id") || !strcmp(p->name,"reference_image_id")){snprintf(error,error_cap,"Use uploaded image fields for edits");return 0;}
+        edit_part *p=&parts[i];if(p->file || !strcmp(p->name,"reference_mode") || !strcmp(p->name,"mask_mode"))continue;
+        if(!strcmp(p->name,"init_image_id") || !strcmp(p->name,"reference_image_id") || !strcmp(p->name,"mask_image_id")){snprintf(error,error_cap,"Use uploaded image fields for edits");return 0;}
         char text[4097],encoded[24585];memcpy(text,p->data,p->size);text[p->size]=0;
         if(!valid_utf8((const unsigned char *)text)){snprintf(error,error_cap,"Invalid UTF-8 form field");return 0;}
         int numeric=!strcmp(p->name,"n") || !strcmp(p->name,"steps") || !strcmp(p->name,"cfg_scale") ||
-            !strcmp(p->name,"seed") || !strcmp(p->name,"manga_strength") || !strcmp(p->name,"denoise_strength") || !strcmp(p->name,"ip_adapter_strength");
+            !strcmp(p->name,"seed") || !strcmp(p->name,"manga_strength") || !strcmp(p->name,"denoise_strength") || !strcmp(p->name,"ip_adapter_strength") || !strcmp(p->name,"control_strength");
         if(numeric){const char *q=text;char number[128];if(!parse_number(&q,number,sizeof(number)) || *q){snprintf(error,error_cap,"Invalid numeric form field");return 0;}strcpy(encoded,number);}
         else if(!strcmp(p->name,"stream")){
             if(strcmp(text,"false")){snprintf(error,error_cap,"Streaming is unsupported");return 0;}strcpy(encoded,"false");
@@ -116,43 +121,63 @@ static int multipart_json(edit_part *parts,unsigned count,const char *init,const
         int n=snprintf(json+used,cap-used,"%s\"%s\":%s",fields++?",":"",p->name,encoded);
         if(n<0 || (size_t)n>=cap-used){snprintf(error,error_cap,"Edited request exceeds JSON limit");return 0;}used+=(size_t)n;
     }
-    int n=snprintf(json+used,cap-used,"%s\"%s\":\"%s\"%s%s%s}",fields?",":"",init[0]?"init_image_id":"reference_image_id",
-        init[0]?init:reference,init[0] && reference[0]?",\"reference_image_id\":\"":"",init[0] && reference[0]?reference:"",init[0] && reference[0]?"\"":"");
-    return n>=0 && (size_t)n<cap-used;
+    const char *names[]={"init_image_id","reference_image_id","mask_image_id"},*ids[]={init,reference,mask};
+    for(unsigned i=0;i<3;i++)if(ids[i][0]){
+        int n=snprintf(json+used,cap-used,"%s\"%s\":\"%s\"",fields++?",":"",names[i],ids[i]);
+        if(n<0 || (size_t)n>=cap-used){snprintf(error,error_cap,"Edited request exceeds JSON limit");return 0;}used+=(size_t)n;
+    }
+    if(used+2>cap)return 0;json[used++]='}';json[used]=0;return 1;
 }
 static int openai_edit_submit(socket_t fd,const unsigned char *body,size_t size,const char *type) {
     edit_part parts[24];unsigned count;char error[768],param[64]={0},mode[32]="img2img";
     if(!multipart_parts(type,body,size,parts,&count,error,sizeof(error))){openai_error(fd,400,error,NULL);return 0;}
-    edit_part *image=NULL,*reference_image=NULL;
+    edit_part *image=NULL,*reference_image=NULL,*mask=NULL;int grayscale=0,has_mask_mode=0;
     for(unsigned i=0;i<count;i++){
         edit_part *p=&parts[i];
         if(!strcmp(p->name,"image") || !strcmp(p->name,"image[]")){if(!p->file){openai_error(fd,400,"image must be a file","image");return 0;}image=p;}
         else if(!strcmp(p->name,"reference_image")){if(!p->file){openai_error(fd,400,"reference_image must be a file","reference_image");return 0;}reference_image=p;}
+        else if(!strcmp(p->name,"mask")){if(!p->file){openai_error(fd,400,"mask must be a PNG file","mask");return 0;}mask=p;}
+        else if(!strcmp(p->name,"mask_mode")){
+            if(p->file || !((p->size==5&&!memcmp(p->data,"alpha",5)) || (p->size==9&&!memcmp(p->data,"grayscale",9)))){openai_error(fd,400,"mask_mode must be alpha or grayscale","mask_mode");return 0;}
+            grayscale=p->size==9;has_mask_mode=1;
+        }
         else if(!strcmp(p->name,"reference_mode")){
             if(p->file || !p->size || p->size>=sizeof(mode)){openai_error(fd,400,"Invalid reference_mode","reference_mode");return 0;}
             memcpy(mode,p->data,p->size);mode[p->size]=0;
-        }else if(p->file){openai_error(fd,400,"Unsupported image field (mask/inpainting is not implemented)",p->name);return 0;}
+        }else if(p->file){openai_error(fd,400,"Unsupported image field",p->name);return 0;}
     }
     if(!image){openai_error(fd,400,"One image file is required","image");return 0;}
-    int init=!strcmp(mode,"img2img") || !strcmp(mode,"combined"),ip=!strcmp(mode,"ip_adapter") || !strcmp(mode,"combined");
+    int init=!strcmp(mode,"img2img") || !strcmp(mode,"combined") || !strcmp(mode,"inpaint"),ip=!strcmp(mode,"ip_adapter") || !strcmp(mode,"combined");
+    if((mask && !init) || (has_mask_mode && !mask) || (!strcmp(mode,"inpaint") && !mask)){openai_error(fd,400,"Mask requires img2img/combined; inpaint requires a mask","mask");return 0;}
     if((!init && !ip) || (reference_image && strcmp(mode,"combined"))){openai_error(fd,400,"reference_mode must be img2img, ip_adapter or combined; separate reference_image requires combined","reference_mode");return 0;}
     char *json=malloc(MAX_BODY+1);ps5_ai_request request;int url_format;
     const char placeholder[]="00000000000000000000000000000000";
     if(!json){openai_error(fd,500,"Out of memory",NULL);return 0;}
-    if(!multipart_json(parts,count,init?placeholder:"",ip?placeholder:"",json,MAX_BODY+1,error,sizeof(error)) ||
+    if(!multipart_json(parts,count,init?placeholder:"",ip?placeholder:"",mask?placeholder:"",json,MAX_BODY+1,error,sizeof(error)) ||
        !openai_validate(json,&request,&url_format,error,sizeof(error),param)){
         openai_error(fd,400,error,param[0]?param:NULL);free(json);return 0;
     }
     lock_state();int busy=openai_busy || stopping || !openai_thread_ready;unlock_state();
     if(busy){openai_error(fd,429,"One image request is already active",NULL);free(json);return 0;}
-    char first_id[33]={0},second_id[33]={0};
+    char first_id[33]={0},second_id[33]={0},mask_id[33]={0};
     if(!backend_upload_image(image->data,image->size,image->type,first_id,error,sizeof(error))){openai_error(fd,503,error,"image");free(json);return 0;}
     if(reference_image && !backend_upload_image(reference_image->data,reference_image->size,reference_image->type,second_id,error,sizeof(error))){
         backend_delete_input(first_id);openai_error(fd,503,error,"reference_image");free(json);return 0;
     }
+    if(mask && !backend_upload_mask(mask->data,mask->size,mask->type,grayscale,mask_id,error,sizeof(error))){
+        backend_delete_input(first_id);if(second_id[0])backend_delete_input(second_id);openai_error(fd,400,error,"mask");free(json);return 0;
+    }
+    if(mask){
+        uint32_t iw,ih,mw,mh;
+        if(!backend_input_dimensions(first_id,&iw,&ih) || !backend_input_dimensions(mask_id,&mw,&mh) ||
+           iw!=mw || ih!=mh || iw!=(uint32_t)request.width || ih!=(uint32_t)request.height){
+            backend_delete_input(first_id);if(second_id[0])backend_delete_input(second_id);backend_delete_input(mask_id);
+            openai_error(fd,400,"Masked source, PNG mask and requested output must have identical dimensions","mask");free(json);return 0;
+        }
+    }
     int accepted=0;
-    if(multipart_json(parts,count,init?first_id:"",ip?(reference_image?second_id:first_id):"",json,MAX_BODY+1,error,sizeof(error)))accepted=openai_submit(fd,json,1);
+    if(multipart_json(parts,count,init?first_id:"",ip?(reference_image?second_id:first_id):"",mask_id,json,MAX_BODY+1,error,sizeof(error)))accepted=openai_submit(fd,json,1);
     else openai_error(fd,400,"Unable to encode edited request",NULL);
-    if(!accepted){backend_delete_input(first_id);if(second_id[0])backend_delete_input(second_id);}
+    if(!accepted){backend_delete_input(first_id);if(second_id[0])backend_delete_input(second_id);if(mask_id[0])backend_delete_input(mask_id);}
     free(json);return accepted;
 }
