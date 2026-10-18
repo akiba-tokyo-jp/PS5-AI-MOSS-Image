@@ -5,6 +5,7 @@
 #define GGML_MAX_NAME 160
 #endif
 #include "engine.h"
+#include "reference_image.h"
 #include "precision_mode.h"
 #include <cmath>
 #include "ggml.h"
@@ -16,6 +17,7 @@
 #include "engine_config.h"
 #include "v3_shutdown.h"
 #include "pool.h"
+#include "cpu_clip_pool_buffer.hpp"
 #include "probe.h"
 #include "memory_plan.h"
 #include "ui_hooks.h"
@@ -60,6 +62,9 @@ static std::string log_path = "/app0/ai-runtime/logs/engine.jsonl";
 static bool hardware_verified = false;
 static bool partial_taesd_gpu_decode = false;
 static std::atomic<bool> parameter_loading{false};
+static std::string loaded_controlnet;
+static std::atomic<uint64_t> cpu_clip_pool_live_bytes{0};
+static std::atomic<uint64_t> cpu_clip_pool_peak_bytes{0};
 extern "C" void ps5_ai_native_config_mark(unsigned,const char*);
 extern "C" void ps5_ai_native_locale_snapshot(uint64_t[11]);
 extern "C" void ps5_ai_native_capacity_snapshot(const char*);
@@ -182,6 +187,28 @@ static void write_event(const nlohmann::json& event) noexcept {
     }
 }
 
+extern "C" ggml_backend_buffer_t ps5_ai_cpu_clip_params_buffer(size_t size) {
+    return ps5_ai_cpu_clip_pool_buffer(size);
+}
+
+extern "C" void ps5_ai_cpu_clip_pool_event(const char* action, uint64_t bytes, int success) noexcept {
+    const uint64_t rounded = (bytes + PS5_AI_FLEX_PAGE_BYTES - 1) & ~(PS5_AI_FLEX_PAGE_BYTES - 1);
+    if (success && !std::strcmp(action, "allocated")) {
+        const uint64_t live = cpu_clip_pool_live_bytes.fetch_add(rounded) + rounded;
+        uint64_t peak = cpu_clip_pool_peak_bytes.load();
+        while (peak < live && !cpu_clip_pool_peak_bytes.compare_exchange_weak(peak, live)) {}
+    } else if (success && !std::strcmp(action, "free")) {
+        const uint64_t before = cpu_clip_pool_live_bytes.load();
+        if (before < rounded) ps5_ai_flex_retain_fault("CPU_CLIP_pool_counter_underflow");
+        else cpu_clip_pool_live_bytes.fetch_sub(rounded);
+    }
+    try { write_event({{"event","cpu_clip_shared_direct_params"},{"action",action},{"bytes",bytes},
+        {"success",success!=0},{"live_bytes",cpu_clip_pool_live_bytes.load()},
+        {"peak_bytes",cpu_clip_pool_peak_bytes.load()},{"compute_backend","CPU"},
+        {"physical_allocation_calls",0},{"Vulkan_import",false}}); }
+    catch (...) { fallback_log("CPU CLIP pool accounting log unavailable"); }
+}
+
 static void engine_log(enum sd_log_level_t level, const char* text, void*) noexcept {
     // The shared progress callback also receives tensor byte-loading progress.
     // These exact loader messages identify that phase without changing I/O.
@@ -299,7 +326,43 @@ struct InferenceObservation {
     const ggml_tensor* requested_flash;
     int requested_steps;
     int last_sampler_step;
+    bool wants_ip;
+    uint64_t gpu_ip_math_nodes;
+    const ggml_tensor* requested_ip;
+    bool init_encoded;
+    bool wants_controlnet=false;
+    uint64_t gpu_controlnet_math_nodes=0;
+    const ggml_tensor* requested_controlnet=nullptr;
 };
+
+static InferenceObservation* active_reference_observation = nullptr;
+extern "C" void ps5_ai_controlnet_phase(int tensors,uint64_t values,double seconds){
+    auto* o=active_reference_observation;
+    if(!o || !o->wants_controlnet || tensors!=10 || !values || !std::isfinite(seconds) || seconds<0)
+        throw std::runtime_error("Invalid ControlNet completion evidence");
+    o->stats->controlnet_evals++;o->stats->controlnet_tensors=tensors;o->stats->controlnet_seconds+=seconds;
+    if(o->stats->controlnet_evals==1)write_event({{"event","controlnet_residuals_completed"},{"tensors",tensors},{"finite_values",values},{"seconds",seconds}});
+}
+extern "C" void ps5_ai_reference_phase(int phase, int value, double seconds) {
+    auto* o=active_reference_observation;
+    if(!o || !std::isfinite(seconds) || seconds<0)return;
+    if(phase==0 && value>0 && value<=o->requested_steps){
+        o->requested_steps=value;o->stats->actual_steps=value;
+    }else if(phase==1 && value==1){o->init_encoded=true;o->stats->init_encode_seconds=seconds;}
+    else if(phase==2 && value==16){o->stats->ip_adapter_tokens=value;o->stats->ip_adapter_seconds=seconds;}
+    try{write_event({{"event","reference_phase"},{"phase",phase},{"value",value},{"seconds",seconds}});}
+    catch(...){fallback_log("reference phase logging unavailable");}
+}
+
+static unsigned char* load_reference_input(const char* path,const char* expected_sha,sd_image_t& image) {
+    const std::string name(path);
+    if(name.rfind("/app0/ai-runtime/inputs/",0)!=0 || name.find("..")!=std::string::npos)
+        throw std::runtime_error("Reference input path was not resolved by native admission");
+    unsigned char* rgb=nullptr;uint32_t w,h;uint64_t bytes;char hash[65];
+    if(!ps5_ai_input_info(path,&w,&h,&bytes,hash) || std::strcmp(hash,expected_sha) ||
+       !ps5_ai_input_read(path,&rgb,&w,&h))throw std::runtime_error("Pinned reference input is missing or its SHA changed");
+    image={w,h,3,rgb};return rgb;
+}
 
 static const char* unet_weight_name(const ggml_tensor* tensor) {
     if (!tensor || (tensor->op != GGML_OP_MUL_MAT && tensor->op != GGML_OP_CONV_2D)) return nullptr;
@@ -310,6 +373,16 @@ static const char* unet_weight_name(const ggml_tensor* tensor) {
         weight = weight->view_src;
     }
     return nullptr;
+}
+
+static const char* controlnet_weight_name(const ggml_tensor* tensor){
+    if(!tensor || (tensor->op!=GGML_OP_MUL_MAT && tensor->op!=GGML_OP_CONV_2D))return nullptr;
+    const ggml_tensor* weight=tensor->src[0];
+    for(unsigned depth=0;weight && depth<8;depth++){
+        const char* n=ggml_get_name(weight);
+        if(n && (!std::strncmp(n,"input_blocks.",13) || !std::strncmp(n,"input_hint_block.",17) || !std::strncmp(n,"zero_convs.",11)))return n;
+        weight=weight->view_src;
+    }return nullptr;
 }
 
 static bool is_gpu_math_tensor(const ggml_tensor* tensor) {
@@ -335,12 +408,20 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
     auto* observation = static_cast<InferenceObservation*>(data);
     if (ask) {
         if (!is_gpu_math_tensor(tensor)) return false;
+        if(observation->wants_controlnet && !observation->gpu_controlnet_math_nodes && !observation->requested_controlnet && controlnet_weight_name(tensor)){
+            observation->requested_controlnet=tensor;return true;
+        }
         // Request only the first UNet-weight and first flash-attention witnesses.
         // Each true ask partitions and synchronizes the graph in SD.cpp; all
         // other nodes still execute normally, without per-node proof barriers.
         if (!observation->gpu_unet_math_nodes && !observation->requested_unet && unet_weight_name(tensor)) {
             observation->requested_unet = tensor;
             return true;
+        }
+        const char* weight=unet_weight_name(tensor);
+        if(observation->wants_ip && !observation->gpu_ip_math_nodes && !observation->requested_ip &&
+           weight && std::strstr(weight,".to_k_ip.weight")){
+            observation->requested_ip=tensor;return true;
         }
         if (!observation->gpu_flash_attention_nodes && !observation->requested_flash && tensor->op == GGML_OP_FLASH_ATTN_EXT) {
             observation->requested_flash = tensor;
@@ -350,16 +431,21 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
     }
     const bool unet = tensor == observation->requested_unet && !observation->gpu_unet_math_nodes;
     const bool flash = tensor == observation->requested_flash && !observation->gpu_flash_attention_nodes;
-    if ((!unet && !flash) || !is_gpu_math_tensor(tensor) || (unet && !unet_weight_name(tensor))) return false;
+    const bool ip=tensor==observation->requested_ip && !observation->gpu_ip_math_nodes;
+    const bool control=tensor==observation->requested_controlnet && !observation->gpu_controlnet_math_nodes;
+    if ((!unet && !flash && !ip && !control) || !is_gpu_math_tensor(tensor) || ((unet || ip) && !unet_weight_name(tensor)) || (control && !controlnet_weight_name(tensor))) return false;
     ++observation->gpu_math_nodes;
     if (unet) ++observation->gpu_unet_math_nodes;
     if (flash) ++observation->gpu_flash_attention_nodes;
+    if(ip){++observation->gpu_ip_math_nodes;observation->stats->gpu_ip_attention_verified=1;}
+    if(control){++observation->gpu_controlnet_math_nodes;observation->stats->gpu_controlnet_verified=1;}
     try {
-        nlohmann::json event = {{"event", unet ? "gpu_unet_model_math_completed" : "gpu_flash_attention_math_completed"},
+        nlohmann::json event = {{"event", control ? "gpu_controlnet_math_completed" : ip ? "gpu_ip_attention_math_completed" : unet ? "gpu_unet_model_math_completed" : "gpu_flash_attention_math_completed"},
             {"op", ggml_op_name(tensor->op)}, {"tensor", ggml_get_name(tensor)},
             {"device", ggml_backend_dev_name(gpu_device)},
             {"scope", "sampled completed witness after backend synchronization; not total GPU operation count"}};
-        if (unet) event["weight"] = unet_weight_name(tensor);
+        if (unet || ip) event["weight"] = unet_weight_name(tensor);
+        if(control)event["weight"]=controlnet_weight_name(tensor);
         write_event(event);
     } catch (...) { fallback_log("ps5-ai: completed GPU witness structured log unavailable"); }
     observation->stats->peak_cpu_bytes = std::max(observation->stats->peak_cpu_bytes, cpu_peak_bytes());
@@ -620,29 +706,43 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         return -1;
     }
     *stats = {};
-    InferenceObservation observation = {progress, user, stats, 0, 0, 0, nullptr, nullptr, request->steps, 0};
+    InferenceObservation observation = {progress, user, stats, 0, 0, 0, nullptr, nullptr, request->steps, 0,
+                                       request->reference_image_id[0]!=0,0,nullptr,false};
+    active_reference_observation=&observation;
+    observation.wants_controlnet=request->controlnet[0]!=0;
     parameter_loading.store(false);
     precision_outputs.store(0);precision_values.store(0);precision_nonfinite.store(0);precision_unet_outputs.store(0);
     sd_image_t* images = nullptr;
     int image_count = 0;
+    unsigned char* init_rgb=nullptr;
+    unsigned char* reference_rgb=nullptr;
+    unsigned char* control_rgb=nullptr;
     struct GenerationCleanup {
         sd_image_t** images;
         int* count;
+        unsigned char** init_rgb;
+        unsigned char** reference_rgb;
+        unsigned char** control_rgb;
         ~GenerationCleanup() noexcept {
             try {
                 sd_set_backend_eval_callback(nullptr, nullptr);
                 sd_set_progress_callback(nullptr, nullptr);
                 if (*images) free_sd_images(*images, *count);
+                std::free(*init_rgb);std::free(*reference_rgb);
+                std::free(*control_rgb);
+                active_reference_observation=nullptr;
             } catch (...) {
                 fallback_log("ps5-ai: generation cleanup failed; reload title");
             }
         }
-    } cleanup = {&images, &image_count};
+    } cleanup = {&images, &image_count, &init_rgb, &reference_rgb, &control_rgb};
     const auto start = std::chrono::steady_clock::now();
     int result = -1;
     try {
         if (!std::isfinite(request->manga_strength) || request->manga_strength < 0 || request->manga_strength > 1.5)
             throw std::runtime_error("Manga strength is outside the finite 0..1.5 range");
+        if(request->reference_image_id[0] && (engine_config.clip_vision_path.empty() || engine_config.ip_adapter_path.empty()))
+            throw std::runtime_error("IP-Adapter weights are not configured; reference request was not run as txt2img");
         ps5_ai_native_capacity_snapshot("before_manga_generation");
         if (!model_context) {
             sd_ctx_params_t context_params;
@@ -669,18 +769,63 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         }
         sd_img_gen_params_t params;
         sd_img_gen_params_init(&params);
+        const std::string requested_control=request->controlnet;
+        if(requested_control!=loaded_controlnet){
+            if(!ps5_ai_ggml_wait_backend("before_ControlNet_model_switch",1))throw std::runtime_error("GPU not quiescent for ControlNet switch");
+            if(!loaded_controlnet.empty()){
+                if(!sd_ctx_unload_control_net(model_context))throw std::runtime_error("ControlNet unload failed");
+                loaded_controlnet.clear();
+            }
+            if(!requested_control.empty()){
+                const std::string* path=requested_control=="canny"?&engine_config.controlnet_canny_path:requested_control=="openpose"?&engine_config.controlnet_openpose_path:nullptr;
+                if(!path || !sd_ctx_load_control_net(model_context,path->c_str()) || !sd_ctx_has_control_net(model_context))
+                    throw std::runtime_error("Requested ControlNet checkpoint could not be loaded");
+                loaded_controlnet=requested_control;
+            }
+            write_event({{"event","controlnet_model_selected"},{"name",loaded_controlnet},{"compute_backend","Vulkan0"},{"only_one_controlnet_resident",true}});
+        }
+        if(!requested_control.empty()){
+            if(!request->control_image_id[0] || !std::isfinite(request->control_strength) || request->control_strength<0.01 || request->control_strength>1.5)
+                throw std::runtime_error("ControlNet requires its prepared input and finite strength");
+            control_rgb=load_reference_input(request->control_image_path,request->control_image_sha256,params.control_image);
+            if(params.control_image.width!=static_cast<uint32_t>(request->width) || params.control_image.height!=static_cast<uint32_t>(request->height))
+                throw std::runtime_error("Prepared ControlNet map dimensions must match output size");
+            params.control_strength=static_cast<float>(request->control_strength);
+            write_event({{"event","controlnet_request"},{"name",requested_control},{"image_sha256",request->control_image_sha256},{"strength",params.control_strength},{"input","prepared RGB edge/pose map; no pose detector"}});
+        }
+        if(request->init_image_id[0]){
+            if(!std::isfinite(request->denoise_strength) || request->denoise_strength<0.01 || request->denoise_strength>1)
+                throw std::runtime_error("Invalid img2img denoise strength");
+            init_rgb=load_reference_input(request->init_image_path,request->init_image_sha256,params.init_image);
+            params.strength=static_cast<float>(request->denoise_strength);
+        }
+        if(request->reference_image_id[0]){
+            if(!std::isfinite(request->ip_adapter_strength) || request->ip_adapter_strength<0.01 || request->ip_adapter_strength>1.5)
+                throw std::runtime_error("Invalid IP-Adapter strength");
+            reference_rgb=load_reference_input(request->reference_image_path,request->reference_image_sha256,params.ip_adapter_image);
+            params.ip_adapter_strength=static_cast<float>(request->ip_adapter_strength);
+        }
+        write_event({{"event","reference_request"},{"init_image_sha256",request->init_image_sha256},
+                     {"reference_image_sha256",request->reference_image_sha256},
+                     {"denoise_strength",request->init_image_id[0]?request->denoise_strength:0},
+                     {"ip_adapter_strength",request->reference_image_id[0]?request->ip_adapter_strength:0},
+                     {"clip_vision_compute","PS5 CPU"},{"clip_vision_params","disk; release after compute"}});
         params.prompt = request->prompt;
         params.clip_skip = 2; // Preserve SDXL's existing resolved default; converted adapter requires it.
         std::string manga_prompt;
         sd_lora_t manga_adapter = {false, static_cast<float>(request->manga_strength), engine_config.manga_lora_path.c_str()};
         if (request->manga_strength > 0) {
-            manga_prompt = std::string("monochrome, ") + request->prompt;
-            params.prompt = manga_prompt.c_str();
+            if (request->manga_monochrome) {
+                manga_prompt = std::string("monochrome, ") + request->prompt;
+                params.prompt = manga_prompt.c_str();
+            }
             params.loras = &manga_adapter;
             params.lora_count = 1;
         }
         write_event({{"event", "manga_lora_request"}, {"strength", request->manga_strength},
-                     {"enabled", request->manga_strength > 0}, {"trigger", "monochrome"},
+                     {"enabled", request->manga_strength > 0},
+                     {"automatic_monochrome", request->manga_monochrome != 0},
+                     {"trigger", request->manga_strength > 0 && request->manga_monochrome ? "monochrome" : ""},
                      {"adapter", engine_config.manga_lora_path}, {"apply_mode", "at_runtime"}});
         params.negative_prompt = request->negative_prompt;
         params.width = request->width;
@@ -708,6 +853,16 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if (!stats->gpu_used || !observation.gpu_flash_attention_nodes) {
             throw std::runtime_error("Image rejected: required completed native UNet/flash-attention witness is missing");
         }
+        if(!stats->actual_steps || observation.last_sampler_step!=stats->actual_steps)
+            throw std::runtime_error("Image rejected: sampler completion evidence is missing");
+        if(request->init_image_id[0] && !observation.init_encoded)
+            throw std::runtime_error("Image rejected: init-image encoder did not complete");
+        if(request->reference_image_id[0] && (stats->ip_adapter_tokens!=16 || !observation.gpu_ip_math_nodes))
+            throw std::runtime_error("Image rejected: Plus tokens or completed GPU IP-attention witness is missing");
+        if(observation.wants_controlnet && (!stats->gpu_controlnet_verified || stats->controlnet_evals<stats->actual_steps || stats->controlnet_tensors!=10))
+            throw std::runtime_error("Image rejected: ControlNet GPU/residual completion evidence is missing");
+        if (cpu_clip_pool_live_bytes.load() != 0)
+            throw std::runtime_error("CPU CLIP shared Direct weights were not returned after conditioning");
         const auto& image = images[0];
         const std::string temporary_path = std::string(output_path) + ".partial";
         if (!stbi_write_png(temporary_path.c_str(), image.width, image.height, image.channel,
@@ -749,6 +904,12 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
     write_event({{"event", "generation_result"}, {"success", result == 0},
+                 {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
+                 {"init_encoded",observation.init_encoded},{"init_encode_seconds",stats->init_encode_seconds},
+                 {"ip_adapter_tokens",stats->ip_adapter_tokens},{"ip_adapter_seconds",stats->ip_adapter_seconds},
+                 {"gpu_ip_attention_verified",stats->gpu_ip_attention_verified!=0},
+                 {"controlnet",request->controlnet},{"gpu_controlnet_verified",stats->gpu_controlnet_verified!=0},
+                 {"controlnet_evals",stats->controlnet_evals},{"controlnet_tensors",stats->controlnet_tensors},{"controlnet_seconds",stats->controlnet_seconds},
                  {"gpu_used", stats->gpu_used != 0}, {"gpu_math_nodes", observation.gpu_math_nodes},
                  {"gpu_unet_math_nodes", observation.gpu_unet_math_nodes},
                  {"gpu_flash_attention_nodes", observation.gpu_flash_attention_nodes},
@@ -760,6 +921,9 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"owned_direct_data_peak_used_bytes", pool.peak_used_bytes},
                  {"owned_direct_data_free_bytes", pool.free_bytes},
                  {"owned_direct_data_fault_retained", pool.fault_retained != 0},
+                 {"cpu_clip_shared_direct_live_bytes",cpu_clip_pool_live_bytes.load()},
+                 {"cpu_clip_shared_direct_peak_bytes",cpu_clip_pool_peak_bytes.load()},
+                 {"owned_pool_peak_includes_CPU_CLIP_weights",true},
                  {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
                  {"backend", engine_config.backend},
                  {"fp16_math",precision_fp16},{"finite_checked_outputs",precision_outputs.load()},

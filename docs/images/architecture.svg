@@ -17,7 +17,7 @@
 <text x="740" y="141" font-size="20" font-weight="700">WAI v17 + SD.cpp</text><text x="740" y="178" font-size="18">Native async API :8188</text>
 <text x="740" y="213" font-size="17">CPU CLIP · GGML Vulkan</text><text x="740" y="251" font-size="17">Jobs · PNG · TV status</text>
 <rect x="910" y="105" width="235" height="180" rx="14" fill="#183f4b"/>
-<g fill="white"><text x="1028" y="141" font-size="20" font-weight="700">PS5 GPU</text><text x="1028" y="178" font-size="18">RADV / AGC Compute</text><text x="1028" y="213" font-size="17">UNet · TAESDXL</text><text x="1028" y="251" font-size="17">6 GiB Direct data pool</text></g>
+<g fill="white"><text x="1028" y="141" font-size="20" font-weight="700">PS5 GPU</text><text x="1028" y="178" font-size="18">RADV / AGC Compute</text><text x="1028" y="213" font-size="17">ControlNet · UNet · TAE</text><text x="1028" y="251" font-size="17">9 GiB shared Direct pool</text></g>
 <text x="735" y="323" font-size="16">Existing WebSrv :8080 preserved · Bounded journals · PNG remains on PS5</text>
 </g>
 <g stroke="#259f9a" stroke-width="3" fill="none" marker-end="url(#arrow)"><path d="M260 163H322"/><path d="M570 163H607"/><path d="M870 163H907"/><path d="M909 235H873"/><path d="M610 235H573"/><path d="M325 235H263"/></g>

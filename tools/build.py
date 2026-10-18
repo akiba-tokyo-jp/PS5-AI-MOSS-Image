@@ -42,12 +42,13 @@ def main():
           '-fvisibility-nodllstorageclass=default','-isysroot','${SDK}',
           '-isystem','${SDK}/target/include/c++/v1','-isystem','${SDK}/target/include',
           '-I','${PLATFORM}/src','-I','${ROOT}/native/app','-I','${ROOT}/native/ui',
-          '-I','${SD}/include','-I','${SD}/ggml/include','-isystem','${SD}/thirdparty',
-          '-I','${VULKAN_HEADERS}/include','-fno-stack-protector','-fno-plt','-femulated-tls',
+          '-I','${SD}/include','-I','${SD}/ggml/include','-I','${SD}/ggml/src','-isystem','${SD}/thirdparty',
+          '-I','${ROOT}/native/sha256','-I','${VULKAN_HEADERS}/include','-fno-stack-protector','-fno-plt','-femulated-tls',
           '-fdenormal-fp-math=ieee','-O2','-ffunction-sections','-fdata-sections','-Wall','-Wextra','-Werror','-MMD']
         for name in profile['objects']:
             stem=Path(name).stem
-            if stem=='app_crt':source='native/link/app_crt.cpp'
+            if stem=='reference_sha256':source='native/sha256/sha256.c'
+            elif stem=='app_crt':source='native/link/app_crt.cpp'
             elif stem in ('format','display'):source='native/ui/'+stem+'.c'
             elif stem in ('cpp_allocation','cxa_owned','threads'):source='native/runtime/'+stem+('.cpp' if stem=='cpp_allocation' else '.c')
             elif stem in ('engine_sdcpp','vulkan_bridge','cpp_allocation'):source='native/app/'+stem+'.cpp'
@@ -55,6 +56,7 @@ def main():
             cpp=source.endswith('.cpp');extra=['-std=c++20','-fexceptions','-fcxx-exceptions'] if cpp else ['-std=c11']
             if stem in ('app_crt','cpp_allocation'):extra+=['-fno-exceptions','-fno-rtti']
             if stem=='server':extra+=['-Dmain=ps5_ai_server_main']
+            if stem=='reference_image':extra+=['-Wno-unused-function']
             if stem=='engine_sdcpp':extra+=['-DPS5_AI_NATIVE_RADV=1']
             if stem in ('engine_sdcpp','startup'):extra+=['-DPS5_AI_ENABLE_FP16='+str(int(a.precision=='fp16'))]
             print('Compiling '+source,flush=True)
@@ -71,6 +73,8 @@ def main():
         before=run(['${LLVM}/llvm-ar.exe','t',str(core)]).splitlines()
         if len(before)!=75 or before.count('ggml_runner.cpp.o')!=1:raise RuntimeError('Unexpected core archive members')
         run(['${LLVM}/llvm-ar.exe','r',str(core),'${OUT}/ggml_runner.cpp.o'])
+        for recipe in profile['reference_compile']:run(recipe)
+        run(['${LLVM}/llvm-ar.exe','r',str(core),*['${OUT}/'+name+'.o' for name in ('image.cpp','diffusion_engine.cpp','model_manager.cpp','model_builders.cpp','photomaker_extension.cpp')]])
         link=[v.replace('${DEPS}/'+driver.name,str(driver).replace('\\','/')).replace('${DEPS}/'+core_name,str(core).replace('\\','/')) for v in profile['link']]
         print('Linking native application',flush=True);run(link)
         raw=out/'llvm-pie.elf';deploy=out/'llvm-pie.deploy.elf'
@@ -86,6 +90,7 @@ def main():
         (title/'licenses').mkdir(exist_ok=True)
         shutil.copyfile(ROOT/'licenses/WAI-Dashboard-Glyphs-OFL.txt',title/'licenses/WAI-Dashboard-Glyphs-OFL.txt')
         shutil.copyfile(ROOT/'licenses/manga-LoRA-attribution.txt',title/'licenses/manga-LoRA-attribution.txt')
+        shutil.copyfile(ROOT/'licenses/IP-Adapter-Apache-2.0.txt',title/'licenses/IP-Adapter-Apache-2.0.txt')
         run(['${NATIVE_TOOL}','self','--sign','--in',str(native),'--out',str(title/'eboot.bin'),'--magic','0x1D3D154F'])
         inspection=run(['${NATIVE_TOOL}','self','--inspect','--file',str(title/'eboot.bin')]);(out/'inspect.txt').write_text(inspection)
         if 'integrity: valid' not in inspection:raise RuntimeError('SELF integrity not confirmed')

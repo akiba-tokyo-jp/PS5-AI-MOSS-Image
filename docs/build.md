@@ -4,7 +4,7 @@
 
 ## 今回検証した範囲
 
-公開フォルダーのネイティブ11翻訳単位とRADVプラットフォーム1翻訳単位を再コンパイルし、
+公開フォルダーのネイティブ13翻訳単位とRADVプラットフォーム1翻訳単位を再コンパイルし、
 SHA256固定の既存SD/GGML/RADV/SDK依存とリンク、ELF→ネイティブELF→SELF変換・検査まで確認しました。
 Windows側のAPI試験は推論を行わないfixtureです。PS5での画像生成の証拠とは区別します。
 
@@ -128,3 +128,19 @@ python tools/prepare_manga_lora_v1.py --base D:/PS5-AI/models/waiIllustriousSDXL
 これはWindowsでのモデル形式変換で、画像生成ではありません。固定mirror commitと元配布SHAを確認し、WAIの完全なSHAを変換metadataへ保存します。旧GLoRAの補正をrank48/F32へ変換し、使用1008層のサンプル補正を検査します。SVDやrank切詰めは行いません。モデルごとの変換なので別checkpointに使い回しません。clip_skip=2を前提とします。
 
 出力`manga-illustrious-wai-v17-r48-f32.safetensors`をタイトルのmodelsディレクトリへ置き、更新した`config/native.json.example`を使います。既存6GiB版のconfigだけを書き換えて動くものではなく、nativeとアプリ内RADVのVA区切りを一緒に再ビルドします。通常OS終了・原本退避・ハッシュ照合後に配備してください。
+
+
+## ControlNet版の再ビルド・通信試験
+
+現行プロファイルはcoreの6メンバー（runner/image/diffusion_engine/model_manager/model_builders/photomaker_extension）を再コンパイルします。conditioning/conditioner.hppのCPU逐次ロードとCPU共有プール呼び出しを含むため、古いcoreメンバーを混在させないでください。Direct9GiBと512MiB領域、添付キャラクターのアイコンもソースへ反映しています。
+
+```powershell
+python tools/build_controlnet_tests.py --config .local/build.json --out D:/ps5-build/protocol-fixtures
+$env:PS5_WAI_FIXTURE_DIR='D:/ps5-build/protocol-fixtures'
+$env:PS5_WAI_TEST_OUT='D:/ps5-build/protocol-results'
+python tests/controlnet_protocol.py
+$env:PS5_WAI_TEST_OUT='D:/ps5-build/client-results'
+python tests/controlnet_powershell_client.py
+```
+
+Python/PillowとWindows PowerShellまたはpwshが必要です。必要ならPS5_WAI_POWERSHELLで実行ファイルを指定できます。試験はlocalhostの18188/18189/18289のみを使います。fixtureエンジンは意図的に失敗を返し、モデル推論やPS5接続は行いません。PS5実機での成功証拠は[ControlNet実測](controlnet.md)を参照してください。

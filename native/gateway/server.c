@@ -297,12 +297,14 @@ static int get_double(field *f, double min, double max, double *out) {
     if (errno || *end || !finite_double(v) || v < min || v > max) return 0;
     *out = v; return 1;
 }
+static int valid_id(const char *id);
 static int validate_request(const char *body, ps5_ai_request *r, char *error, size_t cap) {
     object *obj = malloc(sizeof(*obj));
     if (!obj) { snprintf(error, cap, "Out of memory parsing request"); return 0; }
     int ok = 0; int64_t v;
     memset(r, 0, sizeof(*r));
     r->width = r->height = 512; r->steps = 12; r->cfg_scale = 5; r->seed = -1;
+    r->manga_strength = 1; r->denoise_strength = 0.6; r->ip_adapter_strength = 0.7;
     strcpy(r->sampler, "euler");
     if (!parse_object(body, obj)) { snprintf(error, cap, "Malformed, duplicate, nested, or oversized JSON field"); goto done; }
     for (size_t i = 0; i < obj->count; ++i) {
@@ -317,6 +319,18 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
             if (!get_int(f, 1, 100, &v)) { snprintf(error, cap, "steps must be an integer 1..100"); goto done; } r->steps = (int)v;
         } else if (!strcmp(f->key, "cfg_scale")) {
             if (!get_double(f, 0, 30, &r->cfg_scale)) { snprintf(error, cap, "cfg_scale must be finite and 0..30"); goto done; }
+        } else if (!strcmp(f->key, "manga_strength")) {
+            if (!get_double(f, 0, 1.5, &r->manga_strength)) { snprintf(error, cap, "manga_strength must be finite and 0..1.5"); goto done; }
+        } else if (!strcmp(f->key, "manga_monochrome")) {
+            if (f->type != 3 && f->type != 4) { snprintf(error, cap, "manga_monochrome must be boolean"); goto done; }
+            r->manga_monochrome = f->type == 3;
+        } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id")) {
+            if(f->type != 1 || !valid_id(f->value)){snprintf(error,cap,"Image IDs must be32 lowercase hexadecimal characters");goto done;}
+            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:r->reference_image_id,f->value);
+        } else if (!strcmp(f->key, "denoise_strength")) {
+            if(!get_double(f,0.01,1,&r->denoise_strength)){snprintf(error,cap,"denoise_strength must be finite0.01..1");goto done;}
+        } else if (!strcmp(f->key, "ip_adapter_strength")) {
+            if(!get_double(f,0.01,1.5,&r->ip_adapter_strength)){snprintf(error,cap,"ip_adapter_strength must be finite0.01..1.5");goto done;}
         } else if (!strcmp(f->key, "seed")) {
             if (!get_int(f, -1, INT64_MAX, &r->seed)) { snprintf(error, cap, "seed must be an integer -1..9223372036854775807"); goto done; }
         } else if (!strcmp(f->key, "sampler")) {
@@ -326,6 +340,10 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else { snprintf(error, cap, "Unknown request field: %.63s", f->key); goto done; }
     }
     if (!r->prompt[0]) { snprintf(error, cap, "prompt is required and cannot be empty"); goto done; }
+    if((find_field(obj,"denoise_strength") && !r->init_image_id[0]) ||
+       (find_field(obj,"ip_adapter_strength") && !r->reference_image_id[0])){
+        snprintf(error,cap,"Image strength requires its matching input image ID");goto done;
+    }
     ok = 1;
 done:
     free(obj); return ok;
@@ -794,6 +812,7 @@ static int receive_failed(socket_t fd, int received) {
     return received <= 0;
 }
 #include "openai.inc"
+#include "multipart.inc"
 static int handle_client(socket_t fd, uint64_t deadline) {
     int deferred=0;
     char *buffer = malloc(MAX_HEADER + MAX_BODY + 1);
@@ -836,7 +855,7 @@ static int handle_client(socket_t fd, uint64_t deadline) {
         if (equal_ci(line, "Content-Length")) {
             if (has_length++ || !*value) { send_error(fd, 400, "Invalid or duplicate Content-Length"); goto done; }
             for (const char *p = value; *p; ++p) {
-                if (!isdigit((unsigned char)*p) || content_length > MAX_BODY) { send_error(fd, 413, "Request body too large or invalid length"); goto done; }
+                if (!isdigit((unsigned char)*p) || content_length > MAX_EDIT_BODY) { send_error(fd, 413, "Request body too large or invalid length"); goto done; }
                 content_length = content_length * 10 + (size_t)(*p - '0');
             }
         } else if (equal_ci(line, "Authorization")) {
@@ -852,7 +871,9 @@ static int handle_client(socket_t fd, uint64_t deadline) {
     int public_ui = !strcmp(method, "GET") && (!strcmp(path, "/") || !strcmp(path, "/index.html"));
     char signed_id[33];int signed_ok=!strcmp(method,"GET") && signed_image(path,signed_id);
     if (!public_ui && !signed_ok && !authorized(authorization)) { send_error(fd, 401, "Valid Bearer token required"); goto done; }
-    if (content_length > MAX_BODY) { send_error(fd, 413, "Request body too large"); goto done; }
+    int image_edit=!strcmp(method,"POST") && !strcmp(path,"/v1/images/edits");
+    if(content_length>(image_edit?MAX_EDIT_BODY:MAX_BODY)){send_error(fd,413,"Request body too large");goto done;}
+    if(image_edit){char *larger=realloc(buffer,MAX_HEADER+content_length+1);if(!larger){send_error(fd,500,"Out of memory");goto done;}buffer=larger;}
     if (received > header_size + content_length) { send_error(fd, 400, "Pipelining or extra request data unsupported"); goto done; }
     while (received < header_size + content_length) {
         int n = recv_before_deadline(fd, buffer + received, (int)(header_size + content_length - received), deadline, 5000);
@@ -861,7 +882,7 @@ static int handle_client(socket_t fd, uint64_t deadline) {
     }
     buffer[received] = 0;
     char *body = buffer + header_size;
-    if (memchr(body, 0, content_length)) { send_error(fd, 400, "NUL byte in body"); goto done; }
+    if (!image_edit && memchr(body, 0, content_length)) { send_error(fd, 400, "NUL byte in body"); goto done; }
     if (!strcmp(method, "GET") && content_length) { send_error(fd, 400, "GET body unsupported"); goto done; }
     if (public_ui) {
         get_ui(fd);
@@ -875,7 +896,11 @@ static int handle_client(socket_t fd, uint64_t deadline) {
         if(strcmp(method,"POST"))send_error(fd,405,"Use POST");
         else if(strcmp(content_type,"application/json") && strcmp(content_type,"application/json; charset=utf-8"))send_error(fd,415,"Content-Type must be application/json");
         else if(!has_length || !content_length)send_error(fd,400,"JSON body with Content-Length required");
-        else deferred=openai_submit(fd,body);
+        else deferred=openai_submit(fd,body,0);
+    } else if (!strcmp(path,"/v1/images/edits")) {
+        if(strcmp(method,"POST"))openai_error(fd,405,"Use POST",NULL);
+        else if(!has_length || !content_length)openai_error(fd,400,"Multipart body with Content-Length required",NULL);
+        else deferred=openai_edit_submit(fd,(const unsigned char *)body,content_length,content_type);
     } else if (!strcmp(path, "/health")) {
         if (strcmp(method, "GET")) send_error(fd, 405, "Use GET"); else health(fd);
     } else if (!strcmp(path, "/api/admin/shutdown")) {

@@ -133,6 +133,19 @@ static bool dense_flash(const ggml_tensor * dst,const Profile & profile,Bounds &
     if (!rounded(upper,page,upper)) return false;
     out.split_k=maximum(out.split_k,upper);return true;
 }
+static bool small_plain_softmax(const ggml_tensor * t) {
+    /* Frozen ggml-flex ggml_vk_soft_max: ncols<=16384 dispatches op_f32
+     * without writing any of the four prealloc sizes. Larger rows request
+     * x/y scratch and remain refused. Only unmasked, sink-free F32 is audited.
+     * The caller separately requires the verified no-fusion profile. */
+    if (!t || t->op!=GGML_OP_SOFT_MAX || t->type!=GGML_TYPE_F32 ||
+        !t->src[0] || t->src[0]->type!=GGML_TYPE_F32 || t->src[1] || t->src[2]) return false;
+    uint64_t source=0,destination=0;
+    if (!float_tensor(t->src[0],source) || !float_tensor(t,destination) ||
+        source!=destination || source>UINT32_MAX || t->ne[0]>16384) return false;
+    for (unsigned i=0;i<4;++i) if (t->ne[i]!=t->src[0]->ne[i]) return false;
+    return true;
+}
 static bool zero_prealloc_op(ggml_op op) {
     /* Whitelist only handlers without prealloc_size writes in frozen8003.
      * This concerns the four prealloc buffers, not descriptor/staging/driver BOs. */
@@ -159,7 +172,8 @@ static Bounds inspect(const ggml_cgraph * graph,const Profile & profile) {
     for(int i=0;i<graph->n_nodes;++i) {
         const auto * t=graph->nodes[i];++result.inspected_nodes;
         bool known=t && (t->op==GGML_OP_MUL_MAT ? matmul(t,profile,result) :
-                         t->op==GGML_OP_FLASH_ATTN_EXT ? dense_flash(t,profile,result) : zero_prealloc_op(t->op));
+                         t->op==GGML_OP_FLASH_ATTN_EXT ? dense_flash(t,profile,result) :
+                         t->op==GGML_OP_SOFT_MAX ? small_plain_softmax(t) : zero_prealloc_op(t->op));
         if (!known) {
             result.known=false;++result.unknown_nodes;
             if(result.unknown_nodes==1)result.first_unknown=t?t->op:GGML_OP_NONE;

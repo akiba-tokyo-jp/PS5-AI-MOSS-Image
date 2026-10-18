@@ -1,0 +1,1 @@
+The current application icon uses character artwork supplied by the project owner on2026-10-18. It was converted to PNG and resized for the home icon and dashboard. It was not generated or redrawn by this application. Upstream PS5_Vulkan default artwork is not used by this icon.

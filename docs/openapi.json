@@ -2,18 +2,12 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PS5 AI WAI Images API",
-    "version": "1.0.0",
-    "description": "OpenAI Images generation protocol subset. The CPU gateway on PS5 forwards to the same console native GPU engine8188. No cloud or Windows inference. n=1, PNG, non-streaming. LAN /24 only. Legacy async API remains on8188. URL results are image-only signed capabilities valid up to1hour; the API secret is never put in URLs."
+    "version": "1.2.0-controlnet-candidate",
+    "description": "OpenAI Images generation protocol subset. The CPU gateway on PS5 forwards to the same console native GPU engine8188. No cloud or Windows inference. n=1, PNG, non-streaming. LAN /24 only. Legacy async API remains on8188. URL results are image-only signed capabilities valid up to1hour; the API secret is never put in URLs. Multipart edits support img2img, IP-Adapter Plus or combined mode. No masks/inpainting, remote image URLs, streaming or multi-image batch. WAI extensions controlnet/control_image_id/control_strength select one same-console Vulkan ControlNet and an authenticated prepared edge/pose map. No automatic pose detector."
   },
   "servers": [
     {
-      "url": "http://{ps5_host}:8189",
-      "variables": {
-        "ps5_host": {
-          "default": "192.168.1.100",
-          "description": "Your PS5 private LAN IPv4 address"
-        }
-      }
+      "url": "http://192.168.68.67:8189"
     }
   ],
   "security": [
@@ -47,8 +41,7 @@
               "null"
             ],
             "enum": [
-              "wai-illustrious-sdxl-v17.0",
-              null
+              "wai-illustrious-sdxl-v17.0"
             ],
             "description": " Null uses the default."
           },
@@ -58,8 +51,7 @@
               "null"
             ],
             "enum": [
-              1,
-              null
+              1
             ],
             "default": 1,
             "description": " Null uses the default."
@@ -79,8 +71,7 @@
             ],
             "enum": [
               "b64_json",
-              "url",
-              null
+              "url"
             ],
             "default": "b64_json",
             "description": " Null uses the default."
@@ -92,8 +83,7 @@
             ],
             "enum": [
               "auto",
-              "standard",
-              null
+              "standard"
             ],
             "description": " Null uses the default."
           },
@@ -104,8 +94,7 @@
             ],
             "enum": [
               "auto",
-              "opaque",
-              null
+              "opaque"
             ],
             "description": " Null uses the default."
           },
@@ -115,8 +104,7 @@
               "null"
             ],
             "enum": [
-              "png",
-              null
+              "png"
             ],
             "description": " Null uses the default."
           },
@@ -126,8 +114,7 @@
               "null"
             ],
             "enum": [
-              false,
-              null
+              false
             ],
             "description": " Null uses the default."
           },
@@ -192,11 +179,313 @@
             "enum": [
               "euler",
               "euler_a",
-              "dpm++2m",
-              null
+              "dpm++2m"
             ],
             "default": "euler_a",
             "description": " Null uses the default."
+          },
+          "manga_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1.5,
+            "default": 1
+          },
+          "manga_monochrome": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "WAI extension: opt in to monochrome prompt prefix when manga LoRA is enabled; omitted/null leaves the prompt unchanged"
+          },
+          "init_image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "WAI extension: authenticated native input ID on8188"
+          },
+          "reference_image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "WAI extension: IP-Adapter input ID on8188"
+          },
+          "denoise_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "maximum": 1,
+            "default": 0.6,
+            "description": "WAI extension, requires init image; actual sampler steps can be fewer than requested"
+          },
+          "ip_adapter_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "maximum": 1.5,
+            "default": 0.7,
+            "description": "WAI extension, requires reference image; not OpenAI input_fidelity"
+          },
+          "controlnet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "canny",
+              "openpose",
+              null
+            ],
+            "description": "WAI extension: one ControlNet model at a time"
+          },
+          "control_image_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "WAI extension: RGB edge/pose map uploaded to authenticated native8188 /api/inputs; dimensions must match requested size"
+          },
+          "control_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "maximum": 1.5,
+            "default": 1
+          }
+        }
+      },
+      "ImageEditRequest": {
+        "type": "object",
+        "required": [
+          "image",
+          "prompt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Maximum4096 UTF-8 bytes"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "wai-illustrious-sdxl-v17.0"
+            ],
+            "description": " Null uses the default."
+          },
+          "n": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "enum": [
+              1
+            ],
+            "default": 1,
+            "description": " Null uses the default."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": "1024x1024",
+            "description": "auto, or WIDTHxHEIGHT; dimensions64..1024 and multiples of64 Null uses the default."
+          },
+          "response_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "b64_json",
+              "url"
+            ],
+            "default": "b64_json",
+            "description": " Null uses the default."
+          },
+          "quality": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "auto",
+              "standard"
+            ],
+            "description": " Null uses the default."
+          },
+          "background": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "auto",
+              "opaque"
+            ],
+            "description": " Null uses the default."
+          },
+          "output_format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "png"
+            ],
+            "description": " Null uses the default."
+          },
+          "stream": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "enum": [
+              false
+            ],
+            "description": " Null uses the default."
+          },
+          "user": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256,
+            "description": " Null uses the default."
+          },
+          "safety_identifier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256,
+            "description": " Null uses the default."
+          },
+          "negative_prompt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "PS5 extension; maximum4096 UTF-8 bytes Null uses the default."
+          },
+          "steps": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 100,
+            "default": 8,
+            "description": " Null uses the default."
+          },
+          "cfg_scale": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 30,
+            "default": 5,
+            "description": " Null uses the default."
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -1,
+            "maximum": 9223372036854775807,
+            "default": -1,
+            "description": " Null uses the default."
+          },
+          "sampler": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "euler",
+              "euler_a",
+              "dpm++2m"
+            ],
+            "default": "euler_a",
+            "description": " Null uses the default."
+          },
+          "manga_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1.5,
+            "default": 1
+          },
+          "manga_monochrome": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "WAI extension: opt in to monochrome prompt prefix when manga LoRA is enabled; omitted/null leaves the prompt unchanged"
+          },
+          "denoise_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "maximum": 1,
+            "default": 0.6,
+            "description": "WAI extension, requires init image; actual sampler steps can be fewer than requested"
+          },
+          "ip_adapter_strength": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.01,
+            "maximum": 1.5,
+            "default": 0.7,
+            "description": "WAI extension, requires reference image; not OpenAI input_fidelity"
+          },
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "description": "One PNG or JPEG file, at most8MiB and2048x2048 pixels; image[] is an accepted single-file alias"
+          },
+          "reference_image": {
+            "type": "string",
+            "format": "binary",
+            "description": "Optional separate IP image for combined mode; same limits"
+          },
+          "reference_mode": {
+            "type": "string",
+            "enum": [
+              "img2img",
+              "ip_adapter",
+              "combined"
+            ],
+            "default": "img2img",
+            "description": "WAI extension: source becomes init image, IP reference, or both"
           }
         }
       }
@@ -688,6 +977,263 @@
             }
           },
           "404": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/images/edits": {
+      "post": {
+        "operationId": "editImage",
+        "description": "OpenAI multipart response protocol subset backed by same-console WAI. WAI reference_mode selects image conditioning. All feature inference runs onPS5.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageEditRequest"
+              },
+              "encoding": {
+                "image": {
+                  "contentType": "image/png, image/jpeg"
+                },
+                "reference_image": {
+                  "contentType": "image/png, image/jpeg"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One PNG as base64 or signed URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "created",
+                    "data"
+                  ],
+                  "properties": {
+                    "created": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "b64_json": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Multipart body/image exceeds fixed input limit"
+          },
+          "415": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
             "description": "OpenAI-shaped error",
             "content": {
               "application/json": {

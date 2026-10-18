@@ -9,9 +9,12 @@ static int backend_socket_error(void) {
     return errno;
 #endif
 }
+#ifndef PS5_AI_UPSTREAM_PORT
+#define PS5_AI_UPSTREAM_PORT 8188
+#endif
 static socket_t backend_connect(void) {
     socket_t fd=socket(AF_INET,SOCK_STREAM,0);if(fd==BAD_SOCKET)return BAD_SOCKET;
-    struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_port=htons(8188);a.sin_addr=bind_address;
+    struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_port=htons(PS5_AI_UPSTREAM_PORT);a.sin_addr=bind_address;
 #ifdef _WIN32
     u_long mode=1;if(ioctlsocket(fd,FIONBIO,&mode)){close_socket(fd);return BAD_SOCKET;}
 #else
@@ -42,10 +45,11 @@ static socket_t backend_connect(void) {
     return fd;
 }
 /* Native API always supplies Content-Length and closes its connection. */
-static int backend_http(const char *method,const char *path,const char *body,char *json,size_t cap,const char *png,int *http_status) {
+static int backend_http_bytes(const char *method,const char *path,const void *body,size_t body_n,const char *body_type,char *json,size_t cap,const char *png,int *http_status) {
     socket_t fd=backend_connect();if(fd==BAD_SOCKET)return 0;
-    char header[1200];size_t body_n=body?strlen(body):0;
-    int h=snprintf(header,sizeof(header),"%s %s HTTP/1.1\r\nHost: %s:8188\r\nAuthorization: Bearer %s\r\nConnection: close\r\n%sContent-Length: %zu\r\n\r\n",method,path,bind_ip,api_token,body?"Content-Type: application/json\r\n":"",body_n);
+    char header[1200],type_header[128]={0};
+    if(body && snprintf(type_header,sizeof(type_header),"Content-Type: %s\r\n",body_type)>=(int)sizeof(type_header)){close_socket(fd);return 0;}
+    int h=snprintf(header,sizeof(header),"%s %s HTTP/1.1\r\nHost: %s:8188\r\nAuthorization: Bearer %s\r\nConnection: close\r\n%sContent-Length: %zu\r\n\r\n",method,path,bind_ip,api_token,type_header,body_n);
     int ok=h>0 && (size_t)h<sizeof(header) && send_all(fd,header,(size_t)h) && (!body_n || send_all(fd,body,body_n));wipe_secret(header,sizeof(header));
     uint64_t deadline=0;if(!monotonic_ms(&deadline))ok=0;deadline+=120000;
     char received[8193];size_t used=0;
@@ -91,6 +95,23 @@ static int backend_http(const char *method,const char *path,const char *body,cha
         if(ok && rename(part,png))ok=0;if(!ok)remove(part);
     }
     if(http_status)*http_status=code;return ok && total==length;
+}
+
+static int backend_http(const char *method,const char *path,const char *body,char *json,size_t cap,const char *png,int *status){
+    return backend_http_bytes(method,path,body,body?strlen(body):0,"application/json",json,cap,png,status);
+}
+static int backend_upload_image(const unsigned char *data,size_t size,const char *type,char id[33],char *error,size_t cap){
+    char raw[1024];int code=0;object *o=malloc(sizeof(*o));
+    int ok=o && backend_http_bytes("POST","/api/inputs",data,size,type,raw,sizeof(raw),NULL,&code) && code==201 && parse_object(raw,o);
+    field *f=ok?find_field(o,"image_id"):NULL;ok=f && f->type==1 && valid_id(f->value);
+    if(ok)strcpy(id,f->value);else snprintf(error,cap,"Native image upload unconfirmed or rejected (HTTP%d); generation was not submitted",code);
+    free(o);return ok;
+}
+static void backend_delete_input(const char *id){
+    if(!valid_id(id))return;char path[64],raw[1024];int code=0;
+    snprintf(path,sizeof(path),"/api/inputs/%s",id);
+    /* HTTP409 while native inference still owns an input is retained for TTL cleanup. */
+    (void)backend_http("DELETE",path,NULL,raw,sizeof(raw),NULL,&code);
 }
 
 /* Only for same-console /health responses. Unknown metadata is validated and
@@ -168,7 +189,12 @@ int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_sta
     memset(stats,0,sizeof(*stats));char *body=malloc(51000),*prompt=malloc(24585),*negative=malloc(24585);object *o=malloc(sizeof(*o));int ok=0,code=0;
     if(!body || !prompt || !negative || !o){snprintf(error,cap,"Insufficient memory forwarding request");goto done;}
     if(!quote_json(prompt,24585,r->prompt) || !quote_json(negative,24585,r->negative_prompt)){snprintf(error,cap,"Unable to encode prompt");goto done;}
-    int n=snprintf(body,51000,"{\"prompt\":%s,\"negative_prompt\":%s,\"width\":%d,\"height\":%d,\"steps\":%d,\"cfg_scale\":%.17g,\"seed\":%" PRId64 ",\"sampler\":\"%s\"}",prompt,negative,r->width,r->height,r->steps,r->cfg_scale,r->seed,r->sampler);
+    int n=snprintf(body,51000,"{\"prompt\":%s,\"negative_prompt\":%s,\"width\":%d,\"height\":%d,\"steps\":%d,\"cfg_scale\":%.17g,\"seed\":%" PRId64 ",\"sampler\":\"%s\",\"manga_strength\":%.17g,\"manga_monochrome\":%s",prompt,negative,r->width,r->height,r->steps,r->cfg_scale,r->seed,r->sampler,r->manga_strength,r->manga_monochrome?"true":"false");
+    if(n<0 || n>MAX_BODY){snprintf(error,cap,"Encoded request too large");goto done;}
+    if(r->init_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"init_image_id\":\"%s\",\"denoise_strength\":%.17g",r->init_image_id,r->denoise_strength);
+    if(r->reference_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"reference_image_id\":\"%s\",\"ip_adapter_strength\":%.17g",r->reference_image_id,r->ip_adapter_strength);
+    if(r->controlnet[0])n+=snprintf(body+n,51000-(size_t)n,",\"controlnet\":\"%s\",\"control_image_id\":\"%s\",\"control_strength\":%.17g",r->controlnet,r->control_image_id,r->control_strength);
+    n+=snprintf(body+n,51000-(size_t)n,"}");
     if(n<0 || n>MAX_BODY){snprintf(error,cap,"Encoded native request exceeds24KiB");goto done;}
     /* Exactly one upstream POST. Never retry inference automatically. */
     if(!backend_json("POST","/api/generate",body,o,&code) || code!=202){snprintf(error,cap,"Native generation request unconfirmed or rejected (HTTP%d); no automatic retry",code);goto done;}
@@ -187,13 +213,26 @@ int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_sta
             stats->gpu_used=1;get_double(find_field(o,"generation_seconds"),0,DBL_MAX,&stats->generation_seconds);int64_t v=0;
             if(get_int(find_field(o,"peak_cpu_bytes"),0,INT64_MAX,&v))stats->peak_cpu_bytes=(uint64_t)v;
             v=0;if(get_int(find_field(o,"peak_gpu_bytes"),0,INT64_MAX,&v))stats->peak_gpu_bytes=(uint64_t)v;
+            stats->gpu_controlnet_verified=backend_true(o,"gpu_controlnet_verified");
+            v=0;if(get_int(find_field(o,"controlnet_evals"),0,INT_MAX,&v))stats->controlnet_evals=(int)v;
+            v=0;if(get_int(find_field(o,"controlnet_tensors"),0,INT_MAX,&v))stats->controlnet_tensors=(int)v;
+            get_double(find_field(o,"controlnet_seconds"),0,DBL_MAX,&stats->controlnet_seconds);
+            if(r->controlnet[0] && (!stats->gpu_controlnet_verified || stats->controlnet_evals<1 || stats->controlnet_tensors!=10)){
+                snprintf(error,cap,"Native job lacks actual ControlNet GPU/residual proof");goto done;
+            }
             snprintf(path,sizeof(path),"/api/images/%s",native_id);
             if(!backend_http("GET",path,NULL,NULL,0,output,&code) || code!=200){snprintf(error,cap,"Native PNG retrieval failed");goto done;}
             ok=1;break;
         }
         if(strcmp(state,"running") && strcmp(state,"queued")){snprintf(error,cap,"Unknown native job state");goto done;}pause_ms(1000);
     }
-done:free(body);free(prompt);free(negative);free(o);return ok?0:-1;
+done:
+    if(r->transient_inputs){
+        if(r->init_image_id[0])backend_delete_input(r->init_image_id);
+        if(r->reference_image_id[0] && strcmp(r->init_image_id,r->reference_image_id))backend_delete_input(r->reference_image_id);
+        if(r->control_image_id[0] && strcmp(r->control_image_id,r->init_image_id) && strcmp(r->control_image_id,r->reference_image_id))backend_delete_input(r->control_image_id);
+    }
+    free(body);free(prompt);free(negative);free(o);return ok?0:-1;
 }
 /* Gateway shutdown must NEVER unload/stop/restart the native GPU application. */
 void ps5_ai_engine_shutdown(void){}

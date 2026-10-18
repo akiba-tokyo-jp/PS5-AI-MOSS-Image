@@ -18,7 +18,17 @@ typedef struct ps5_ai_request {
     double cfg_scale;
     int64_t seed;
     char sampler[32];
-    double manga_strength; /* Default 1 for existing requests; native override 0..1.5. */
+    double manga_strength; /* Default 1, native/OpenAI extension 0..1.5. */
+    int manga_monochrome; /* Default false; opt in to automatic prompt prefix. */
+    char init_image_id[33], reference_image_id[33];
+    double denoise_strength, ip_adapter_strength;
+    /* Resolved by authenticated native admission, never accepted as client paths. */
+    char init_image_path[1024], reference_image_path[1024];
+    char init_image_sha256[65], reference_image_sha256[65];
+    int transient_inputs; /* Internal gateway ownership; not a JSON request field. */
+    char controlnet[16], control_image_id[33];
+    char control_image_path[1024], control_image_sha256[65];
+    double control_strength;
 } ps5_ai_request;
 
 typedef struct ps5_ai_engine_status {
@@ -38,6 +48,10 @@ typedef struct ps5_ai_stats {
     double generation_seconds;
     uint64_t peak_cpu_bytes;
     uint64_t peak_gpu_bytes;
+    int actual_steps, ip_adapter_tokens, gpu_ip_attention_verified;
+    double init_encode_seconds, ip_adapter_seconds;
+    int gpu_controlnet_verified, controlnet_evals, controlnet_tensors;
+    double controlnet_seconds;
 } ps5_ai_stats;
 
 typedef void (*ps5_ai_progress_cb)(double progress, void *user);

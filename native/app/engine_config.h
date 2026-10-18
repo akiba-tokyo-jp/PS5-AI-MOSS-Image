@@ -12,6 +12,8 @@
 struct PS5AIEngineConfig {
     std::string model, vae, taesd, backend, params_backend, max_vram;
     std::string manga_lora_path;
+    std::string clip_vision_path, ip_adapter_path, reference_params_backend;
+    std::string controlnet_canny_path, controlnet_openpose_path;
     std::string flash_attn_mode = "auto,unet=on";
     bool batched_cfg = true;
     int conditioning_cache_size = 2;
@@ -82,16 +84,28 @@ struct PS5AIEngineConfig {
         result.manga_lora_path = object.value("manga_lora_path", "");
         if (result.manga_lora_path != "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors")
             throw std::runtime_error("This manga build requires its verified WAI v17-specific converted LoRA");
+        result.clip_vision_path=object.value("clip_vision_path", "");
+        result.ip_adapter_path=object.value("ip_adapter_path", "");
+        if(result.clip_vision_path.empty()!=result.ip_adapter_path.empty() ||
+           (!result.clip_vision_path.empty() &&
+            (result.clip_vision_path!="/app0/models/clip-vision-vit-h-f16.safetensors" ||
+             result.ip_adapter_path!="/app0/models/ip-adapter-plus_sdxl_vit-h.safetensors")))
+            throw std::runtime_error("Reference mode requires the verified ViT-H encoder and SDXL Plus adapter pair");
         result.vae = object.value("vae", "");
         result.taesd = object.value("taesd_path", "");
         result.backend = object.value("backend", "");
         result.params_backend = object.value("params_backend", "");
+        result.controlnet_canny_path=object.value("controlnet_canny_path", "");
+        result.controlnet_openpose_path=object.value("controlnet_openpose_path", "");
+        if(result.controlnet_canny_path!="/app0/models/controlnet-illustrious-canny-f16.safetensors" ||
+           result.controlnet_openpose_path!="/app0/models/controlnet-xinsir-openpose-sdxl-f16.safetensors")
+            throw std::runtime_error("ControlNet build requires its verified Canny/OpenPose model pair");
         result.max_vram = object.value("max_vram_gib", "");
         result.flash_attn_mode = object.value("flash_attn_mode", result.flash_attn_mode);
         result.batched_cfg = object.value("batched_cfg", result.batched_cfg);
         result.conditioning_cache_size = bounded_integer(object, "conditioning_cache_size", result.conditioning_cache_size, 0, 2);
-        if (result.flash_attn_mode != "auto,unet=on")
-            throw std::runtime_error("Native Direct WAI requires native UNet flash attention: auto,unet=on");
+        if (result.flash_attn_mode != "auto,unet=on,controlnet=on")
+            throw std::runtime_error("ControlNet build requires flash attention: auto,unet=on,controlnet=on");
         result.log = object.value("log", result.log);
         result.cpu_threads = bounded_integer(object, "cpu_threads", result.cpu_threads, 1, 4);
         result.vae_tile_size = bounded_integer(object, "vae_tile_size", result.vae_tile_size, 32, 1024);
@@ -121,7 +135,7 @@ struct PS5AIEngineConfig {
     }
 
     void resolve_defaults(const std::string& gpu_name) {
-        const std::string expected = "cpu,unet=" + gpu_name + ",vae=" + gpu_name;
+        const std::string expected = "cpu,unet=" + gpu_name + ",vae=" + gpu_name + ",controlnet=" + gpu_name;
         if (backend.empty()) backend = expected;
         if (params_backend.empty()) params_backend = "cpu";
         auto local_only = [&](const std::string& assignment, bool parameters) {
@@ -139,8 +153,11 @@ struct PS5AIEngineConfig {
         };
         local_only(backend, false);
         local_only(params_backend, true);
+        reference_params_backend=params_backend+(clip_vision_path.empty()?"":",clip_vision=disk");
         if (backend != expected || (params_backend != "cpu" && params_backend != "disk" &&
-            params_backend != "cpu,unet=disk" && params_backend != "cpu,unet=" + gpu_name))
+            params_backend != "cpu,unet=disk" && params_backend != "cpu,unet=" + gpu_name &&
+            params_backend != "cpu,unet=" + gpu_name + ",te=disk" &&
+            params_backend != "cpu,unet=" + gpu_name + ",te=disk,controlnet=" + gpu_name))
             throw std::runtime_error("Native Direct WAI requires CPU CLIP, native Vulkan UNet/VAE compute, and local CPU/disk or native UNet parameter storage");
     }
 
@@ -167,7 +184,9 @@ struct PS5AIEngineConfig {
         params.vae_path = vae.empty() ? nullptr : vae.c_str();
         params.taesd_path = taesd.empty() ? nullptr : taesd.c_str();
         params.backend = backend.c_str();
-        params.params_backend = params_backend.c_str();
+        params.params_backend = reference_params_backend.c_str();
+        params.clip_vision_path=clip_vision_path.empty()?nullptr:clip_vision_path.c_str();
+        params.ip_adapter_path=ip_adapter_path.empty()?nullptr:ip_adapter_path.c_str();
         params.max_vram = max_vram.empty() ? nullptr : max_vram.c_str();
         params.n_threads = cpu_threads;
         params.enable_mmap = mmap;

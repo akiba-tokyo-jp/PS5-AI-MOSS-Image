@@ -1,9 +1,33 @@
 # PS5 AI WAI
 
-2026-10-18：**漫画LoRAの標準適用とDirect 7GiBを実機で確認しました。** 既存OpenAI互換APIの同じリクエストで動作します。256×256/20stepsは初回LoRA読み込み込み22.83秒、全3024テンソル適用・実PNG取得を確認。WAI初回38.19秒とはロード条件が違うため速度比は出していません。
-[実機記録・メモリ・画像](docs/manga.md)・[24秒のライブ検証](docs/media/manga-verification.mp4)。現在の版には別途取得・変換した漫画LoRAが必要です。
+2026-10-18：**Canny / OpenPose ControlNetの256・1024生成とOpenAI互換APIからのPNG取得をPS5実機で確認しました。** Direct9GiB・512MiB単位、CPU CLIP一時重みの共有プール利用に対応しています。ホーム用・状態画面内のアイコンをユーザー添付キャラクターへ更新しました。
+[実測値・制約・モデル配置](docs/controlnet.md)・[API仕様](docs/api.md)。
 
-![PS5で生成した漫画LoRAの実画像](docs/images/manga-256.png)
+| 1024×1024 /20steps /漫画LoRA1 | PS5内生成 |
+|---|---:|
+| Canny | 162.56秒 |
+| OpenPose | 329.68秒 |
+
+OpenPoseの速度差は未解決です。機能検証の各1枚であり、同一条件の速度最適化比較ではありません。
+
+![PS5で生成したCanny1024](docs/images/controlnet-canny1024.png)
+
+![PS5で生成したOpenPose1024](docs/images/controlnet-openpose1024.png)
+
+[Canny成功動画12秒](docs/media/controlnet-canny1024.mp4)・[OpenPose成功動画12秒](docs/media/controlnet-openpose1024.mp4)。実Windows操作録画の完了部分で、12秒が生成時間という意味ではありません。
+
+```mermaid
+flowchart LR
+  W[Windows: OpenAI SDK / PowerShell] --> G[PS5:8189 Images互換ゲートウェイ]
+  G --> A[同じPS5:8188 非同期ジョブ]
+  A --> C[CPU CLIP:共有プールの一時重み]
+  C --> V[Vulkan: ControlNet + UNet + TAESDXL]
+  V --> P[PS5保存PNG]
+  P --> G
+  G --> W
+```
+
+従来の漫画LoRA256検証は[過去の記録](docs/manga.md)を参照してください。現行版も漫画LoRA強度1を既定とし、自動monochromeは既定で無効です。
 
 状態画面を濃紺とミントのカード表示へ更新しました。滑らかな文字・進捗・取得できるメモリ値・ログをCPUで描画します。
 [画面と実機検証](docs/dashboard.md)・[16秒の成功記録](docs/media/dashboard-success.mp4)を参照してください。取得できない使用率や温度は表示しません。
@@ -14,7 +38,7 @@ WAI768×1024・20stepsは初回92.47秒、読み込み済み57.06秒で同一PNG
 その後も生成を休止せず、連続6枚を70.62～70.69秒で確認しました。4枚目以降の遅延はこの6枚では再発していません。
 
 <p align="center">
-  <img src="assets/sce_sys/icon0.png" width="160" alt="PS5上のWAIで生成したアプリアイコン">
+  <img src="assets/sce_sys/icon0.png" width="160" alt="ユーザー添付キャラクターのアプリアイコン">
 </p>
 
 <p align="center"><strong>PS5のGPUでWAIを生成。WindowsからHTTPでPNGを取得。</strong></p>
@@ -23,20 +47,20 @@ WAI768×1024・20stepsは初回92.47秒、読み込み済み57.06秒で同一PNG
 `stable-diffusion.cpp / GGML → Vulkan → PS5向けRADV / AGC` を接続し、画像生成APIとテレビ上の状態表示を実装しました。
 Windowsはビルド・転送・APIクライアントを担当します。推論はPS5本体で実行します。
 
-**FW 12.40でGPU生成とWindowsからのPNG取得を確認済みです。** 漫画LoRA版の個別検証は256×256、従来WAI単体では1024×1024を確認しました。
+**FW 12.40でGPU生成とWindowsからのPNG取得を確認済みです。** 漫画LoRAとControlNetを含む1024×1024まで確認しました。
 実験的な移植です。他のFW、本体、起動環境での動作は未検証です。
 
 ![処理の構成図](docs/images/architecture.svg)
 
 ![新しい状態画面のデザイン例](docs/images/dashboard-preview.png)
 
-上図は同じ描画コードをWindowsで実行した仮データのプレビューです。PS5のHDMIスクリーンショットではありません。
+上図は同じ描画コードをWindowsで実行した仮データ・旧アイコンのプレビューです。現行アイコンは上のユーザー添付キャラクターです。PS5のHDMIスクリーンショットではありません。
 実機では取得できる項目だけを表示するため、カード数や数値は異なります。
 
 ## 実際に生成した画像
 
 <p align="center">
-  <img src="docs/images/wai-1024.png" width="480" alt="PS5実機でWAI v17を使い生成した漫画調の女の子。採用アイコンの原画像。">
+  <img src="docs/images/wai-1024.png" width="480" alt="PS5実機でWAI v17を使い生成した漫画調の女の子。以前の生成検証画像。">
 </p>
 
 WAI v17.0 / 1024×1024 / Euler ancestral / 20 steps / CFG 5 / seed 135792。
@@ -125,7 +149,7 @@ client.close()
 ```
 
 対応範囲は **OpenAI Images APIの生成機能の一部**です。PNG・1枚・非ストリーミングに対応します。
-画像編集、複数枚、透過、JPEG/WebP、ComfyUIやA1111のAPIは実装していません。
+img2img/IP-Adapterの参照入力とimages/editsは実験機能です。mask/inpainting、複数枚、透過、JPEG/WebP出力、ComfyUIやA1111のAPIは未対応です。
 詳しくは [API仕様](docs/api.md) と [OpenAPI 3.1](docs/openapi.json) を参照してください。
 
 ## 実装とビルド

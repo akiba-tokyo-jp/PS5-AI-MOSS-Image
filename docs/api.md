@@ -1,4 +1,4 @@
-現在のnative版は漫画LoRA強度1.0を既定適用します。8189のリクエストやモデル名は同じです。native8188のみ`manga_strength`（有限値0..1.5、0で無効）を受け付けます。詳細：[漫画LoRAの検証](manga.md)。img2img/IP-Adapterの画像入力APIは未実装です。以下の1024×1024の過去検証は漫画LoRA導入前のWAI単体を指します。
+現行版：漫画LoRA強度1を既定適用し、`manga_strength:0`で無効化できます。自動monochromeは既定falseです。OpenAI JSONでも両項目をWAI拡張として受け付けます。ControlNet Canny/OpenPoseは256/1024を実機確認済み：[結果と入力手順](controlnet.md)。
 
 # API仕様
 
@@ -60,3 +60,13 @@ HTTPタイムアウト・切断はネイティブ生成のキャンセルを意�
 IDを取得済みならジョブを確認し、不明なPOSTを自動再送しないでください。
 致命的なretained状態はfailed/degraded、新規生成503、終了待ちできないshutdownは409です。
 管理用shutdownはアプリの正常な後処理と同義ではありません。[運用](deployment.md)を参照してください。
+
+## 参照画像とControlNet拡張
+
+認証付きnative `POST :8188/api/inputs`へPNG/JPEGを送り、返されたimage_idを使用します。`GET /api/inputs/{id}`で寸法・SHA256・参照数を取得、`DELETE`で未参照入力を削除できます。ジョブが参照中の削除は拒否します。
+
+OpenAI互換`POST :8189/v1/images/generations`に`controlnet:canny|openpose`、`control_image_id`、`control_strength`（有限0.01..1.5、既定1）を渡します。入力は出力と同じ寸法の完成済みedge/pose mapです。自動OpenPose検出はありません。SDKでは`extra_body`を使います。これらはOpenAI標準ではなくWAI拡張です。
+
+`init_image_id`と`denoise_strength`はimg2img、`reference_image_id`と`ip_adapter_strength`はIP-Adapter経路です。multipart `POST /v1/images/edits`も対応しますが、これらの参照画像経路は画質・人物同一性の課題が残る実験機能です。今回のControlNet検証はその品質検証を兼ねません。mask/inpaintingは現行未対応です。
+
+`scripts/Invoke-WaiControlNet.ps1`を使用できます。タイムアウト時に自動再送しないでください。ネイティブjobsの`controlnet_evals`、`controlnet_tensors`、`gpu_controlnet_verified`で実行結果を確認できます。詳細な全フィールドは[OpenAPI文書](openapi.json)を参照してください。

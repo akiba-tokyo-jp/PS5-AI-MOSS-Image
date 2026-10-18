@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #define _POSIX_C_SOURCE 200809L
 #include "engine.h"
+#include "reference_image.h"
 #include "v3_shutdown.h"
 #include "ui_hooks.h"
 #include <ctype.h>
@@ -90,12 +91,20 @@ static int listen_port = 8188;
 static char api_token[257];
 static size_t token_len;
 static FILE *log_file;
+#ifdef __PROSPERO__
+extern void ps5_ai_native_server_stage(const char*,int,int);
+#define STARTUP_STAGE(name,code) ps5_ai_native_server_stage(name,code,errno)
+#else
+#define STARTUP_STAGE(name,code) ((void)0)
+#endif
 static char bounded_api_log_path[MAX_PATH_SIZE];
 #include "bounded_stdio_log.h"
 static job jobs[MAX_JOBS];
 static volatile sig_atomic_t stopping;
 static volatile sig_atomic_t listener_reload;
 static uint32_t sequence;
+static int input_pin_request(ps5_ai_request *);
+static void input_unpin_request(const ps5_ai_request *);
 static struct in_addr bind_address;
 static uint32_t listener_generation;
 static int64_t server_started_at;
@@ -293,13 +302,15 @@ static int get_double(field *f, double min, double max, double *out) {
     if (errno || *end || !finite_double(v) || v < min || v > max) return 0;
     *out = v; return 1;
 }
+static int valid_id(const char *id);
 static int validate_request(const char *body, ps5_ai_request *r, char *error, size_t cap) {
     object *obj = malloc(sizeof(*obj));
     if (!obj) { snprintf(error, cap, "Out of memory parsing request"); return 0; }
     int ok = 0; int64_t v;
     memset(r, 0, sizeof(*r));
     r->width = r->height = 512; r->steps = 12; r->cfg_scale = 5; r->seed = -1;
-    r->manga_strength = 1;
+    r->manga_strength = 1; r->denoise_strength = 0.6; r->ip_adapter_strength = 0.7;
+    r->control_strength=1;
     strcpy(r->sampler, "euler");
     if (!parse_object(body, obj)) { snprintf(error, cap, "Malformed, duplicate, nested, or oversized JSON field"); goto done; }
     for (size_t i = 0; i < obj->count; ++i) {
@@ -316,6 +327,24 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
             if (!get_double(f, 0, 30, &r->cfg_scale)) { snprintf(error, cap, "cfg_scale must be finite and 0..30"); goto done; }
         } else if (!strcmp(f->key, "manga_strength")) {
             if (!get_double(f, 0, 1.5, &r->manga_strength)) { snprintf(error, cap, "manga_strength must be finite and 0..1.5"); goto done; }
+        } else if (!strcmp(f->key, "manga_monochrome")) {
+            if (f->type != 3 && f->type != 4) { snprintf(error, cap, "manga_monochrome must be boolean"); goto done; }
+            r->manga_monochrome = f->type == 3;
+        } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id")) {
+            if(f->type != 1 || !valid_id(f->value)){snprintf(error,cap,"Image IDs must be32 lowercase hexadecimal characters");goto done;}
+            strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:r->reference_image_id,f->value);
+        } else if (!strcmp(f->key, "denoise_strength")) {
+            if(!get_double(f,0.01,1,&r->denoise_strength)){snprintf(error,cap,"denoise_strength must be finite0.01..1");goto done;}
+        } else if (!strcmp(f->key, "ip_adapter_strength")) {
+            if(!get_double(f,0.01,1.5,&r->ip_adapter_strength)){snprintf(error,cap,"ip_adapter_strength must be finite0.01..1.5");goto done;}
+        } else if (!strcmp(f->key,"controlnet")) {
+            if(f->type!=1 || (strcmp(f->value,"canny") && strcmp(f->value,"openpose"))){snprintf(error,cap,"controlnet must be canny or openpose");goto done;}
+            strcpy(r->controlnet,f->value);
+        } else if (!strcmp(f->key,"control_image_id")) {
+            if(f->type!=1 || !valid_id(f->value)){snprintf(error,cap,"Invalid control image ID");goto done;}
+            strcpy(r->control_image_id,f->value);
+        } else if (!strcmp(f->key,"control_strength")) {
+            if(!get_double(f,0.01,1.5,&r->control_strength)){snprintf(error,cap,"control_strength must be finite0.01..1.5");goto done;}
         } else if (!strcmp(f->key, "seed")) {
             if (!get_int(f, -1, INT64_MAX, &r->seed)) { snprintf(error, cap, "seed must be an integer -1..9223372036854775807"); goto done; }
         } else if (!strcmp(f->key, "sampler")) {
@@ -325,6 +354,13 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else { snprintf(error, cap, "Unknown request field: %.63s", f->key); goto done; }
     }
     if (!r->prompt[0]) { snprintf(error, cap, "prompt is required and cannot be empty"); goto done; }
+    if((find_field(obj,"denoise_strength") && !r->init_image_id[0]) ||
+       (find_field(obj,"ip_adapter_strength") && !r->reference_image_id[0])){
+        snprintf(error,cap,"Image strength requires its matching input image ID");goto done;
+    }
+    if((r->controlnet[0]!=0)!=(r->control_image_id[0]!=0) || (find_field(obj,"control_strength") && !r->controlnet[0])){
+        snprintf(error,cap,"ControlNet requires both its model name and prepared control image ID");goto done;
+    }
     ok = 1;
 done:
     free(obj); return ok;
@@ -358,9 +394,22 @@ static int serialize_job(const job *j, char *out, size_t cap) {
         "{\"job_id\":\"%s\",\"status\":\"%s\",\"progress\":%.4f,\"error\":%s,"
         "\"image_url\":%s,\"created_at\":%" PRId64 ",\"updated_at\":%" PRId64 ","
         "\"gpu_used\":%s,\"generation_seconds\":%.6f,\"peak_cpu_bytes\":%s,"
-        "\"peak_gpu_bytes\":%s}", j->id, j->status, j->progress,
+        "\"peak_gpu_bytes\":%s,\"mode\":\"%s\",\"manga_strength\":%.6f,\"manga_monochrome\":%s,"
+        "\"init_image_sha256\":\"%s\",\"reference_image_sha256\":\"%s\","
+        "\"denoise_strength\":%.6f,\"ip_adapter_strength\":%.6f,\"actual_steps\":%d,"
+        "\"ip_adapter_tokens\":%d,\"gpu_ip_attention_verified\":%s,"
+        "\"init_encode_seconds\":%.6f,\"ip_adapter_seconds\":%.6f,"
+        "\"controlnet\":\"%s\",\"control_image_sha256\":\"%s\",\"control_strength\":%.6f,"
+        "\"gpu_controlnet_verified\":%s,\"controlnet_evals\":%d,\"controlnet_tensors\":%d,\"controlnet_seconds\":%.6f}", j->id, j->status, j->progress,
         error, url, j->created, j->updated, j->stats.gpu_used ? "true" : "false",
-        j->stats.generation_seconds, cpu, gpu);
+        j->stats.generation_seconds, cpu, gpu,
+        j->request.init_image_id[0]?(j->request.reference_image_id[0]?"combined":"img2img"):(j->request.reference_image_id[0]?"ip_adapter":"txt2img"),
+        j->request.manga_strength,j->request.manga_monochrome?"true":"false",j->request.init_image_sha256,j->request.reference_image_sha256,
+        j->request.init_image_id[0]?j->request.denoise_strength:0,j->request.reference_image_id[0]?j->request.ip_adapter_strength:0,
+        j->stats.actual_steps,j->stats.ip_adapter_tokens,j->stats.gpu_ip_attention_verified?"true":"false",
+        j->stats.init_encode_seconds,j->stats.ip_adapter_seconds,
+        j->request.controlnet,j->request.control_image_sha256,j->request.controlnet[0]?j->request.control_strength:0,
+        j->stats.gpu_controlnet_verified?"true":"false",j->stats.controlnet_evals,j->stats.controlnet_tensors,j->stats.controlnet_seconds);
     return n >= 0 && (size_t)n < cap;
 }
 static int atomic_write(const char *folder, const char *name, const char *data, size_t len) {
@@ -522,7 +571,7 @@ static void *worker(void *unused)
             strcpy(j->status, "running"); j->updated = (int64_t)time(NULL);
             if (!persist_job(j)) {
                 strcpy(j->status, "failed"); strcpy(j->error, "Unable to persist running state");
-                log_line("Job %s failed to persist", j->id); j = NULL;
+                log_line("Job %s failed to persist", j->id); input_unpin_request(&j->request); j = NULL;
             }
         }
         unlock_state();
@@ -540,6 +589,7 @@ static void *worker(void *unused)
         }
         if (!finite_double(stats.generation_seconds) || stats.generation_seconds < 0) stats.generation_seconds = 0;
         lock_state();
+        input_unpin_request(&j->request);
         j->stats = stats; j->updated = (int64_t)time(NULL);
         strcpy(j->status, ok ? "completed" : "failed");
         if (ok) j->progress = 1;
@@ -568,7 +618,7 @@ static int send_all(socket_t fd, const void *data, size_t size) {
 }
 static const char *status_text(int code) {
     switch (code) {
-    case 200: return "OK"; case 202: return "Accepted"; case 400: return "Bad Request";
+    case 201: return "Created"; case 200: return "OK"; case 202: return "Accepted"; case 400: return "Bad Request";
     case 401: return "Unauthorized"; case 403: return "Forbidden"; case 404: return "Not Found";
     case 405: return "Method Not Allowed"; case 408: return "Request Timeout";
     case 413: return "Content Too Large";
@@ -658,6 +708,7 @@ static void submit(socket_t fd, const char *body) {
             (!j || jobs[i].updated < j->updated)) j = &jobs[i];
     }
     if (!j) { unlock_state(); send_error(fd, 429, "Job queue is full"); return; }
+    if(!input_pin_request(&request)){unlock_state();send_error(fd,404,"Referenced input image is missing or expired");return;}
     memset(j, 0, sizeof(*j)); j->occupied = 1; j->request = request;
     j->created = j->updated = (int64_t)time(NULL);
     char existing[JOB_JSON_SIZE];
@@ -669,7 +720,7 @@ static void submit(socket_t fd, const char *body) {
     strcpy(j->status, "queued");
     char name[64]; snprintf(name, sizeof(name), "%s.request.json", j->id);
     if (!atomic_write("jobs", name, body, strlen(body)) || !persist_job(j)) {
-        j->occupied = 0; unlock_state(); send_error(fd, 500, "Unable to persist job"); return;
+        input_unpin_request(&j->request); j->occupied = 0; unlock_state(); send_error(fd, 500, "Unable to persist job"); return;
     }
     char response[JOB_JSON_SIZE]; serialize_job(j, response, sizeof(response));
     log_line("Job %s accepted", j->id); unlock_state(); send_json(fd, 202, response);
@@ -730,6 +781,8 @@ static void get_ui(socket_t fd) {
     }
     fclose(f);
 }
+#include "reference_store.inc"
+
 static void admin_shutdown(socket_t fd) {
     if(retained_engine_fault()){send_error(fd,409,"Retained GPU resources require a verified native app close; cooperative worker join is unavailable");return;}
     int running = 0, queued = 0;
@@ -833,7 +886,7 @@ static void handle_client(socket_t fd, uint64_t deadline) {
         if (equal_ci(line, "Content-Length")) {
             if (has_length++ || !*value) { send_error(fd, 400, "Invalid or duplicate Content-Length"); goto done; }
             for (const char *p = value; *p; ++p) {
-                if (!isdigit((unsigned char)*p) || content_length > MAX_BODY) { send_error(fd, 413, "Request body too large or invalid length"); goto done; }
+                if (!isdigit((unsigned char)*p) || content_length > PS5_AI_INPUT_MAX_BYTES) { send_error(fd, 413, "Request body too large or invalid length"); goto done; }
                 content_length = content_length * 10 + (size_t)(*p - '0');
             }
         } else if (equal_ci(line, "Authorization")) {
@@ -848,7 +901,13 @@ static void handle_client(socket_t fd, uint64_t deadline) {
     }
     int public_ui = !strcmp(method, "GET") && (!strcmp(path, "/") || !strcmp(path, "/index.html"));
     if (!public_ui && !authorized(authorization)) { send_error(fd, 401, "Valid Bearer token required"); goto done; }
-    if (content_length > MAX_BODY) { send_error(fd, 413, "Request body too large"); goto done; }
+    int input_upload=!strcmp(method,"POST") && !strcmp(path,"/api/inputs");
+    size_t body_limit=input_upload?PS5_AI_INPUT_MAX_BYTES:MAX_BODY;
+    if(content_length>body_limit){send_error(fd,413,"Request body too large");goto done;}
+    if(input_upload){
+        char *larger=realloc(buffer,MAX_HEADER+content_length+1);
+        if(!larger){send_error(fd,500,"Out of memory");goto done;}buffer=larger;
+    }
     if (received > header_size + content_length) { send_error(fd, 400, "Pipelining or extra request data unsupported"); goto done; }
     while (received < header_size + content_length) {
         int n = recv_before_deadline(fd, buffer + received, (int)(header_size + content_length - received), deadline, 5000);
@@ -857,7 +916,7 @@ static void handle_client(socket_t fd, uint64_t deadline) {
     }
     buffer[received] = 0;
     char *body = buffer + header_size;
-    if (memchr(body, 0, content_length)) { send_error(fd, 400, "NUL byte in body"); goto done; }
+    if (!input_upload && memchr(body, 0, content_length)) { send_error(fd, 400, "NUL byte in body"); goto done; }
     if (!strcmp(method, "GET") && content_length) { send_error(fd, 400, "GET body unsupported"); goto done; }
     if (public_ui) {
         get_ui(fd);
@@ -867,6 +926,14 @@ static void handle_client(socket_t fd, uint64_t deadline) {
         if (strcmp(method, "POST")) send_error(fd, 405, "Use POST");
         else if (!has_length || content_length) send_error(fd, 400, "Shutdown requires Content-Length: 0 and an empty body");
         else admin_shutdown(fd);
+    } else if (!strcmp(path,"/api/inputs")) {
+        if(strcmp(method,"POST"))send_error(fd,405,"Use POST");
+        else if(!has_length || !content_length)send_error(fd,400,"Image bytes and Content-Length required");
+        else upload_input(fd,(const unsigned char *)body,content_length,content_type);
+    } else if (!strncmp(path,"/api/inputs/",12)) {
+        if(strcmp(method,"GET") && strcmp(method,"DELETE"))send_error(fd,405,"Use GET or DELETE");
+        else if(content_length)send_error(fd,400,"Input metadata/deletion requires empty body");
+        else input_metadata(fd,path+12,!strcmp(method,"DELETE"));
     } else if (!strcmp(path, "/api/generate")) {
         if (strcmp(method, "POST")) send_error(fd, 405, "Use POST");
         else if (strcmp(content_type, "application/json") && strcmp(content_type, "application/json; charset=utf-8")) send_error(fd, 415, "Content-Type must be application/json");
@@ -895,18 +962,25 @@ static void finish_client(socket_t fd, uint64_t deadline) {
 }
 
 static int setup_paths(void) {
+    STARTUP_STAGE("setup_paths_enter",0);
     struct stat st;
     if (path_metadata(root_path, &st, 1) || !S_ISDIR(st.st_mode)) {
+        STARTUP_STAGE("root_metadata_failed",0);
         fprintf(stderr, "Root directory must already exist: %s\n", root_path); return 0;
     }
-    const char *folders[] = {"config", "logs", "jobs", "output"};
+    const char *folders[] = {"config", "logs", "jobs", "output", "inputs"};
     for (size_t i = 0; i < sizeof(folders)/sizeof(folders[0]); ++i) {
+        STARTUP_STAGE("folder_begin",(int)i);
         char path[MAX_PATH_SIZE]; if (!path_for(path, sizeof(path), folders[i], "")) return 0;
         if (make_dir(path) && errno != EEXIST) { fprintf(stderr, "Cannot create %s\n", path); return 0; }
         if (path_metadata(path, &st, 1) || !S_ISDIR(st.st_mode)) return 0;
     }
+    STARTUP_STAGE("recover_inputs_before",0);
+    if(!recover_inputs()){STARTUP_STAGE("recover_inputs_failed",0);fprintf(stderr,"Input image storage recovery failed\n");return 0;}
+    STARTUP_STAGE("recover_inputs_passed",1);
     if (!path_for(bounded_api_log_path, sizeof(bounded_api_log_path), "logs", "api.log")) return 0;
     log_file = fopen(bounded_api_log_path, "ab");
+    STARTUP_STAGE("api_log_open",log_file!=NULL);
     if (!log_file) { fprintf(stderr, "Cannot open API log\n"); return 0; }
     return 1;
 }
@@ -965,6 +1039,7 @@ static socket_t open_listener(void) {
 }
 
 int main(int argc, char **argv) {
+    STARTUP_STAGE("server_main_enter",0);
 #ifdef _WIN32
     InitializeCriticalSection(&state_mutex); InitializeCriticalSection(&log_mutex);
     WSADATA ws; if (WSAStartup(MAKEWORD(2,2), &ws)) return 1;
@@ -987,22 +1062,28 @@ int main(int argc, char **argv) {
     if (inet_pton(AF_INET, bind_ip, &bind_address) != 1 || !private_address(ntohl(bind_address.s_addr))) {
         fprintf(stderr, "Bind address must be a specific RFC1918 or loopback IPv4 address\n"); return 1;
     }
-    if (!setup_paths()) return 1;
+    if (!setup_paths()) {STARTUP_STAGE("setup_paths_failed",0);return 1;}
+    STARTUP_STAGE("setup_paths_passed",1);
     /* Windows uses EXCLUSIVEADDRUSE because its REUSEADDR can admit a second
      * live listener. POSIX REUSEADDR does not enable duplicate listeners. */
     socket_t listener = open_listener();
+    STARTUP_STAGE("listener_open",listener!=BAD_SOCKET);
     if (listener == BAD_SOCKET) { fclose(log_file); return 1; }
     listener_generation = 1; server_started_at = (int64_t)time(NULL);
     if (!consume_token()) {
+        STARTUP_STAGE("consume_token_failed",0);
         log_line("Startup token unavailable or could not be consumed; API refused to start");
         close_socket(listener); fclose(log_file); return 1;
     }
+    STARTUP_STAGE("consume_token_passed",1);
     /* Acquire the port before changing persisted job states or initializing a
      * GPU engine. A rejected duplicate launch must leave existing jobs alone. */
-    recover_jobs();
+    STARTUP_STAGE("recover_jobs_before",0);recover_jobs();STARTUP_STAGE("recover_jobs_after",1);
     char config[MAX_PATH_SIZE], error[768] = {0};
     snprintf(config, sizeof(config), "%s/config.json", root_path);
+    STARTUP_STAGE("engine_init_before",0);
     if (ps5_ai_engine_init(config, error, sizeof(error))) log_line("Engine unavailable: %s", error);
+    STARTUP_STAGE("engine_init_after",1);
 #ifdef _WIN32
     HANDLE thread = CreateThread(NULL, 0, worker, NULL, 0, NULL);
     if (!thread) { log_line("Worker thread creation failed"); close_socket(listener); return 1; }

@@ -2,9 +2,9 @@
   "engine": {
     "model": "/app0/models/waiIllustriousSDXL_v170.safetensors",
     "taesd_path": "/app0/models/taesdxl-official-f32.safetensors",
-    "backend": "cpu,unet=Vulkan0,vae=Vulkan0",
-    "params_backend": "cpu,unet=Vulkan0",
-    "max_vram_gib": "Vulkan0=6.75",
+    "backend": "cpu,unet=Vulkan0,vae=Vulkan0,controlnet=Vulkan0",
+    "params_backend": "cpu,unet=Vulkan0,te=disk,controlnet=Vulkan0",
+    "max_vram_gib": "Vulkan0=8.75",
     "cpu_threads": 4,
     "mmap": false,
     "eager_load": false,
@@ -15,11 +15,15 @@
     "vae_tile_size": 256,
     "vae_tile_overlap": 0.5,
     "log": "/app0/ai-runtime/logs/engine.jsonl",
-    "flash_attn_mode": "auto,unet=on",
+    "flash_attn_mode": "auto,unet=on,controlnet=on",
     "batched_cfg": true,
     "conditioning_cache_size": 2,
-    "gpu_pool_bytes": 7516192768,
+    "gpu_pool_bytes": 9663676416,
     "working_reserve_bytes": 1073741824,
-    "manga_lora_path": "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors"
+    "manga_lora_path": "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors",
+    "clip_vision_path": "/app0/models/clip-vision-vit-h-f16.safetensors",
+    "ip_adapter_path": "/app0/models/ip-adapter-plus_sdxl_vit-h.safetensors",
+    "controlnet_canny_path": "/app0/models/controlnet-illustrious-canny-f16.safetensors",
+    "controlnet_openpose_path": "/app0/models/controlnet-xinsir-openpose-sdxl-f16.safetensors"
   }
 }

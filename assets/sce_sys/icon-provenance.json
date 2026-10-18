@@ -1,0 +1,16 @@
+{
+  "source": "Project owner supplied character image,2026-10-18",
+  "operation": "RGBA PNG conversion and Lanczos resize only",
+  "semantic_editing": false,
+  "home_icon_size": [
+    512,
+    512
+  ],
+  "dashboard_icon_size": [
+    72,
+    72
+  ],
+  "icon_sha256": "679e887f2c23b8948189ce1d51f2973a000e71756b00dc3dcdb715293880f745",
+  "console_icon_files_full_hash_verified": true,
+  "physical_home_screen_visual_verified": false
+}

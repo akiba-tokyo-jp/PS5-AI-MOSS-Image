@@ -730,10 +730,10 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     struct ps5_ai_memory_plan plan = {0};
     ps5_ai_native_config_mark(1,"memory_plan_before");
     if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size) ||
-        plan.gpu_pool_bytes != (UINT64_C(7)<<30) || plan.working_reserve_bytes != UINT64_C(1073741824))
-        return init_error(error,error_size,"Candidate native Direct7GiB/initial working reserve1GiB configuration required");
+        plan.gpu_pool_bytes != (UINT64_C(9)<<30) || plan.working_reserve_bytes != UINT64_C(1073741824))
+        return init_error(error,error_size,"Candidate native Direct9GiB/initial working reserve1GiB configuration required");
     ps5_ai_native_config_mark(16,"memory_plan_returned");
-    ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=268435456 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
+    ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=536870912 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
         (unsigned long long)plan.gpu_pool_bytes,(unsigned long long)plan.working_reserve_bytes);
     if (!log_healthy || ps5_ai_native_arena_open_log(1))
         return init_error(error,error_size,"Native arena persistent journal unavailable");
@@ -759,16 +759,16 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         arena.gpu_fault_retained || arena.global_capacity_measured || !log_healthy)
         return init_error(error,error_size,"Native per-BO empty-owner guard failed");
     native_data_prepare_entered=true;
-    if (ps5_ai_direct_pool_configure(plan.gpu_pool_bytes,UINT64_C(268435456),plan.working_reserve_bytes) ||
+    if (ps5_ai_direct_pool_configure(plan.gpu_pool_bytes,UINT64_C(536870912),plan.working_reserve_bytes) ||
         ps5_ai_flex_prepare()) return init_error(error,error_size,"Native actual Direct data admission failed");
     struct ps5_ai_direct_pool_stats direct={0}; ps5_ai_direct_pool_snapshot(&direct);
     struct ps5_ai_flex_stats pool=report_direct("native_prepared");
     if (!direct.ready || direct.ownership_uncertain || direct.physical_owned_bytes!=plan.gpu_pool_bytes ||
-        direct.mapped_bytes!=plan.gpu_pool_bytes || direct.largest_region_bytes!=UINT64_C(268435456) ||
-        direct.region_count!=28 || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
+        direct.mapped_bytes!=plan.gpu_pool_bytes || direct.largest_region_bytes!=UINT64_C(536870912) ||
+        direct.region_count!=plan.gpu_pool_bytes/UINT64_C(536870912) || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
         !pool.gpu_access_granted || pool.fault_retained || !pool.log_healthy || !log_healthy)
         return init_error(error,error_size,"Native owned region accounting incomplete");
-    ps5_ai_native_capacity_snapshot("candidate_7GiB_pool_prepared");
+    ps5_ai_native_capacity_snapshot("candidate_9GiB_pool_prepared");
     int rc=__real_ps5_ai_engine_init(config_path,error,error_size);
     if (rc) return init_error(error,error_size,"Native real engine initialization failed");
     ps5_ai_ggml_graph_phase(1);
@@ -787,6 +787,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     if (gate) return init_error(error,error_size,"Native same-context Direct GPU gate failed");
     engine_started=true;
     native_ui_start_after_real_gate();
+    ps5_ai_native_capacity_snapshot("native_9GiB_ready_after_GPU_gate");
     ps5_ai_ggml_report("NATIVE_ENGINE_READY pid=%d Direct_data_reserved=%llu single_SCALE_tensor_verified_bytes=67108864 whole_pool_GPU_verified=0 model_loaded=0 GPU_UNet_image_verified=0 engine_ready=1",
         (int)probe_pid,(unsigned long long)pool.reserved_bytes);
     if (!log_healthy) ps5_ai_ggml_retain("native_ready_receipt_failed");
@@ -917,6 +918,22 @@ int ps5_ai_server_main(int, char **);
 /* Public typed API used by pinned cobanov6323 ps5/app/main.cpp95,240. */
 int sceSystemServiceLoadExec(const char *path, const char *const *args);
 #include "bootstrap.inc"
+/* Startup metadata only; preserve errno and the inference/log policies. */
+void ps5_ai_native_server_stage(const char *stage,int result,int observed_errno) {
+    int saved=errno;
+    if(native_session_paths_ready) {
+        int fd=open(native_session_bootstrap_path,O_WRONLY|O_APPEND|O_NOFOLLOW);
+        if(fd>=0) {
+            struct stat st;char line[256];
+            if(!fstat(fd,&st)&&S_ISREG(st.st_mode)&&st.st_size>=0&&st.st_size<65536) {
+                int n=snprintf(line,sizeof(line),"SERVER_STAGE pid=%d stage=%.64s result=%d errno=%d GPU_call=0\n",getpid(),stage,result,observed_errno);
+                if(n>0&&(size_t)n<sizeof(line))(void)bootstrap_raw_line(fd,line,(size_t)n);
+            }
+            close(fd);
+        }
+    }
+    errno=saved;
+}
 int main(int argc, char **argv) {
     controller_main_thread = pthread_self();
     controller_main_thread_valid = true;
