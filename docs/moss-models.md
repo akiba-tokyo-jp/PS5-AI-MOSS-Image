@@ -3,7 +3,10 @@
 This project is prepared on Windows. PS5 model loading, generation, and the
 proposed 12 GiB Direct reservation are **not yet verified**.
 
-The first candidate is **MOSS-Image-SFT**, the curated-data fine-tune of Base.
+The requested configuration is **MOSS-Image-SFT plus the user-selected LoRA**.
+See [adapter selection and memory assessment](moss-requested-lora.md). The LoRA
+is an addition, not a replacement checkpoint, and is not yet connected to the
+native runtime. The base candidate is **MOSS-Image-SFT**, the curated-data fine-tune of Base.
 This is the project's default for ordinary generation; upstream does not state
 that SFT is better for every task. Base remains an optional comparison/fine-tuning
 starting point. Both use a 5B DiT, Qwen3.5-9B text encoder, and FLUX.2 VAE.
@@ -87,8 +90,8 @@ The prepared source now addresses the **legacy** cap with 1 GiB Direct regions
 and bounds CPU weight claims by the actual owned region size. A 545.625 MiB
 embedding can therefore pass the new source-level size bound, subject to a
 sufficient contiguous free span. This is not a successful native allocation:
-the full native rebuild, 1 GiB mapping, embedding load and numerical/readback
-checks remain unverified. `runtime_admitted=0` prevents explicit AGC/pool setup.
+the native cross-build has passed, while 1 GiB native mapping, embedding load
+and numerical/readback checks remain unverified. `runtime_admitted=0` prevents explicit AGC/pool setup.
 
 There is also a capacity admission issue separate from the embedding cap.
 Earlier records from this console reported 12 GiB before AGC and 11.4375 GiB in

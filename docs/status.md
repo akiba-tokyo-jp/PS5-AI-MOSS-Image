@@ -1,6 +1,7 @@
 # MOSS Imageの状態
 
-2026-10-19 JST。private開発版。**PS5への転送・登録・MOSS推論は未実施**です。
+2026-10-19 JST。private開発版。指定構成をMOSS-Image-SFT＋axiomofmindのLoRAへ更新。
+LoRAは70.93MiBの追加重みで、F32重み換算141.75MiB。q/k/v→qkvの対応、BF16処理、native/API接続は残件です。[調査](moss-requested-lora.md)。既存のビルド成功はLoRA適用成功を意味しません。**PS5への転送・登録・MOSS推論は未実施**です。
 
 - MOSS専用Title ID候補PPSA99190、native8192、OpenAI互換gateway8193を用意。
 - Direct予約目標12GiB、1GiB regions、推論予算11.5GiB、pool外working reserve1GiBを設定。

@@ -45,5 +45,12 @@
     "libSceLibcInternal.sprx",
     "libkernel.sprx"
   ],
-  "native_precision": "fp32"
+  "native_precision": "fp32",
+  "requested_configuration": "MOSS-Image-SFT + axiomofmind/Moss-image-nsfw-uncensored-lora",
+  "requested_adapter_revision": "e0a4cd44a906a4296dca7fa200c76058d1938082",
+  "requested_adapter_header_verified": true,
+  "requested_adapter_full_weights_downloaded": false,
+  "requested_adapter_native_connected": false,
+  "requested_adapter_application_verified": false,
+  "native_build_scope": "Base MOSS preparation, runtime admission0; user-requested LoRA is not connected"
 }

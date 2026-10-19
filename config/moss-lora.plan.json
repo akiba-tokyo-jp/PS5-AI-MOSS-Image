@@ -1,0 +1,53 @@
+{
+  "schema": "ps5-ai-moss-requested-adapter-plan-v1",
+  "runtime_configuration": false,
+  "status": "REQUESTED_COMPATIBILITY_WORK_REQUIRED",
+  "requested_adapter": {
+    "role": "lora",
+    "repository": "axiomofmind/Moss-image-nsfw-uncensored-lora",
+    "revision": "e0a4cd44a906a4296dca7fa200c76058d1938082",
+    "remote_path": "pytorch_lora_weights.safetensors",
+    "relative_install_path": "loras/moss-image-nsfw-uncensored-r16-bf16.safetensors",
+    "url": "https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/resolve/e0a4cd44a906a4296dca7fa200c76058d1938082/pytorch_lora_weights.safetensors",
+    "expected_bytes": 74377208,
+    "expected_sha256": "d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa",
+    "sha256_source": "HF LFS metadata; full local bytes not downloaded or verified",
+    "license": "Apache-2.0",
+    "downloaded": false,
+    "local_weight_verified": false,
+    "base_for_this_project": "MOSS-Image-SFT",
+    "training_base": "MOSS-Image-Base",
+    "author_recommends_SFT": true,
+    "author_reports_Base_compatible": true,
+    "rank": 16,
+    "alpha": 16,
+    "source_dtype": "BF16",
+    "tensor_count": 504,
+    "tensor_elements": 37158912,
+    "tensor_payload_bytes": 74317824,
+    "F32_payload_bytes": 148635648,
+    "largest_BF16_tensor_bytes": 524288,
+    "header_inspected": true,
+    "author_example": {
+      "lora_scale": 0.7,
+      "steps": 30,
+      "cfg_scale": 3,
+      "width": 1024,
+      "height": 1024
+    },
+    "requested_by_user": true,
+    "runtime_integrated": false,
+    "PS5_admitted": false,
+    "quantized_base_apply_strategy_candidate": "at_runtime; avoid full checkpoint dequantization",
+    "blocking_work": [
+      "MOSS separate q/k/v LoRA names must correctly target fused qkv projections; fail closed unless all504 tensors match",
+      "BF16 LoRA storage needs a verified supported computation or explicit exact F32 conversion",
+      "API/native configuration must explicitly pass the chosen MOSS adapter; SDXL manga fields must not be reused",
+      "PS5 Direct capacity and real inference peak/readback remain unverified"
+    ]
+  },
+  "base_engine_config": "moss-native.json.example",
+  "direct_target_bytes": 12884901888,
+  "do_not_use_SDXL_manga_fields": true,
+  "full_component_downloader_currently_covers_base_only": true
+}

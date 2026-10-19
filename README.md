@@ -1,6 +1,8 @@
 # PS5 AI MOSS Image
 
-MOSS-Image-SFTをPS5本体で推論するためのネイティブアプリと、LAN用のOpenAI Images互換APIを準備しています。
+MOSS-Image-SFTとユーザー指定LoRAをPS5本体で推論するためのネイティブアプリと、LAN用のOpenAI Images互換APIを準備しています。
+
+**指定構成はMOSS-Image-SFT＋[選択LoRA](docs/moss-requested-lora.md)です。LoRAのqkv名前変換・BF16処理・native接続は未対応で、現在のビルドをLoRA適用済みとは扱いません。**
 
 **Private開発版です。MOSSのPS5実機推論・12GiB確保・PNG生成は未確認です。実機復帰まで転送・登録・実行を行いません。** 準備版は未検証のモデル初期化へ進む前に明示エラーで止まります。
 
@@ -33,6 +35,7 @@ Qwenのembeddingは実GGUFヘッダーで545.625MiBと確認しました。旧51
 
 - [現在の検証範囲](docs/status.md)
 - [固定モデル・ハッシュ・メモリ・ライセンス](docs/moss-models.md)
+- [指定LoRAの実ヘッダー・メモリ・互換対応](docs/moss-requested-lora.md)
 - [APIとOpenAPI](docs/api.md)
 - [設定例](config/moss-native.json.example)
 - [ビルド](docs/build.md) / [配置計画](docs/deployment.md)

@@ -38,3 +38,8 @@ All exact selected filenames/revisions/expected hashes are in config/models.lock
 Full weights have not yet been downloaded, modified or redistributed by this
 project. Expected hashes are remote LFS metadata, not local full-byte proof.
 Keep applicable upstream NOTICE files and identify later source/model changes.
+
+User-selected additional adapter: axiomofmind/Moss-image-nsfw-uncensored-lora
+Revision: e0a4cd44a906a4296dca7fa200c76058d1938082
+Apache-2.0 license retained as MOSS-requested-LoRA-Apache-2.0.txt.
+Metadata selected only; no adapter weights distributed or native application verified.
