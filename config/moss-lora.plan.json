@@ -1,7 +1,7 @@
 {
   "schema": "ps5-ai-moss-requested-adapter-plan-v1",
   "runtime_configuration": false,
-  "status": "REQUESTED_COMPATIBILITY_WORK_REQUIRED",
+  "status": "HOST_INTEGRATED_AND_EXACT_CONVERTED_PS5_UNVERIFIED",
   "requested_adapter": {
     "role": "lora",
     "repository": "axiomofmind/Moss-image-nsfw-uncensored-lora",
@@ -11,10 +11,10 @@
     "url": "https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/resolve/e0a4cd44a906a4296dca7fa200c76058d1938082/pytorch_lora_weights.safetensors",
     "expected_bytes": 74377208,
     "expected_sha256": "d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa",
-    "sha256_source": "HF LFS metadata; full local bytes not downloaded or verified",
+    "sha256_source": "Immutable HF LFS identity and complete locked local download verified2026-10-19",
     "license": "Apache-2.0",
-    "downloaded": false,
-    "local_weight_verified": false,
+    "downloaded": true,
+    "local_weight_verified": true,
     "base_for_this_project": "MOSS-Image-SFT",
     "training_base": "MOSS-Image-Base",
     "author_recommends_SFT": true,
@@ -36,18 +36,47 @@
       "height": 1024
     },
     "requested_by_user": true,
-    "runtime_integrated": false,
+    "runtime_integrated": true,
     "PS5_admitted": false,
     "quantized_base_apply_strategy_candidate": "at_runtime; avoid full checkpoint dequantization",
     "blocking_work": [
-      "MOSS separate q/k/v LoRA names must correctly target fused qkv projections; fail closed unless all504 tensors match",
-      "BF16 LoRA storage needs a verified supported computation or explicit exact F32 conversion",
-      "API/native configuration must explicitly pass the chosen MOSS adapter; SDXL manga fields must not be reused",
-      "PS5 Direct capacity and real inference peak/readback remain unverified"
-    ]
+      "Fresh full core and native crossbuild of current source; runtime guard remains0",
+      "PS5 Direct capacity plus actual full selected LoRA GPU application/finite readback/PNG remain unverified"
+    ],
+    "PS5_execution_verified": false,
+    "host_integration_only": true
   },
   "base_engine_config": "moss-native.json.example",
   "direct_target_bytes": 12884901888,
   "do_not_use_SDXL_manga_fields": true,
-  "full_component_downloader_currently_covers_base_only": true
+  "full_component_downloader_currently_covers_base_only": false,
+  "derived_runtime_adapter": {
+    "role": "required_runtime_lora",
+    "source_repository": "axiomofmind/Moss-image-nsfw-uncensored-lora",
+    "source_revision": "e0a4cd44a906a4296dca7fa200c76058d1938082",
+    "source_sha256": "d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa",
+    "relative_install_path": "derived/moss-image-nsfw-uncensored-r16-f32.safetensors",
+    "stage_basename": "moss-image-nsfw-uncensored-r16-f32.safetensors",
+    "runtime_path": "/app0/models/moss-image-nsfw-uncensored-r16-f32.safetensors",
+    "expected_bytes": 148704512,
+    "expected_sha256": "907c1e0220c8aa301595b4a369f7b09447001306ffebb53da1fc58f24542cdf9",
+    "source_dtype": "BF16",
+    "target_dtype": "F32",
+    "rank": 16,
+    "alpha": 16,
+    "target_tensor_count": 504,
+    "all_tensor_values_exact_reread": true,
+    "base_checkpoint_merged": false,
+    "converter": "tools/models/convert_moss_lora_bf16_f32.py",
+    "license": "Apache-2.0",
+    "PS5_execution_verified": false
+  },
+  "host_checks": {
+    "all504_expected_names_shapes_F32": true,
+    "all504_actual_upstream_names_preserved": true,
+    "all504_matched_actual_selected_DiT_header": true,
+    "full_values_BF16_to_F32_bit_exact_reread": true,
+    "GPU_execution": false,
+    "PNG_generated": false
+  }
 }

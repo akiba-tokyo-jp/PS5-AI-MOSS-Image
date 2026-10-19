@@ -5,6 +5,7 @@
 #include "engine.h"
 #include "arena.h"
 #include "v3_shutdown.h"
+#include "lifecycle.h"
 #include "shutdown_policy.h"
 #include "journal_metrics.h"
 #include "pool.h"
@@ -167,6 +168,7 @@ void ps5_ai_native_config_mark(unsigned stage,const char *label) {
     atomic_store_explicit(&native_config_stage,stage,memory_order_relaxed);
     ps5_ai_ggml_report("NATIVE_CONFIG stage=%u phase=%s metadata_only=1 config_body_logged=0",stage,label);
 }
+#include "lifecycle_impl.inc"
 static bool engine_started;
 static pid_t probe_pid;
 static pthread_t controller_main_thread;
@@ -652,6 +654,7 @@ int ps5_ai_ggml_wait_backend(const char *phase, int expect_work) {
     return ready;
 }
 __attribute__((noreturn)) void ps5_ai_ggml_retain(const char *reason) {
+    native_lifecycle_failed(PS5_AI_LIFE_RETAINED_FLAG);
     ps5_ai_native_ui_phase(PS5_AI_STATUS_FAILED);
     ps5_ai_native_ui_log(reason);
     retention_entered = true;
@@ -704,6 +707,7 @@ static struct ps5_ai_v3_exit_state exit_state(int server_rc) {
 }
 
 static int init_error(char *error, size_t size, const char *message) {
+    native_lifecycle_failed(PS5_AI_LIFE_INIT_FAILED);
     ps5_ai_native_ui_phase(PS5_AI_STATUS_FAILED);
     if (error && size) snprintf(error, size, "%s", message);
     ps5_ai_ggml_report("API_engine_unavailable reason=%s startup_failures=%d backend_quiescent=%d model_loaded=0 image_generated=0", message, failures, (int)backend_quiescent);
@@ -722,13 +726,16 @@ static int native_capture_stderr(void) {
 }
 
 int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error_size) {
+    native_lifecycle_mark(PS5_AI_LIFE_CONFIG);
     if (++engine_init_calls != 1 || !config_path || strcmp(config_path,"/app0/ai-runtime/config.json")) {
+        native_lifecycle_failed(PS5_AI_LIFE_INIT_FAILED);
         if (error && error_size) snprintf(error,error_size,"Invalid/repeated fixed native API configuration");
         return -1;
     }
     log_fd=open(LOG_PATH,O_WRONLY|O_CREAT|O_APPEND|O_NOFOLLOW,0600);
     struct stat st;
     if(log_fd<0 || fstat(log_fd,&st) || !S_ISREG(st.st_mode)) {
+        native_lifecycle_failed(PS5_AI_LIFE_INIT_FAILED);
         log_healthy=false;
         if(error&&error_size)snprintf(error,error_size,"Native persistent raw-fd journal unavailable");
         return -1;
@@ -743,7 +750,10 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     struct ps5_ai_memory_plan plan = {0};
     ps5_ai_native_config_mark(1,"memory_plan_before");
     /* Preserve the pre-AGC admission reason; do not overwrite it with a pool error. */
-    if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size)) return -1;
+    if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size)) {
+        native_lifecycle_failed(PS5_AI_LIFE_INIT_FAILED);
+        return -1; /* Preserve the MOSS guard0/configuration rejection reason. */
+    }
     if (plan.gpu_pool_bytes != PS5_AI_DATA_VA_BYTES || plan.working_reserve_bytes != UINT64_C(1073741824))
         return init_error(error,error_size,"MOSS requested Direct12GiB/working reserve1GiB configuration required");
     ps5_ai_native_config_mark(16,"memory_plan_returned");
@@ -758,6 +768,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         setenv("GGML_VK_DISABLE_COOPMAT","1",1) || setenv("GGML_VK_DISABLE_COOPMAT2","1",1) ||
         setenv("GGML_VK_SUBALLOCATION_BLOCK_SIZE","67108864",1) || setenv("GGML_VK_VISIBLE_DEVICES","0",1))
         return init_error(error,error_size,"Native GPU environment guard failed");
+    native_lifecycle_mark(PS5_AI_LIFE_AGC);
     ps5_ai_ggml_report("BEFORE native_RADV_platform_init sole_Init8_owner=1 hard_timeout=none");
     if (!log_healthy) return init_error(error,error_size,"Native Init8 BEFORE log failed");
     bool ready=radv_ps5_platform_init();
@@ -765,6 +776,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     if (!ready || agc_init_requests!=1 || agc_init_attempts!=1 || agc_init_result || !log_healthy)
         return init_error(error,error_size,"Native sole Init8 failed");
     native_driver_prepare_entered=true;
+    native_lifecycle_mark(PS5_AI_LIFE_DRIVER);
     if (ps5_ai_arena_prepare()) return init_error(error,error_size,"Native per-BO owner prepare failed");
     struct ps5_ai_arena_stats arena=report_arena("native_owner_prepared");
     /* Zero owned BOs is valid before Vulkan creates its first internal object. */
@@ -773,6 +785,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         arena.gpu_fault_retained || arena.global_capacity_measured || !log_healthy)
         return init_error(error,error_size,"Native per-BO empty-owner guard failed");
     native_data_prepare_entered=true;
+    native_lifecycle_mark(PS5_AI_LIFE_DIRECT);
     if (ps5_ai_direct_pool_configure(plan.gpu_pool_bytes,PS5_AI_DATA_REGION_BYTES,plan.working_reserve_bytes) ||
         ps5_ai_flex_prepare()) return init_error(error,error_size,"Native actual Direct data admission failed");
     struct ps5_ai_direct_pool_stats direct={0}; ps5_ai_direct_pool_snapshot(&direct);
@@ -783,9 +796,11 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         !pool.gpu_access_granted || pool.fault_retained || !pool.log_healthy || !log_healthy)
         return init_error(error,error_size,"Native owned region accounting incomplete");
     ps5_ai_native_capacity_snapshot("candidate_12GiB_pool_prepared");
+    native_lifecycle_mark(PS5_AI_LIFE_BACKEND);
     int rc=__real_ps5_ai_engine_init(config_path,error,error_size);
     if (rc) return init_error(error,error_size,"Native real engine initialization failed");
     ps5_ai_ggml_graph_phase(1);
+    native_lifecycle_mark(PS5_AI_LIFE_GPU_GATE);
     int gate=ps5_ai_native_gpu_data_gate(error,error_size);
     ps5_ai_ggml_graph_phase(0);
     struct ps5_ai_ggml_dispatch_stats state={0}; ps5_ai_ggml_dispatch_snapshot(&state);
@@ -800,6 +815,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         ps5_ai_ggml_retain("native_data_gate_ownership_or_log_unknown");
     if (gate) return init_error(error,error_size,"Native same-context Direct GPU gate failed");
     engine_started=true;
+    native_lifecycle_mark(PS5_AI_LIFE_READY);
     native_ui_start_after_real_gate();
     ps5_ai_native_capacity_snapshot("native_12GiB_ready_after_GPU_gate");
     ps5_ai_ggml_report("NATIVE_ENGINE_READY pid=%d Direct_data_reserved=%llu single_SCALE_tensor_verified_bytes=67108864 whole_pool_GPU_verified=0 model_loaded=0 GPU_UNet_image_verified=0 engine_ready=1",
@@ -863,6 +879,10 @@ int __wrap_ps5_ai_engine_generate(const ps5_ai_request *request, const char *pat
 }
 
 void __wrap_ps5_ai_engine_shutdown(void) {
+    struct ps5_ai_native_lifecycle lifetime;
+    ps5_ai_native_lifecycle_snapshot(&lifetime);
+    if (!ps5_ai_lifecycle_checked_shutdown_allowed(&lifetime))
+        ps5_ai_ggml_retain("native_shutdown_requires_verified_normal_OS_title_close");
     if (!on_controller_main_thread() || ++shutdown_calls != 1 || !shutdown_requested ||
         !worker_joined || !listener_closed || generation_active || retention_entered || !log_healthy)
         ps5_ai_ggml_retain("V3_shutdown_without_proven_idle_worker_join");
@@ -935,6 +955,11 @@ int sceSystemServiceLoadExec(const char *path, const char *const *args);
 /* Startup metadata only; preserve errno and the inference/log policies. */
 void ps5_ai_native_server_stage(const char *stage,int result,int observed_errno) {
     int saved=errno;
+    if (stage && !strcmp(stage,"server_main_enter")) native_lifecycle_mark(PS5_AI_LIFE_SERVER);
+    if (stage && (!strcmp(stage,"worker_create_failed") ||
+        !strcmp(stage,"setup_paths_failed") || !strcmp(stage,"consume_token_failed") ||
+        (!strcmp(stage,"listener_open") && !result)))
+        native_lifecycle_failed(PS5_AI_LIFE_SERVER_FAILED);
     if(native_session_paths_ready) {
         int fd=open(native_session_bootstrap_path,O_WRONLY|O_APPEND|O_NOFOLLOW);
         if(fd>=0) {
@@ -948,10 +973,21 @@ void ps5_ai_native_server_stage(const char *stage,int result,int observed_errno)
     }
     errno=saved;
 }
+static void native_normal_close_handoff(void) {
+    struct ps5_ai_native_lifecycle lifetime;
+    ps5_ai_native_lifecycle_snapshot(&lifetime);
+    char handoff[320];
+    int n=snprintf(handoff,sizeof(handoff),"NATIVE_NORMAL_CLOSE_HANDOFF title=PPSA99190 pid=%d stage=%s failed_stage=%s constructor_effects=unknown external_fresh_owner_verification_required=1 OS_close_authorized=0 automatic_exit=0 manual_GPU_release=0\n",getpid(),
+        ps5_ai_lifecycle_phase_name(lifetime.phase),ps5_ai_lifecycle_phase_name(lifetime.failed_phase));
+    if(n>0&&(size_t)n<sizeof(handoff))(void)write(2,handoff,(size_t)n);
+}
 int main(int argc, char **argv) {
     controller_main_thread = pthread_self();
     controller_main_thread_valid = true;
+    native_lifecycle_mark(PS5_AI_LIFE_BOOTSTRAP);
     if(!native_bootstrap()) {
+        native_lifecycle_failed(PS5_AI_LIFE_BOOTSTRAP_FAILED);
+        native_normal_close_handoff();
         const char message[]="native_WAI_bootstrap_failed_or_timeout native_resident=1 GPU_not_started=1 SCE_constructor_effects=unknown\n";
         (void)write(2,message,sizeof(message)-1);for(;;)sleep(1);
     }
@@ -960,6 +996,10 @@ int main(int argc, char **argv) {
      * compiled in; this does not accept or reinterpret arbitrary OS args. */
     char program[]="native-moss-image-sft"; char *fixed_argv[]={program,NULL};
     int rc = ps5_ai_server_main(1, fixed_argv);
+    if (rc) native_lifecycle_failed(PS5_AI_LIFE_SERVER_FAILED);
+    struct ps5_ai_native_lifecycle lifetime;
+    ps5_ai_native_lifecycle_snapshot(&lifetime);
+    if (!ps5_ai_lifecycle_checked_shutdown_allowed(&lifetime)) native_normal_close_handoff();
     ps5_ai_native_ui_phase(PS5_AI_STATUS_STOPPING);
     ps5_ai_native_ui_log("API stopped; cooperative exit requires checked shutdown");
     /* Also cover API startup failures after engine initialization, such as a

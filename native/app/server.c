@@ -3,6 +3,11 @@
 #include "engine.h"
 #include "reference_image.h"
 #include "v3_shutdown.h"
+#include "lifecycle.h"
+#include "moss_lora_receipt.h"
+#ifndef _WIN32
+extern int ps5_ai_moss_lora_snapshot(struct ps5_ai_moss_lora_receipt *) __attribute__((weak));
+#endif
 #include "ui_hooks.h"
 #include <ctype.h>
 #include <stdatomic.h>
@@ -113,6 +118,16 @@ static int64_t server_started_at;
 #include "retained_fault.inc"
 
 static int finite_double(double value) { return value >= -DBL_MAX && value <= DBL_MAX; }
+#if defined(__PROSPERO__) || defined(PS5_AI_LIFECYCLE_HOST_TEST)
+static void lifecycle_json(char *out,size_t cap) {
+    struct ps5_ai_native_lifecycle s;
+    ps5_ai_native_lifecycle_snapshot(&s);
+    snprintf(out,cap,"{\"initialization_stage\":\"%s\",\"failed_stage\":\"%s\",\"engine_ready\":%s,\"fault_retention_entered\":%s,\"in_app_shutdown\":\"%s\",\"constructor_effects\":\"unknown\",\"title_id\":\"PPSA99190\",\"process_id\":%" PRId64 ",\"external_fresh_owner_verification_required\":true,\"os_close_authorized\":false,\"manual_gpu_release\":false}",
+        ps5_ai_lifecycle_phase_name(s.phase),s.failure_observed?ps5_ai_lifecycle_phase_name(s.failed_phase):"none",
+        s.engine_ready?"true":"false",s.fault_retention_entered?"true":"false",
+        ps5_ai_lifecycle_checked_shutdown_allowed(&s)?"checked_gpu_cleanup":"trusted_os_close_required",(int64_t)get_pid());
+}
+#endif
 static void wipe_secret(void *data, size_t size) {
     volatile unsigned char *p = data;
     while (size--) *p++ = 0;
@@ -696,22 +711,32 @@ static void health(socket_t fd) {
     }
     unlock_state();
     char screen_json[256]="null";
+    char lora_json[1024]="null";
 #ifndef _WIN32
+    struct ps5_ai_moss_lora_receipt lora={0};
+    if(ps5_ai_moss_lora_snapshot && !ps5_ai_moss_lora_snapshot(&lora))
+        snprintf(lora_json,sizeof(lora_json),"{\"adapter\":\"axiomofmind/Moss-image-nsfw-uncensored-lora\",\"path\":\"/app0/models/moss-image-nsfw-uncensored-r16-f32.safetensors\",\"configured\":%s,\"strength\":%.9g,\"loaded_tensors\":%u,\"matched_tensors\":%u,\"used_tensors\":%u,\"skipped_tensors\":%u,\"application_verified\":%s}",
+            lora.configured?"true":"false",(double)lora.strength,lora.loaded,lora.matched,lora.used,lora.skipped,
+            lora.application_verified?"true":"false");
     struct ps5_ai_status_display_state_v1 display={0};
     if(!ps5_ai_status_display_state(&display))
         snprintf(screen_json,sizeof(screen_json),"{\"ready\":%s,\"heartbeat\":%" PRIu64 ",\"last_presented_frame\":%" PRIu64 ",\"fault\":%s,\"stopped\":%s}",
             display.ready?"true":"false",display.heartbeat,display.completed_flip_argument,
             display.display_fault?"true":"false",display.stopped?"true":"false");
 #endif
+    char lifetime_json[1024]="null";
+#if defined(__PROSPERO__) || defined(PS5_AI_LIFECYCLE_HOST_TEST)
+    lifecycle_json(lifetime_json,sizeof(lifetime_json));
+#endif
     snprintf(body, sizeof(body),
-        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-image\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false},\"backend\":%s,\"engine_available\":%s,"
+        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-image\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false,\"selected_moss_lora\":true},\"selected_moss_lora\":%s,\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
-        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s}",
-        s.available && s.gpu_available ? "ready" : "degraded", backend,
+        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s,\"lifecycle\":%s}",
+        s.available && s.gpu_available ? "ready" : "degraded", lora_json, backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
-        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json);
+        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json,lifetime_json);
     send_json(fd, 200, body);
 }
 static void submit(socket_t fd, const char *body) {
@@ -808,6 +833,15 @@ static void get_ui(socket_t fd) {
 
 static void admin_shutdown(socket_t fd) {
     if(retained_engine_fault()){send_error(fd,409,"Retained GPU resources require a verified native app close; cooperative worker join is unavailable");return;}
+#if defined(__PROSPERO__) || defined(PS5_AI_LIFECYCLE_HOST_TEST)
+    struct ps5_ai_native_lifecycle lifetime;
+    ps5_ai_native_lifecycle_snapshot(&lifetime);
+    if(!ps5_ai_lifecycle_checked_shutdown_allowed(&lifetime)) {
+        char state[1024],response[1536];lifecycle_json(state,sizeof(state));
+        snprintf(response,sizeof(response),"{\"error\":\"Initialization did not complete the checked GPU path; a separately verified normal OS title close is required. No in-app GPU cleanup or OS close was attempted.\",\"recovery\":%s}",state);
+        send_json(fd,409,response);return;
+    }
+#endif
     int running = 0, queued = 0;
     lock_state();
     for (int i = 0; i < MAX_JOBS; ++i) if (jobs[i].occupied) {
@@ -1111,10 +1145,10 @@ int main(int argc, char **argv) {
     STARTUP_STAGE("engine_init_after",1);
 #ifdef _WIN32
     HANDLE thread = CreateThread(NULL, 0, worker, NULL, 0, NULL);
-    if (!thread) { log_line("Worker thread creation failed"); close_socket(listener); return 1; }
+    if (!thread) { STARTUP_STAGE("worker_create_failed",0);log_line("Worker thread creation failed"); close_socket(listener); return 1; }
 #else
     pthread_t thread;
-    if (pthread_create(&thread, NULL, worker, NULL)) { log_line("Worker thread creation failed"); close_socket(listener); return 1; }
+    if (pthread_create(&thread, NULL, worker, NULL)) { STARTUP_STAGE("worker_create_failed",0);log_line("Worker thread creation failed"); close_socket(listener); return 1; }
     signal(SIGPIPE, SIG_IGN);
 #endif
     signal(SIGINT, stop_signal); signal(SIGTERM, stop_signal);

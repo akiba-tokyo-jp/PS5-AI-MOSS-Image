@@ -13,7 +13,7 @@
 
 WAIは8188／8189、Animaは8190／8191を維持します。WAI・Anima・MOSSは同時に実行せず、停止を確認して切り替える設計です。MOSSのサーバーは他のアプリ用ポートを指定した起動を拒否します。
 
-両APIは専用ファイルから読み込むBearer認証を要求します。トークンは起動後にファイルから削除してメモリに保持し、ソースやURLには入れません。接続元は同じprivate IPv4 /24内に制限します。ゲートウェイは推論を行わず、同じPS5上の8192番へ1件だけ転送します。Windowsでの代替推論や自動再送はありません。
+両APIは専用ファイルから読み込むBearer認証を要求します。同じMOSSアプリのnativeとgatewayには同じトークン値を各起動ファイルへ渡します。gatewayはその値でnativeを認証するためです。WAI・Animaのトークンとは分離します。トークンは各プロセスが起動後にファイルから削除してメモリに保持し、ソースやURLには入れません。接続元は同じprivate IPv4 /24内に制限します。ゲートウェイは推論を行わず、同じPS5上の8192番へ1件だけ転送します。Windowsでの代替推論や自動再送はありません。
 
 ## OpenAIクライアント
 
@@ -55,5 +55,7 @@ PowerShellクライアントは[`Invoke-MossOpenAI.ps1`](../scripts/Invoke-MossO
 ## モデル構成の設定例
 
 [`config/moss-native.json.example`](../config/moss-native.json.example)はモデル本体・Qwen3.5エンコーダー・Flux2 VAE・外部Qwen3.5 tokenizerの配置予定を示します。ファイルは同梱していません。モデル名・必要な量子化形式・バックエンド互換性・メモリ設定は、別途のソース監査と実機検証が必要です。既存Anima用の重みやtokenizerへ代替する動作は設けません。
+
+選定LoRAはアプリ設定の`moss_lora_path`と`moss_lora_strength`で指定し、HTTP要求から任意のモデルパスを渡す機能はありません。未知のengine設定キー、選定外のLoRAパス、0以下・1.5超・floatで有限正値にならない強度は、明示的GPU初期化前のmemory-plan検査で拒否します。構成上の対応とPS5での生成成功は分けて扱います。
 
 設定例のDirect予約目標は12GiB（12,884,901,888 bytes）、その内側のVulkan推論予算は11.5GiBです。`working_reserve_bytes`は1GiBを維持します。実機で12GiBを確保できた実測を示す値ではありません。現在の移植上の制限を解決し、実行許可を検証するまでは配備・起動しません。

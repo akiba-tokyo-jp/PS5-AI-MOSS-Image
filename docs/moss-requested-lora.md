@@ -1,79 +1,96 @@
 # User-selected MOSS adapter — 2026-10-19
 
-The requested configuration is **MOSS-Image-SFT plus
-axiomofmind/Moss-image-nsfw-uncensored-lora**. The URL names an adapter, not a
-replacement checkpoint. The author recommends SFT, reports compatibility with
-Base, and records Base as its training parent.
+The selected configuration is **MOSS-Image-SFT plus
+axiomofmind/Moss-image-nsfw-uncensored-lora**. The URL identifies a LoRA, not a
+replacement checkpoint. The author recommends SFT, reports Base compatibility,
+and records Base as its training parent.
 
-Sources: [author model card](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/README.md),
+Sources: [model card](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/README.md),
 [adapter config](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/adapter_config.json),
 [license](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/LICENSE).
 
-## Fixed identity and measured header metadata
+**The full local download, exact conversion, source hookup and fresh cross-build
+have passed. No MOSS model/LoRA loading, GPU inference or PNG generation has been
+verified on PS5. Runtime admission remains 0 and the repository remains private.**
 
-| Item | Value |
+## Fixed files and exact conversion
+
+| Item | Verified local value |
 |---|---|
-| Revision | `e0a4cd44a906a4296dca7fa200c76058d1938082` |
-| File | `pytorch_lora_weights.safetensors` |
-| Complete file size | 74,377,208 bytes / 70.9326 MiB |
-| Expected LFS SHA256 | `d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa` |
-| Tensor storage | 504 BF16 tensors, 74,317,824 bytes / 70.875 MiB |
-| Exact F32 expansion of the same elements | 148,635,648 bytes / 141.75 MiB |
-| Rank / alpha | 16 / 16 |
-| Largest BF16 tensor | 524,288 bytes / 0.5 MiB |
+| Source revision | `e0a4cd44a906a4296dca7fa200c76058d1938082` |
+| Original file | `pytorch_lora_weights.safetensors`, 74,377,208 bytes |
+| Full source SHA256 | `d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa` |
+| Source tensors | 504 BF16 tensors / 37,158,912 elements |
+| Rank / alpha | 16 / 16; alpha/rank=1 |
 | Targets | q, k, v, o, ffn_up_gate, ffn_down in 42 DiT layers |
-| Author example | scale 0.7, 30 steps, CFG3, 1024 square |
+| Canonical derivative | `moss-image-nsfw-uncensored-r16-f32.safetensors`, 148,704,512 bytes |
+| Full derivative SHA256 | `907c1e0220c8aa301595b4a369f7b09447001306ffebb53da1fc58f24542cdf9` |
+| F32 tensor payload | 148,635,648 bytes / 141.75 MiB |
+| Configured strength | 0.7, runtime application |
 
-Anonymous immutable HTTP Range inspection read only the 59,376-byte header
-plus its 8-byte length. No full weights or sample images were downloaded. The
-whole-file SHA is upstream LFS metadata, not a local full-file verification.
+The [downloader](../tools/download_moss.py) now covers the four locked base
+components plus the raw selected adapter by default. `--base-only` explicitly
+omits the adapter and does not prepare the complete selected configuration.
+All five source files were downloaded to D and verified by complete SHA256
+readback. The [converter](../tools/models/convert_moss_lora_bf16_f32.py) validates
+the immutable source identity, all 504 names/shapes, rank/alpha and finite values.
+It shifts each finite BF16 bit pattern into exact F32, then rereads **every
+converted value** against its source and records the complete derivative hash.
+It does not merge or dequantize the full base checkpoint. Raw BF16 is not staged
+under the F32 filename.
 
-## Memory assessment
+## Independent q/k/v and native hookup
 
-The adapter's persistent weight increment is relatively small. F32 weight
-storage would be 141.75 MiB, while keeping BF16 would store 70.875 MiB; neither
-number is an inference peak. Dtype conversion may briefly retain both, and
-runtime LoRA adds intermediate/output tensors, graph scratch and allocator
-alignment. A real runtime must measure these.
+The selected DiT's actual local GGUF header matches all 504 derivative tensors
+against 168 target weights. The base MOSS projection slices q/k/v in that order.
+The converter preserves each independent A/B pair and maps it as follows:
 
-The selected four base component files plus the LoRA total 9,351,811,137 bytes,
-about **8.7096 GiB** on disk. Against the requested12 GiB pool the arithmetic
-remainder is about3.2904 GiB. This is not free VRAM or a fit guarantee. The large
-Qwen encoder, its CPU memory and recurrent state, DiT/VAE workspace, driver and
-native display still determine the real peak. CPU/GPU share console memory.
+| Original module | Canonical fused target |
+|---|---|
+| q | `proj.qkv.weight.lora_down/up` |
+| k | `proj.qkv.weight.1.lora_down/up` |
+| v | `proj.qkv.weight.2.lora_down/up` |
 
-The existing Direct-capacity issue is unchanged: historical native reports of
-12 GiB before AGC and11.4375 GiB during a later GPU context do not meet the
-prepared12 GiB pool plus1 GiB outside-pool headroom check. The adapter does not
-increase the reported physical quota. No new PS5 allocation was attempted.
+The existing SD.cpp runtime adapter computes each low-rank update separately and
+concatenates its output slices. It does not reuse q's A matrix for k or v.
+Other targets retain their corresponding o/ffn names. Native configuration passes
+exactly this required adapter through `sd_lora_t`, with
+`LORA_APPLY_AT_RUNTIME`; WAI's manga fields are not reused. See
+[configuration and staging](deployment.md).
 
-## Concrete compatibility work before enabling
+The MOSS-only adapter contract rejects unexpected names, dtype, rank, shape or
+missing model targets. Each generation clears its previous used set, and the
+acceptance gate requires **loaded 504 / matched 504 / used 504 / skipped 0**.
+Unused tensors fail before decoded output allocation. These are required runtime
+values, not claimed PS5 observations. Native generation additionally requires
+completed GPU math, finite/readback checks and successful PNG publication.
+`/health` exposes `selected_moss_lora` receipt counters and
+`application_verified`; configured status alone is not proof of application.
 
-The prepared native engine does not yet connect the requested adapter. The
-plan in [config/moss-lora.plan.json](../config/moss-lora.plan.json) is metadata,
-not runtime configuration. The existing downloader still covers only the four
-base components; it must not imply that this LoRA is downloaded or enabled.
+## Host evidence and remaining admission
 
-1. MOSS has fused `proj.qkv` in
-   `patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp`, whereas
-   this adapter has separate `proj.q`, `proj.k`, `proj.v`. The current name
-   conversion and preprocessing lack that MOSS mapping. Simply loading the
-   original file risks silently leaving the q/k/v tensors unused. All504 source
-   tensors must be accounted for, with shape and alpha/rank checks, and failure
-   must be explicit if any requested weight is unused.
-2. The loader currently preserves the BF16 LoRA type. It does not automatically
-   create an F32 copy. The PS5 Vulkan path needs a verified supported dtype or
-   an explicit exact BF16-to-F32 conversion with its derived hash recorded.
-3. Q4 base weights cause SD.cpp Auto to choose runtime LoRA: two low-rank matrix
-   products and output addition. This avoids expanding the whole DiT to F32.
-   Immediate merge instead creates dense F32 weight/delta buffers; the largest
-   MOSS feed-forward matrix is192 MiB in F32, with a similar dense delta. The
-   graph-wide peak cannot be inferred just from this one matrix.
-4. Native configuration/API must explicitly pass the MOSS adapter. WAI's SDXL
-   manga LoRA fields cannot be reused as if compatible. The current API remains
-   base-only, with compile-time runtime admission0.
-5. After console recovery, establish actual capacity, numerical adapter
-   application, complete GPU compute and output PNG before declaring success.
+`tests/moss_lora_checks.py` passes conversion/numeric oracles, all 504 contract
+acceptances with 1,013 negative cases, actual pinned upstream name conversion,
+strict-adapter syntax and 110 configuration checks with both examples. The
+conversion oracles include all 65,280 finite BF16 encodings and independent q/k/v
+numeric comparisons. The current PS5-target engine syntax check passes.
+Full core 75/75 and the native SELF were rebuilt from the current LoRA/lifecycle
+source; [status](status.md) records their identities. These are host checks,
+not a learned-model inference test.
 
-No PS5 connection, setting/app/driver/memory change, inference or PNG generation
-was performed for this assessment. The repository remains PRIVATE.
+The four base runtime files plus the F32 derivative total 9,426,138,441 bytes
+(about 8.779 GiB) on disk. The 141.75 MiB persistent F32 tensor payload does not
+include LoRA intermediates, graph scratch, allocator alignment, Qwen CPU state,
+DiT/VAE workspace, driver or display. Disk size is not a resident-memory peak.
+
+The requested 12 GiB Direct pool plus 1 GiB outside-pool reserve is still a
+blocker. Historical native reports of 12 GiB before AGC and 11.4375 GiB with a
+later GPU context do not satisfy that check. They are not current free-memory
+measurements or a permanent hardware limit. No new allocation or successful
+MOSS readback has been established by these host receipts. Runtime guard 0 stays
+in place until capacity, Qwen numerical output and actual GPU application/readback
+are verified. Constructor side effects remain unknown; the guard concerns the
+explicit app initialization path. See [lifecycle and recovery](deployment.md).
+
+Apache-2.0 text is retained and included in the new native package. Model weights,
+private evidence, credentials and build artifacts are not committed to Git.

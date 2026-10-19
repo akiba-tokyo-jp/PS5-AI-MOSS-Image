@@ -109,7 +109,7 @@ const char *ps5_ai_native_arena_log_path(void){return native_log_path;}
 int ps5_ai_native_arena_open_log(int sandbox){
     if(native_log_attempted++||(sandbox!=0&&sandbox!=1))return -1;
 #ifndef PS5_AI_PERBO_HOST_TEST
-    const char *paths[2]={"/data/ai/anima-native-logs/radv-native-perbo-v2.log","/download0/ai-native-bounded-logs-v2/native-driver.log"};
+    const char *paths[2]={"/data/ai/moss-native-logs/radv-native-perbo-v2.log","/download0/ai-native-bounded-logs-v2/native-driver.log"};
     for(int i=sandbox;i<2;i++){
         int fd=open(paths[i],O_WRONLY|O_CREAT|O_APPEND|O_NOFOLLOW,0600);if(fd<0)continue;
         struct stat st;if(fstat(fd,&st)||!S_ISREG(st.st_mode)){close(fd);continue;}

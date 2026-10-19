@@ -14,7 +14,7 @@ python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/
 python -B tools/build_gateway.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-gateway --native
 ```
 
-[source-freeze例](../config/moss-source-freeze.json.example)をD側の個人用JSONへコピーし、`repository_root`と`private_vendor_root`の2パスを実際のcloneへ合わせます。固定した21ファイルのsize/SHAが一致しなければビルドを拒否します。ソース改修後はレビュー・host確認・新しいfreezeを行います。core builderの引数は同toolの`--help`を参照してください。SDK・shader生成物・レビュー済み依存アーカイブが別途必要で、クリーンPCからのワンコマンド依存構築ではありません。
+[source-freeze例](../config/moss-source-freeze.json.example)をD側の個人用JSONへコピーし、`repository_root`と`private_vendor_root`の2パスを実際のcloneへ合わせます。例の古い21入力を現行LoRA/lifecycleの完全freezeとして使い回しません。ソース改修後はレビュー・host確認を行い、実際の全対象入力のsize/SHAを含む新しいfreezeを作成します。現ローカルcore用freezeは181入力で、source/header/overlayの前後hashも別途確認しています。core builderの引数は同toolの`--help`を参照してください。SDK・shader生成物・レビュー済み依存アーカイブが別途必要で、クリーンPCからのワンコマンド依存構築ではありません。
 
 nativeは`title/PPSA99190/eboot.bin`、gatewayは`ps5-ai-moss-openai-gateway.elf`を出力します。SELF整合性・loaded bytes・動的依存・ソースhashを検証します。`fp32`は演算設定であり、GGUFのQ4保存形式とは別です。
 
@@ -27,3 +27,12 @@ nativeは`title/PPSA99190/eboot.bin`、gatewayは`ps5-ai-moss-openai-gateway.elf
 ## モデルとホスト試験
 
 モデルは[固定lock](../config/models.lock.json)と[専用ダウンローダー](../tools/download_moss.py)でDへ配置します。取得だけではPS5へ反映しません。MOSSの現行host試験は`tests/moss_*`です。HTTP fixture、pool mock、source guard試験はPS5推論成功として扱いません。継承したWAI/Anima試験は別モデルの履歴です。
+
+
+## 2026-10-19の選定LoRA対応ビルド
+
+LoRA/lifecycle接続後のfull coreは75 objectsをfresh compile、旧object流用0で完了しました。75 sourceと4,135 header等の前後hashが一致し、archive SHA256は`2184d88babd47ab8826b03c58f473de7e98adb19a79ab47798e97d576e2f56bc`です。
+
+その完了後、native packagerへ選定LoRAのLICENSEコピー1行だけを追加しました。core用181入力freezeの履歴を書き換えず、C/C++・header・overlay・core builder/profileが変わっていないことと、native側213入力freezeを分けて記録しました。native builderはさらに3,793入力の前後一致を検査しました。SELF SHA256は`50131fb15447eec767e3f976ed19255870d2de1068512a81f86772128fdac30b`、integrity正常、動的依存6、initializer24です。これらはguard0のホスト成果物で、PS5実機起動・推論成功ではありません。
+
+LoRAの再現可能なhost checksは`tests/moss_lora_checks.py --llvm <LLVM/bin> --sd <private-SD> --out <fresh-D-output>`です。数値/shape/実upstream name conversionを検査し、モデル推論やPS5接続は行いません。詳しい検証範囲は[status](status.md)と[LoRA](moss-requested-lora.md)を参照してください。

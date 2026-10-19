@@ -13,6 +13,8 @@ struct PS5AIEngineConfig {
     // MOSS uses a split DiT, Qwen3.5 text encoder, external tokenizer and FLUX.2 VAE.
     // The DiT must never be passed as an SDXL combined checkpoint.
     std::string model, llm, vae, tokenizer, taesd, backend, params_backend, max_vram;
+    std::string moss_lora_path;
+    double moss_lora_strength = 0.7;
     std::string manga_lora_path;
     std::string clip_vision_path, ip_adapter_path, reference_params_backend;
     std::string controlnet_canny_path, controlnet_openpose_path;
@@ -21,12 +23,55 @@ struct PS5AIEngineConfig {
     int conditioning_cache_size = 2;
     std::string log = "/app0/ai-runtime/logs/engine.jsonl";
     int cpu_threads = 3;
-    int vae_tile_size = 256; // Image pixels; SD1/2 divides this by 8.
+    int vae_tile_size = 256; // Image pixels; the selected VAE resolves latent tile sizes.
     float vae_tile_overlap = 0.5f;
     bool vae_tiling = true, mmap = false, disable_prefetch = true;
     bool eager_load = false, auto_fit = true, tae_preview_only = false;
     uint64_t gpu_pool_bytes = UINT64_C(12) << 30;
     uint64_t working_reserve_bytes = UINT64_C(1) << 30;
+
+    static const nlohmann::json& engine_object(const nlohmann::json& document) {
+        if (!document.is_object()) throw std::runtime_error("MOSS config must be a JSON object");
+        for (auto it = document.begin(); it != document.end(); ++it)
+            if (it.key() != "engine" && it.key() != "logging")
+                throw std::runtime_error("Unknown MOSS config top-level key; only engine and optional logging are accepted");
+        if (!document.contains("engine") || !document.at("engine").is_object())
+            throw std::runtime_error("MOSS config requires an explicit engine object; no default engine is selected");
+        return document.at("engine");
+    }
+
+    static void validate_keys(const nlohmann::json& object) {
+        if (!object.is_object()) throw std::runtime_error("engine must be a JSON object");
+        static constexpr const char* allowed[] = {
+            "model", "llm", "vae", "tokenizer", "taesd_path", "backend", "params_backend", "max_vram_gib",
+            "moss_lora_path", "moss_lora_strength",
+            "manga_lora_path", "clip_vision_path", "ip_adapter_path", "controlnet_canny_path", "controlnet_openpose_path",
+            "flash_attn_mode", "batched_cfg", "conditioning_cache_size", "log", "cpu_threads", "vae_tile_size",
+            "vae_tile_overlap", "vae_tiling", "mmap", "disable_prefetch", "eager_load", "auto_fit", "tae_preview_only",
+            "gpu_pool_bytes", "working_reserve_bytes"
+        };
+        for (auto it = object.begin(); it != object.end(); ++it) {
+            bool known = false;
+            for (const char* key : allowed) if (it.key() == key) { known = true; break; }
+            if (!known) throw std::runtime_error("Unknown engine configuration field: " + it.key());
+        }
+    }
+
+    static const char* selected_moss_lora_path() {
+        return "/app0/models/moss-image-nsfw-uncensored-r16-f32.safetensors";
+    }
+
+    static void validate_selected_lora(const nlohmann::json& object) {
+        const std::string path = object.value("moss_lora_path", selected_moss_lora_path());
+        if (path != selected_moss_lora_path())
+            throw std::runtime_error("MOSS selected adapter requires its exact canonical F32 path; empty/base-only or other adapters are not selected");
+        if (object.contains("moss_lora_strength") && !object.at("moss_lora_strength").is_number())
+            throw std::runtime_error("engine.moss_lora_strength must be numeric");
+        const double strength = object.value("moss_lora_strength", 0.7);
+        if (!std::isfinite(strength) || strength <= 0.0 || strength > 1.5 ||
+            !std::isfinite(static_cast<float>(strength)) || static_cast<float>(strength) <= 0.f)
+            throw std::runtime_error("engine.moss_lora_strength must remain finite and positive as float, at most1.5; selected LoRA cannot be disabled");
+    }
 
     static uint64_t memory_integer(const nlohmann::json& object, const char* key, uint64_t fallback) {
         if (!object.contains(key)) return fallback;
@@ -41,7 +86,9 @@ struct PS5AIEngineConfig {
     }
 
     static ps5_ai_memory_plan memory_plan(const nlohmann::json& object) {
-        if (!object.is_object()) throw std::runtime_error("engine must be a JSON object");
+        // Validate before explicit AGC/Direct setup as well as full engine parsing.
+        validate_keys(object);
+        validate_selected_lora(object);
         ps5_ai_memory_plan result = {
             memory_integer(object, "gpu_pool_bytes", UINT64_C(12) << 30),
             memory_integer(object, "working_reserve_bytes", UINT64_C(1) << 30)};
@@ -84,6 +131,8 @@ struct PS5AIEngineConfig {
         result.working_reserve_bytes = plan.working_reserve_bytes;
         result.model = object.value("model", "/app0/models/MOSS-Image-SFT-Q4_K.gguf");
         result.llm = object.value("llm", "/app0/models/Qwen3.5-9B-Q4_K_M.gguf");
+        result.moss_lora_path = object.value("moss_lora_path", selected_moss_lora_path());
+        result.moss_lora_strength = object.value("moss_lora_strength", result.moss_lora_strength);
         result.manga_lora_path = object.value("manga_lora_path", "");
         result.clip_vision_path=object.value("clip_vision_path", "");
         result.ip_adapter_path=object.value("ip_adapter_path", "");

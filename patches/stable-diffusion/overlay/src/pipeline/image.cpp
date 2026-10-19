@@ -1067,13 +1067,20 @@ namespace sd::pipeline {
             final_latents = std::move(hires_final_latents);
         }
 
+        // Refuse a partial MOSS adapter before allocating/publishing decoded
+        // pixels. The selected native contract requires504/504 used tensors.
+        if (sd->version == VERSION_MOSS_IMAGE) {
+            sd->lora_stat();
+        }
         int num_images = 0;
         auto result    = decode_image_outputs(sd, request, final_latents, &num_images);
         if (result == nullptr) {
             return false;
         }
 
-        sd->lora_stat();
+        if (sd->version != VERSION_MOSS_IMAGE) {
+            sd->lora_stat();
+        }
 
         int64_t t1 = ggml_time_ms();
         LOG_INFO("generate_image completed in %.2fs", (t1 - t0) * 1.0f / 1000);

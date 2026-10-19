@@ -36,7 +36,16 @@ def main():
     for stem in ('moss_engine_config','moss_cpu_text_pool'):
         exe=out/(stem+'.exe')
         run([llvm/'clang++.exe','-std=c++20',*common,*inc,root/'tests'/(stem+'.cpp'),'-o',exe],stem+'.compile')
-        results.append({'suite':stem,'stdout':run([exe],stem+'.test').strip()})
+        arguments=[exe]
+        if stem=='moss_engine_config':
+            arguments += [root/'config/native.json.example',root/'config/moss-native.json.example']
+        results.append({'suite':stem,'stdout':run(arguments,stem+'.test').strip()})
+    for directory in ('app','gateway','ui'):
+        exe=out/('moss_ui_metadata-'+directory+'.exe')
+        label='moss_ui_metadata-'+directory
+        run([llvm/'clang.exe','-std=c17',*common,'-I',root/'native'/directory,
+             root/'tests/moss_ui_metadata.c','-o',exe],label+'.compile')
+        results.append({'suite':label,'stdout':run([exe],label+'.test').strip()})
     pool=out/'moss_direct_pool.exe'
     run([llvm/'clang.exe','-std=c17',*common,'-Wno-deprecated-pragma',*inc,'-I',a.platform.resolve()/'include',
          root/'tests/moss_direct_pool.c','-o',pool],'moss_direct_pool.compile')
@@ -55,8 +64,10 @@ def main():
          root/'tests/moss_operator_bounds.cpp',*objs,'-Wl,--gc-sections','-o',op],'moss_operator_bounds.compile')
     results.append({'suite':'moss_operator_bounds','stdout':run([op],'moss_operator_bounds.test').strip(),
                     'actual_GGML_constructors':True,'graph_executed':False})
-    files=[root/'native/app'/name for name in ('engine_config.h','moss_runtime_admission.h','placement.h','pool.c','startup.c','cpu_clip_pool_buffer.hpp')]
-    files += [root/'tests'/name for name in ('moss_engine_config.cpp','moss_cpu_text_pool.cpp','moss_direct_pool.c','moss_operator_bounds.cpp','moss_engine_checks.py')]
+    files=[root/'native/app'/name for name in ('engine_config.h','moss_runtime_admission.h','placement.h','pool.c','startup.c','cpu_clip_pool_buffer.hpp','phase_profile.h')]
+    files += [root/'config'/name for name in ('native.json.example','moss-native.json.example')]
+    files += [root/'tests'/name for name in ('moss_engine_config.cpp','moss_cpu_text_pool.cpp','moss_direct_pool.c','moss_operator_bounds.cpp','moss_engine_checks.py','moss_ui_metadata.c')]
+    files += [root/'native'/directory/'status.h' for directory in ('app','gateway','ui')]
     files += [root/'patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp']
     receipt={'success':True,'PS5_contacted':False,'model_inference_executed':False,'native_GPU_calls':0,
              'runtime_admission_enabled':False,'requested_pool_bytes':12884901888,'region_bytes':1073741824,

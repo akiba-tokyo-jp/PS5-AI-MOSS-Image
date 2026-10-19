@@ -1,8 +1,8 @@
 {
   "schema": "ps5-ai-moss-image-model-lock-v1",
-  "state": "HOST_ONLY_DOWNLOAD_PLAN_PS5_UNVERIFIED",
+  "state": "HOST_LOCKED_COMPONENTS_AND_SELECTED_LORA_VERIFIED_PS5_UNVERIFIED",
   "selected_variant": "MOSS-Image-SFT",
-  "selection_basis": "User-selected adapter on author-recommended MOSS-Image-SFT base; original Base is training parent",
+  "selection_basis": "User-selected MOSS-Image-SFT plus the fixed axiomofmind rank16 adapter; SFT is the adapter author preferred inference parent",
   "upstream": {
     "code": {
       "repository": "OpenMOSS/MOSS-Image",
@@ -27,10 +27,10 @@
       "url": "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/238daf423f0de65316207453591f275407aac9a7/MOSS-Image-SFT-Q4_K.gguf",
       "expected_bytes": 3327400800,
       "expected_sha256": "902dbb0364d8b313cd91792b3cfe7c87b987386f0c5414986f3f1027b82b2225",
-      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "sha256_source": "Immutable HF LFS identity plus complete local download and SHA256 readback verified2026-10-19; verify again on each destination",
       "license": "Apache-2.0",
-      "downloaded": false,
-      "local_weight_verified": false
+      "downloaded": true,
+      "local_weight_verified": true
     },
     {
       "role": "text_encoder",
@@ -41,10 +41,10 @@
       "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
       "expected_bytes": 5680522464,
       "expected_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
-      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "sha256_source": "Immutable HF LFS identity plus complete local download and SHA256 readback verified2026-10-19; verify again on each destination",
       "license": "Apache-2.0",
-      "downloaded": false,
-      "local_weight_verified": false
+      "downloaded": true,
+      "local_weight_verified": true
     },
     {
       "role": "vae",
@@ -55,10 +55,10 @@
       "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/3284a1dbb351e3396d70f39f2a71cbf6ed2ef1bb/vae/flux2-vae_small.safetensors",
       "expected_bytes": 249521340,
       "expected_sha256": "d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b",
-      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "sha256_source": "Immutable HF LFS identity plus complete local download and SHA256 readback verified2026-10-19; verify again on each destination",
       "license": "Apache-2.0",
-      "downloaded": false,
-      "local_weight_verified": false
+      "downloaded": true,
+      "local_weight_verified": true
     },
     {
       "role": "tokenizer",
@@ -69,10 +69,10 @@
       "url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/5a52857ead25c0d69082820131daf24e124ad622/tokenizer/tokenizer.json",
       "expected_bytes": 19989325,
       "expected_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
-      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "sha256_source": "Immutable HF LFS identity plus complete local download and SHA256 readback verified2026-10-19; verify again on each destination",
       "license": "Apache-2.0",
-      "downloaded": false,
-      "local_weight_verified": false
+      "downloaded": true,
+      "local_weight_verified": true
     }
   ],
   "alternatives": [
@@ -177,7 +177,9 @@
     "prompt_enhancement": false,
     "text_encoder_backend": "CPU candidate, hybrid GDN numerical oracle required",
     "diffusion_backend": "Vulkan candidate, PS5 execution unverified",
-    "vae_backend": "Vulkan candidate; evaluate F32 and tiling independently"
+    "vae_backend": "Vulkan candidate; evaluate F32 and tiling independently",
+    "moss_lora_strength": 0.7,
+    "lora_apply_mode": "at_runtime"
   },
   "required_components_not_selected": [
     "No SDXL CLIP/VAE/TAESD, SDXL LoRA, ControlNet or IP-Adapter component reused",
@@ -221,12 +223,16 @@
   },
   "verification": {
     "PS5_operations": 0,
-    "full_weight_downloads": 0,
+    "full_weight_downloads": 5,
     "inference_runs": 0,
-    "weight_hashes_locally_verified": false,
-    "public_metadata_only": true,
+    "weight_hashes_locally_verified": true,
+    "public_metadata_only": false,
     "bounded_GGUF_header_prefix_inspected": true,
-    "source_lock_sha256": "03908d1eae0e74d7d0dc048ae922b651fc807132ff0093184346d35696f56ba1"
+    "source_lock_sha256": "03908d1eae0e74d7d0dc048ae922b651fc807132ff0093184346d35696f56ba1",
+    "requested_adapter_full_local_hash_verified": true,
+    "requested_adapter_exact_conversion_verified": true,
+    "derived_adapters_verified": 1,
+    "host_only": true
   },
   "compatibility": {
     "source_supported": true,
@@ -265,10 +271,10 @@
     "url": "https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/resolve/e0a4cd44a906a4296dca7fa200c76058d1938082/pytorch_lora_weights.safetensors",
     "expected_bytes": 74377208,
     "expected_sha256": "d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa",
-    "sha256_source": "HF LFS metadata; full local bytes not downloaded or verified",
+    "sha256_source": "Immutable HF LFS identity and complete locked local download verified2026-10-19",
     "license": "Apache-2.0",
-    "downloaded": false,
-    "local_weight_verified": false,
+    "downloaded": true,
+    "local_weight_verified": true,
     "base_for_this_project": "MOSS-Image-SFT",
     "training_base": "MOSS-Image-Base",
     "author_recommends_SFT": true,
@@ -290,14 +296,57 @@
       "height": 1024
     },
     "requested_by_user": true,
-    "runtime_integrated": false,
+    "runtime_integrated": true,
     "PS5_admitted": false,
     "quantized_base_apply_strategy_candidate": "at_runtime; avoid full checkpoint dequantization",
     "blocking_work": [
-      "MOSS separate q/k/v LoRA names must correctly target fused qkv projections; fail closed unless all504 tensors match",
-      "BF16 LoRA storage needs a verified supported computation or explicit exact F32 conversion",
-      "API/native configuration must explicitly pass the chosen MOSS adapter; SDXL manga fields must not be reused",
-      "PS5 Direct capacity and real inference peak/readback remain unverified"
-    ]
-  }
+      "Fresh full core and native crossbuild of current source; runtime guard remains0",
+      "PS5 Direct capacity plus actual full selected LoRA GPU application/finite readback/PNG remain unverified"
+    ],
+    "PS5_execution_verified": false,
+    "host_integration_only": true
+  },
+  "requested_adapters": [
+    {
+      "role": "lora",
+      "repository": "axiomofmind/Moss-image-nsfw-uncensored-lora",
+      "revision": "e0a4cd44a906a4296dca7fa200c76058d1938082",
+      "remote_path": "pytorch_lora_weights.safetensors",
+      "relative_install_path": "loras/moss-image-nsfw-uncensored-r16-bf16.safetensors",
+      "url": "https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/resolve/e0a4cd44a906a4296dca7fa200c76058d1938082/pytorch_lora_weights.safetensors",
+      "expected_bytes": 74377208,
+      "expected_sha256": "d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa",
+      "license": "Apache-2.0",
+      "sha256_source": "HF LFS identity and full local locked download verified2026-10-19; verify again on each destination",
+      "source_dtype": "BF16",
+      "rank": 16,
+      "alpha": 16,
+      "target_tensor_count": 504,
+      "downloaded": true,
+      "local_weight_verified": true
+    }
+  ],
+  "derived_adapters": [
+    {
+      "role": "required_runtime_lora",
+      "source_repository": "axiomofmind/Moss-image-nsfw-uncensored-lora",
+      "source_revision": "e0a4cd44a906a4296dca7fa200c76058d1938082",
+      "source_sha256": "d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa",
+      "relative_install_path": "derived/moss-image-nsfw-uncensored-r16-f32.safetensors",
+      "stage_basename": "moss-image-nsfw-uncensored-r16-f32.safetensors",
+      "runtime_path": "/app0/models/moss-image-nsfw-uncensored-r16-f32.safetensors",
+      "expected_bytes": 148704512,
+      "expected_sha256": "907c1e0220c8aa301595b4a369f7b09447001306ffebb53da1fc58f24542cdf9",
+      "source_dtype": "BF16",
+      "target_dtype": "F32",
+      "rank": 16,
+      "alpha": 16,
+      "target_tensor_count": 504,
+      "all_tensor_values_exact_reread": true,
+      "base_checkpoint_merged": false,
+      "converter": "tools/models/convert_moss_lora_bf16_f32.py",
+      "license": "Apache-2.0",
+      "PS5_execution_verified": false
+    }
+  ]
 }

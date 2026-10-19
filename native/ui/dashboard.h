@@ -133,7 +133,7 @@ static int ps5_ai_dashboard_draw(unsigned char *frame,const struct ps5_ai_status
     unsigned log_count=0;for(size_t i=0;i<n;i++)if(!wai_technical_row(rows[i]))log_count++;
     if(log_count){wai_card(&c,64,692,1792,302);wai_text(&c,100,715,1720,1,WAI_FG,WAI_CARD,"Activity");unsigned line=0;
         for(size_t i=0;i<n&&line<4;i++)if(!wai_technical_row(rows[i])){int y=773+(int)line*44;wai_round(&c,100,y+10,6,6,3,WAI_LILAC);wai_text(&c,124,y,1686,0,WAI_MUTED,WAI_CARD,rows[i]);line++;}}
-    const char *footer=preview?"DESIGN PREVIEW / SAMPLE TELEMETRY / NOT A PS5 SCREENSHOT":"PS5 native Anima image generation";
+    const char *footer=preview?"DESIGN PREVIEW / SAMPLE TELEMETRY / NOT A PS5 SCREENSHOT":"PS5 native MOSS Image generation";
     wai_text(&c,64,1025,1320,0,preview?WAI_AMBER:WAI_MUTED,WAI_BG,footer);
     snprintf(text,sizeof(text),"Display frame  %llu",(unsigned long long)s->sequence);
     wai_text(&c,1490,1025,366,0,WAI_MUTED,WAI_BG,text);return 1;

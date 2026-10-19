@@ -21,6 +21,8 @@
     "auto_fit": true,
     "tae_preview_only": false,
     "log": "/app0/ai-runtime/logs/engine.jsonl",
-    "tokenizer": "/app0/models/tokenizer_qwen3.5.json"
+    "tokenizer": "/app0/models/tokenizer_qwen3.5.json",
+    "moss_lora_path": "/app0/models/moss-image-nsfw-uncensored-r16-f32.safetensors",
+    "moss_lora_strength": 0.7
   }
 }

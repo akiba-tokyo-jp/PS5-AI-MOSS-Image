@@ -29,8 +29,13 @@ def load_lock(path=LOCK):
     files = data.get("files", [])
     if len(files) != 4 or {f.get("role") for f in files} != {"diffusion", "text_encoder", "vae", "tokenizer"}:
         raise ValueError("Expected exactly the four selected model components")
+    adapters = data.get("requested_adapters", [])
+    if (len(adapters) != 1 or adapters[0].get("role") != "lora" or
+            adapters[0].get("repository") != "axiomofmind/Moss-image-nsfw-uncensored-lora" or
+            adapters[0].get("target_tensor_count") != 504):
+        raise ValueError("Expected the user-selected complete MOSS rank16 adapter")
     seen = set()
-    for entry in files:
+    for entry in [*files, *adapters]:
         repo = entry["repository"]
         revision = entry["revision"]
         remote = entry["remote_path"]
@@ -166,9 +171,12 @@ def main():
     action.add_argument("--verify", action="store_true", help="Local hash/size checks only; no network or writes")
     action.add_argument("--download", action="store_true", help="Explicitly download missing locked files; no inference")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--base-only", action="store_true", help="Explicitly omit the required requested adapter; not a complete runnable selected configuration")
     args = parser.parse_args()
     try:
         data = load_lock()
+        if not args.base_only:
+            data = dict(data, files=[*data["files"], *data["requested_adapters"]])
         rows = operate(args.output, data, download=args.download)
     except Exception as error:
         # Transport exceptions can contain temporary signed redirect URLs. Avoid

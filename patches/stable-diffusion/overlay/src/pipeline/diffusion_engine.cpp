@@ -1960,6 +1960,9 @@ bool StableDiffusionGGML::apply_loras(const sd_lora_t* loras, uint32_t lora_coun
         lora_spec.path          = lora_id;
         lora_spec.multiplier    = loras[i].multiplier;
         lora_spec.is_high_noise = loras[i].is_high_noise;
+        // The selected native MOSS configuration must never silently omit its
+        // required adapter when a file/type/shape cannot be loaded.
+        lora_spec.required = version == VERSION_MOSS_IMAGE;
         all_loras.push_back(std::move(lora_spec));
         if (loras[i].is_high_noise) {
             lora_id = "|high_noise|" + lora_id;

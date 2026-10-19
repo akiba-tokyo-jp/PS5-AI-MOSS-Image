@@ -6,6 +6,7 @@ See docs/build.md for the explicit dependency-build limitation.
 """
 import argparse, hashlib, json, os, re, shutil, struct, subprocess
 from pathlib import Path
+from build_input_snapshot import collect as collect_inputs, require_unchanged
 
 ROOT=Path(__file__).resolve().parents[1]
 def digest(path):
@@ -107,7 +108,9 @@ def main():
         path=Path(expand(header['path']))
         if not path.is_file() or digest(path)!=header['sha256']:
             raise RuntimeError('Missing/replaced reviewed compiler header: '+header['path'])
+    frozen_inputs=collect_inputs(ROOT,a.config,c,profile,expand)
     out.mkdir(parents=True,exist_ok=True);(out/'obj').mkdir(exist_ok=True)
+    (out/'inputs-before.private.json').write_text(json.dumps(frozen_inputs,indent=2)+'\n',encoding='utf-8')
     (out/'temp').mkdir(exist_ok=True)
     env=dict(os.environ);env['PATH']=str(c['HOST_BIN'])+os.pathsep+str(c['LLVM'])+os.pathsep+env.get('PATH','')
     env['TMP']=env['TEMP']=str(out/'temp')
@@ -199,15 +202,19 @@ def main():
         shutil.copyfile(ROOT/'licenses/WAI-Dashboard-Glyphs-OFL.txt',title/'licenses/WAI-Dashboard-Glyphs-OFL.txt')
         for notice in (ROOT/'licenses').glob('MOSS-models-*.txt'):
             shutil.copyfile(notice,title/'licenses'/notice.name)
+        shutil.copyfile(ROOT/'licenses/MOSS-requested-LoRA-Apache-2.0.txt',title/'licenses/MOSS-requested-LoRA-Apache-2.0.txt')
         run(['${NATIVE_TOOL}','self','--sign','--in',str(native),'--out',str(title/'eboot.bin'),'--magic','0x1D3D154F'])
         inspection=run(['${NATIVE_TOOL}','self','--inspect','--file',str(title/'eboot.bin')]);(out/'inspect.txt').write_text(inspection)
         if 'integrity: valid' not in inspection:raise RuntimeError('SELF integrity not confirmed')
+        current_inputs=collect_inputs(ROOT,a.config,c,profile,expand)
+        require_unchanged(frozen_inputs,current_inputs)
         sources={str(s.relative_to(ROOT)):digest(s) for folder in ['native/app','native/ui','native/runtime','native/link',
                  'patches/stable-diffusion/overlay'] for s in (ROOT/folder).rglob('*') if s.is_file()}
         for name in ['build-profiles/native.json','tools/build.py']:sources[name]=digest(ROOT/name)
         (out/'manifest.json').write_text(json.dumps({'local_build_only':True,'console_executed':False,
             'model_family':'moss-image-sft','requested_direct_bytes':12884901888,
             'runtime_admitted':False,'requested_precision':a.precision,'controlnet_batch_pair':batch_pair,
+            'input_hashes_stable':True,'inputs_before_after':frozen_inputs,
             'full_core_manifest_sha256':digest(a.core_manifest),'full_core_manifest':core_manifest,
             'runner_sha256':digest(ROOT/'patches/stable-diffusion/overlay/src/core/ggml_runner.cpp'),
             'scratch_bounds_sha256':digest(ROOT/'patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp'),

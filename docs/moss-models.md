@@ -5,8 +5,9 @@ proposed 12 GiB Direct reservation are **not yet verified**.
 
 The requested configuration is **MOSS-Image-SFT plus the user-selected LoRA**.
 See [adapter selection and memory assessment](moss-requested-lora.md). The LoRA
-is an addition, not a replacement checkpoint, and is not yet connected to the
-native runtime. The base candidate is **MOSS-Image-SFT**, the curated-data fine-tune of Base.
+is an addition, not a replacement checkpoint. It is now connected in the native
+source and fresh cross-build through an exact F32 runtime adapter; PS5 application
+is still unverified. The base candidate is **MOSS-Image-SFT**, the curated-data fine-tune of Base.
 This is the project's default for ordinary generation; upstream does not state
 that SFT is better for every task. Base remains an optional comparison/fine-tuning
 starting point. Both use a 5B DiT, Qwen3.5-9B text encoder, and FLUX.2 VAE.
@@ -15,9 +16,11 @@ starting point. Both use a 5B DiT, Qwen3.5-9B text encoder, and FLUX.2 VAE.
 ## Locked files
 
 [config/models.lock.json](../config/models.lock.json) fixes full repository
-revisions, exact sizes, and expected SHA256 values. These expected checksums come
-from upstream Git-LFS metadata; full model bytes have not been downloaded or
-verified by this project yet.
+revisions, exact sizes, and SHA256 values. All four selected base files and the
+raw selected LoRA have now been downloaded to D, with complete final-file SHA256
+readback matching the immutable upstream identities. The exact F32 LoRA derivative
+is also fully verified. None of these host file checks is a PS5 load or memory-fit
+measurement.
 
 | Component | Selected file | Bytes |
 | --- | --- | ---: |
@@ -37,7 +40,9 @@ tokenizer has different bytes, and SD.cpp explicitly requires an external file.
 
 The downloader uses Python 3.11 or later and only its standard library. Its
 default location is `D:\PS5-AI\models\moss-image-sft-v1`; model weights and the
-large tokenizer stay outside the repository. Neither command performs inference
+large tokenizer stay outside the repository. The default selection includes the
+raw required LoRA; `--base-only` deliberately omits it and is incomplete for the
+selected runtime. Neither command performs inference
 or contacts the PS5.
 
 ```powershell
@@ -52,6 +57,11 @@ only after the complete size and digest match. A verified same-volume hardlink
 is used for atomic publication without replacing a racing writer; NTFS supports
 this. Unsupported filesystems fail with the partial preserved.
 
+The BF16 source is converted separately with the fixed
+[exact converter](../tools/models/convert_moss_lora_bf16_f32.py); only its canonical
+F32 derivative is staged. The runtime files (base4 plus derivative) total
+9,426,138,441 bytes, about 8.779 GiB. The raw adapter remains a source artifact on D.
+
 A mismatched existing file, interrupted `.part`, or another tool's lock is
 preserved. Inspect it before explicitly moving/removing it and running the tool
 again. There is no automatic resume, network retry, model substitution, remote
@@ -59,17 +69,16 @@ code execution, API token use, or PS5 deployment. Never commit the models.
 
 ## 12 GiB is a target, not a measured fit
 
-The four complete files total **8.640 GiB** on disk. Against a proposed 12 GiB
-pool, the arithmetic difference is **3.360 GiB**. The former 9,422 MiB pool left
-only **0.561 GiB** by the same arithmetic. File size is not runtime memory: the
+The four base files total **8.640 GiB** on disk. Adding the canonical F32 LoRA
+raises runtime file storage to about 8.779 GiB; this does not measure resident
+memory or establish available VRAM. The
 GGUF includes an output head that feature extraction may not need, while tensor
 conversion, graph scratch, activations, tokenizer objects, copies, alignment and
 drivers add memory. CPU and GPU also share physical console memory with the OS.
 
-For planning sensitivity only, adding 0.5–2 GiB of live scratch/copies to the file
-total gives 9.14–10.64 GiB before other overhead. That range is not a prediction
-or a PS5 measurement. Component lifetimes, bounded CPU encoding and actual peaks
-must be measured; a larger pool alone does not establish stability.
+Component lifetimes, bounded CPU encoding, LoRA intermediates and actual peaks
+must be measured. A larger pool or a disk-size subtraction does not establish
+stability or available GPU memory.
 
 ### Confirmed single-allocation blocker
 

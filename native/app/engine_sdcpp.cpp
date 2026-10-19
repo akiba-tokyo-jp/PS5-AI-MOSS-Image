@@ -17,6 +17,8 @@
 #include "json.hpp"
 #include "engine_config.h"
 #include "moss_runtime_admission.h"
+#include "moss_lora_contract.hpp"
+#include "moss_lora_receipt.h"
 #include "v3_shutdown.h"
 #include "pool.h"
 #include "cpu_clip_pool_buffer.hpp"
@@ -66,6 +68,25 @@ static bool partial_taesd_gpu_decode = false;
 static std::atomic<bool> parameter_loading{false};
 static std::atomic<uint64_t> cpu_clip_pool_live_bytes{0};
 static std::atomic<uint64_t> cpu_clip_pool_peak_bytes{0};
+static std::atomic<unsigned> moss_lora_loaded{0}, moss_lora_matched{0}, moss_lora_used{0}, moss_lora_skipped{0};
+static std::atomic<uint32_t> moss_lora_scale_bits{0};
+static std::atomic<bool> moss_lora_configured{false}, moss_lora_verified{false}, moss_lora_invalid{false};
+extern "C" void ps5_ai_moss_lora_contract_record(unsigned loaded, unsigned matched, unsigned used, unsigned skipped, float strength) {
+    if (loaded != 504 || matched != 504 || used > 504 || skipped || !std::isfinite(strength) ||
+        strength != static_cast<float>(engine_config.moss_lora_strength)) moss_lora_invalid = true;
+    moss_lora_loaded = loaded; moss_lora_matched = matched; moss_lora_used = used; moss_lora_skipped = skipped;
+    if (!std::isfinite(strength)) strength = 0.f;
+    uint32_t bits; std::memcpy(&bits, &strength, sizeof(bits)); moss_lora_scale_bits = bits;
+}
+extern "C" int ps5_ai_moss_lora_snapshot(struct ps5_ai_moss_lora_receipt *out) {
+    if (!out) return -1;
+    *out = {};
+    out->loaded = moss_lora_loaded.load(); out->matched = moss_lora_matched.load();
+    out->used = moss_lora_used.load(); out->skipped = moss_lora_skipped.load();
+    uint32_t bits = moss_lora_scale_bits.load(); std::memcpy(&out->strength, &bits, sizeof(bits));
+    out->configured = moss_lora_configured.load(); out->application_verified = moss_lora_verified.load();
+    return 0;
+}
 extern "C" uint64_t ps5_ai_cpu_clip_shared_direct_live_bytes(void) {
     return cpu_clip_pool_live_bytes.load();
 }
@@ -130,7 +151,7 @@ static nlohmann::json bounded_config(const char* path) {
     ps5_ai_native_config_mark(11,"JSON_parse_before");
     auto config = nlohmann::json::parse(bytes);
     ps5_ai_native_config_mark(12,"JSON_parse_returned");
-    if (!config.is_object()) throw std::runtime_error("Native Direct MOSS-Image config must be a JSON object");
+    (void)PS5AIEngineConfig::engine_object(config);
     return config;
 }
 
@@ -155,7 +176,7 @@ extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan*
         if(!ps5_ai_native_journal_configure_debug(ps5_ai_log_policy_debug(config)))
             throw std::runtime_error("Native journal policy must be fixed once before AGC initialization");
         ps5_ai_native_config_mark(13,"memory_plan_fields_before");
-        const auto plan = PS5AIEngineConfig::memory_plan(config.value("engine", nlohmann::json::object()));
+        const auto plan = PS5AIEngineConfig::memory_plan(PS5AIEngineConfig::engine_object(config));
         *out = plan;
         ps5_ai_native_config_mark(14,"memory_plan_fields_returned");
         return 0;
@@ -557,7 +578,11 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
             throw std::runtime_error("Engine config path is missing");
         }
         const auto config = bounded_config(config_path);
-        engine_config = PS5AIEngineConfig::parse(config.value("engine", nlohmann::json::object()));
+        engine_config = PS5AIEngineConfig::parse(PS5AIEngineConfig::engine_object(config));
+        const float configured_scale = static_cast<float>(engine_config.moss_lora_strength);
+        uint32_t configured_scale_bits; std::memcpy(&configured_scale_bits, &configured_scale, sizeof(configured_scale_bits));
+        moss_lora_scale_bits = configured_scale_bits;
+        moss_lora_configured = true;
         log_path = engine_config.log;
         std::snprintf(current_status.model, sizeof(current_status.model), "%s", engine_config.model.c_str());
         sd_set_log_callback(engine_log, nullptr);
@@ -607,7 +632,8 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
                      {"vae_tile_image_pixels", engine_config.vae_tile_size},
                      {"vae_tile_overlap", engine_config.vae_tile_overlap},
                      {"eager_load", engine_config.eager_load},
-                      {"configured_LoRA_inputs", 0}, {"mode", "text2img"},
+                      {"configured_LoRA_inputs", 1}, {"moss_lora_path", engine_config.moss_lora_path},
+                      {"moss_lora_strength", engine_config.moss_lora_strength}, {"lora_apply_mode", "at_runtime"}, {"mode", "text2img"},
                       {"model_mmap_policy", "disabled; explicit file I/O; no whole-file prefault"},
                      {"flash_attn_mode", engine_config.flash_attn_mode}, {"batched_cfg", engine_config.batched_cfg},
                      {"conditioning_cache_size", engine_config.conditioning_cache_size},
@@ -792,6 +818,8 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     } cleanup = {&images, &image_count};
     const auto start = std::chrono::steady_clock::now();
     int result = -1;
+    moss_lora_loaded = 0; moss_lora_matched = 0; moss_lora_used = 0; moss_lora_skipped = 0;
+    moss_lora_verified = false; moss_lora_invalid = false;
     try {
         if (!std::isfinite(request->manga_strength) || request->manga_strength != 0 || request->manga_monochrome)
             throw std::runtime_error("MOSS-Image-SFT text2img does not support the WAI-specific manga LoRA or monochrome option");
@@ -852,6 +880,16 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         // The real upstream MOSS branch applies zero-based layer22 skipping
         // only to the negative CFG evaluation; positive conditioning is intact.
         engine_config.apply_image(params);
+        sd_lora_t selected_lora = {};
+        selected_lora.path = engine_config.moss_lora_path.c_str();
+        selected_lora.multiplier = static_cast<float>(engine_config.moss_lora_strength);
+        selected_lora.is_high_noise = false;
+        params.loras = &selected_lora;
+        params.lora_count = 1;
+        write_event({{"event", "moss_selected_lora_request"}, {"path", engine_config.moss_lora_path},
+                     {"strength", engine_config.moss_lora_strength}, {"required_tensors", 504},
+                     {"rank", 16}, {"alpha", 16}, {"source_storage", "F32 exact from BF16"},
+                     {"qkv_layout", "independent A/B pairs in ordered q,k,v output slices"}, {"base_merge", false}});
         sd_set_backend_eval_callback(observe_graph, &observation);
         sd_set_progress_callback(observe_progress, &observation);
         if (progress) {
@@ -861,6 +899,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if (!generate_image(model_context, &params, &images, &image_count) || image_count != 1 || !images || !images[0].data) {
             throw std::runtime_error("MOSS-Image image generation failed; see engine.jsonl");
         }
+        ps5_ai_moss_lora::validate_counts(moss_lora_loaded.load(), moss_lora_matched.load(),
+            moss_lora_used.load(), moss_lora_skipped.load(), true);
+        if (moss_lora_invalid.load())
+            throw std::runtime_error("Image rejected: selected MOSS LoRA application/strength receipt is invalid");
         stats->gpu_used = observation.gpu_dit_math_nodes > 0 ? 1 : 0;
         if (!stats->gpu_used || (engine_config.requires_dit_flash_attention() && !observation.gpu_flash_attention_nodes)) {
             throw std::runtime_error("Image rejected: required completed native DiT/flash-attention witness is missing");
@@ -890,6 +932,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             current_status.reason[0] = '\0';
         }
         result = 0;
+        moss_lora_verified = true;
     } catch (const std::exception& exception) {
         set_error(error, error_size, exception.what());
         {
@@ -916,6 +959,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
     write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", "text2img"},
+                 {"moss_lora_path", engine_config.moss_lora_path}, {"moss_lora_strength", engine_config.moss_lora_strength},
+                 {"moss_lora_loaded_tensors", moss_lora_loaded.load()}, {"moss_lora_matched_tensors", moss_lora_matched.load()},
+                 {"moss_lora_used_tensors", moss_lora_used.load()}, {"moss_lora_skipped_tensors", moss_lora_skipped.load()},
+                 {"moss_lora_application_verified", moss_lora_verified.load()},
                  {"flow_shift",request->flow_shift},{"scheduler","discrete"},{"negative_cfg_skip_layers",{22}},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
                  {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},
