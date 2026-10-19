@@ -11,7 +11,7 @@
 *.map text eol=lf
 *.ld text eol=lf
 *.md text eol=lf
-*.ps1 text eol=crlf
+*.ps1 text eol=lf
 *.png binary
 *.mp4 binary
 *.patch text eol=lf whitespace=-blank-at-eol
@@ -19,3 +19,43 @@
 # Preserve pinned upstream Vulkan header bytes, including their final blank line.
 patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-common.h whitespace=-blank-at-eof
 patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-push-constants.h whitespace=-blank-at-eof
+
+# Preserve exact historical source bytes inherited from PS5 AI WAI.
+docs/dashboard-verification.json -text
+docs/precision-build-verification.json -text
+docs/precision-verification.json -text
+docs/verification.json -text
+licenses/MIT.txt -text
+licenses/PS5LM-LICENSE.txt -text
+licenses/PS5_Vulkan-NOTICE.md -text
+licenses/ggml-MIT.txt -text
+licenses/stable-diffusion-MIT.txt -text
+native/app/bootstrap.inc -text
+native/app/driver_journal_impl.inc -text
+native/app/kick_impl32.c -text
+native/app/native_constructor_expect.h -text
+native/app/perbo_owner_impl.c -text
+native/app/precision_mode.h -text
+native/app/storage_probe.inc -text
+native/app/vulkan_bridge.cpp -text
+native/link/platform-local.map -text
+native/payload_crt/credential_preserving_patch.c -text
+native/ui/dashboard_font.h -text
+native/ui/font-provenance.json -text
+native/ui/font.h -text
+patches/mesa/overlay/src/amd/vulkan/radv_device.c -text
+patches/mesa/overlay/src/amd/vulkan/radv_device_memory.c -text
+patches/mesa/overlay/src/amd/vulkan/radv_physical_device.c -text
+patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c -text
+patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp -text
+patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-types.h -text
+scripts/Invoke-WaiOpenAI.ps1 -text
+tests/backend_health.c -text
+tests/dashboard_preview.c -text
+tests/native_scratch.cpp -text
+
+# Preserve the metadata bytes used by the Anima package manifest.
+assets/sce_sys/param.json -text
+
+# Preserve inherited PowerShell CRLF checkouts with normalized Git blobs.
+scripts/Invoke-WaiReference.ps1 text eol=crlf

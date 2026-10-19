@@ -18,7 +18,7 @@ typedef struct ps5_ai_request {
     double cfg_scale;
     int64_t seed;
     char sampler[32];
-    double manga_strength; /* Default 1, native/OpenAI extension 0..1.5. */
+    double manga_strength; /* Anima: fixed 0; the inherited SDXL LoRA is unsupported. */
     int manga_monochrome; /* Default false; opt in to automatic prompt prefix. */
     char init_image_id[33], reference_image_id[33];
     double denoise_strength, ip_adapter_strength;

@@ -10,12 +10,14 @@
 #include <cstdint>
 
 struct PS5AIEngineConfig {
-    std::string model, vae, taesd, backend, params_backend, max_vram;
+    // Anima is a split DiT + Qwen text encoder + Qwen-Image VAE model.
+    // The DiT must never be passed as an SDXL combined checkpoint.
+    std::string model, llm, vae, taesd, backend, params_backend, max_vram;
     std::string manga_lora_path;
     std::string clip_vision_path, ip_adapter_path, reference_params_backend;
     std::string controlnet_canny_path, controlnet_openpose_path;
     std::string flash_attn_mode = "auto,unet=on";
-    bool batched_cfg = true;
+    bool batched_cfg = false;
     int conditioning_cache_size = 2;
     std::string log = "/app0/ai-runtime/logs/engine.jsonl";
     int cpu_threads = 3;
@@ -52,7 +54,7 @@ struct PS5AIEngineConfig {
             result.working_reserve_bytes < PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES ||
             result.working_reserve_bytes % PS5_AI_MEMORY_PLAN_PAGE_BYTES ||
             result.gpu_pool_bytes > UINT64_MAX - result.working_reserve_bytes)
-            throw std::runtime_error("Native Direct WAI memory bytes must fit pool address/page arithmetic; reserve is aligned and at least64MiB outside the pool");
+            throw std::runtime_error("Native Direct Anima memory bytes must fit pool address/page arithmetic; reserve is aligned and at least64MiB outside the pool");
         return result;
     }
 
@@ -80,32 +82,27 @@ struct PS5AIEngineConfig {
         const auto plan = memory_plan(object);
         result.gpu_pool_bytes = plan.gpu_pool_bytes;
         result.working_reserve_bytes = plan.working_reserve_bytes;
-        result.model = object.value("model", "");
+        result.model = object.value("model", "/app0/models/anima-turbo-v1.1-f16.safetensors");
+        result.llm = object.value("llm", "/app0/models/qwen_3_06b_base.safetensors");
         result.manga_lora_path = object.value("manga_lora_path", "");
-        if (result.manga_lora_path != "/app0/models/manga-illustrious-wai-v17-r48-f32.safetensors")
-            throw std::runtime_error("This manga build requires its verified WAI v17-specific converted LoRA");
         result.clip_vision_path=object.value("clip_vision_path", "");
         result.ip_adapter_path=object.value("ip_adapter_path", "");
-        if(result.clip_vision_path.empty()!=result.ip_adapter_path.empty() ||
-           (!result.clip_vision_path.empty() &&
-            (result.clip_vision_path!="/app0/models/clip-vision-vit-h-f16.safetensors" ||
-             result.ip_adapter_path!="/app0/models/ip-adapter-plus_sdxl_vit-h.safetensors")))
-            throw std::runtime_error("Reference mode requires the verified ViT-H encoder and SDXL Plus adapter pair");
-        result.vae = object.value("vae", "");
+        result.vae = object.value("vae", "/app0/models/qwen_image_vae-f16.safetensors");
         result.taesd = object.value("taesd_path", "");
         result.backend = object.value("backend", "");
         result.params_backend = object.value("params_backend", "");
         result.controlnet_canny_path=object.value("controlnet_canny_path", "");
         result.controlnet_openpose_path=object.value("controlnet_openpose_path", "");
-        if(result.controlnet_canny_path!="/app0/models/controlnet-illustrious-canny-f16.safetensors" ||
-           result.controlnet_openpose_path!="/app0/models/controlnet-xinsir-openpose-sdxl-f16.safetensors")
-            throw std::runtime_error("ControlNet build requires its verified Canny/OpenPose model pair");
+        if (!result.manga_lora_path.empty() || !result.clip_vision_path.empty() ||
+            !result.ip_adapter_path.empty() || !result.controlnet_canny_path.empty() ||
+            !result.controlnet_openpose_path.empty() || !result.taesd.empty())
+            throw std::runtime_error("Anima text2img does not accept WAI/SDXL LoRA, IP-Adapter, ControlNet or four-channel TAESD weights");
         result.max_vram = object.value("max_vram_gib", "");
         result.flash_attn_mode = object.value("flash_attn_mode", result.flash_attn_mode);
         result.batched_cfg = object.value("batched_cfg", result.batched_cfg);
         result.conditioning_cache_size = bounded_integer(object, "conditioning_cache_size", result.conditioning_cache_size, 0, 2);
-        if (result.flash_attn_mode != "auto,unet=on,controlnet=on")
-            throw std::runtime_error("ControlNet build requires flash attention: auto,unet=on,controlnet=on");
+        if (result.flash_attn_mode != "auto,unet=on")
+            throw std::runtime_error("Anima DiT requires flash attention: auto,unet=on (SD.cpp diffusion-module selector)");
         result.log = object.value("log", result.log);
         result.cpu_threads = bounded_integer(object, "cpu_threads", result.cpu_threads, 1, 4);
         result.vae_tile_size = bounded_integer(object, "vae_tile_size", result.vae_tile_size, 32, 1024);
@@ -116,9 +113,8 @@ struct PS5AIEngineConfig {
         result.eager_load = object.value("eager_load", result.eager_load);
         result.auto_fit = object.value("auto_fit", result.auto_fit);
         result.tae_preview_only = object.value("tae_preview_only", result.tae_preview_only);
-        if (!model_path_ok(result.model) || (!result.vae.empty() && !model_path_ok(result.vae)) ||
-            (!result.taesd.empty() && !model_path_ok(result.taesd)))
-            throw std::runtime_error("engine model/vae/taesd_path must name files inside /app0/models/");
+        if (!model_path_ok(result.model) || !model_path_ok(result.llm) || !model_path_ok(result.vae))
+            throw std::runtime_error("engine model/llm/vae must name split model files inside /app0/models/");
         if (result.cpu_threads < 1 || result.cpu_threads > 4)
             throw std::runtime_error("engine.cpu_threads must be between 1 and 4");
         if (result.vae_tile_size < 32 || result.vae_tile_size > 1024 || result.vae_tile_size % 8 != 0)
@@ -135,9 +131,10 @@ struct PS5AIEngineConfig {
     }
 
     void resolve_defaults(const std::string& gpu_name) {
-        const std::string expected = "cpu,unet=" + gpu_name + ",vae=" + gpu_name + ",controlnet=" + gpu_name;
+        // SD.cpp names the diffusion backend selector 'unet' for DiT models too.
+        const std::string expected = "cpu,unet=" + gpu_name + ",vae=" + gpu_name;
         if (backend.empty()) backend = expected;
-        if (params_backend.empty()) params_backend = "cpu";
+        if (params_backend.empty()) params_backend = "cpu,unet=" + gpu_name + ",te=disk,vae=" + gpu_name;
         auto local_only = [&](const std::string& assignment, bool parameters) {
             size_t begin = 0;
             while (begin <= assignment.size()) {
@@ -153,26 +150,26 @@ struct PS5AIEngineConfig {
         };
         local_only(backend, false);
         local_only(params_backend, true);
-        reference_params_backend=params_backend+(clip_vision_path.empty()?"":",clip_vision=disk");
+        reference_params_backend=params_backend;
         if (backend != expected || (params_backend != "cpu" && params_backend != "disk" &&
             params_backend != "cpu,unet=disk" && params_backend != "cpu,unet=" + gpu_name &&
             params_backend != "cpu,unet=" + gpu_name + ",te=disk" &&
-            params_backend != "cpu,unet=" + gpu_name + ",te=disk,controlnet=" + gpu_name))
-            throw std::runtime_error("Native Direct WAI requires CPU CLIP, native Vulkan UNet/VAE compute, and local CPU/disk or native UNet parameter storage");
+            params_backend != "cpu,unet=" + gpu_name + ",te=disk,vae=" + gpu_name))
+            throw std::runtime_error("Native Direct Anima requires CPU Qwen text encoding, native Vulkan DiT/VAE compute, and local parameter storage");
     }
 
     void validate_actual_pool(const std::string& gpu_name, uint64_t actual_bytes) const {
         if (actual_bytes != gpu_pool_bytes)
-            throw std::runtime_error("Native Direct WAI configured GPU pool does not match the actual prepared owned pool");
+            throw std::runtime_error("Native Direct Anima configured GPU pool does not match the actual prepared owned pool");
         const std::string prefix = gpu_name + "=";
         if (max_vram.rfind(prefix, 0) != 0 || max_vram.find(',', prefix.size()) != std::string::npos)
-            throw std::runtime_error("Native Direct WAI max_vram_gib must explicitly name only the native Vulkan device");
+            throw std::runtime_error("Native Direct Anima max_vram_gib must explicitly name only the native Vulkan device");
         const std::string number = max_vram.substr(prefix.size());
         size_t consumed = 0;
         const double gib = std::stod(number, &consumed);
         if (number.empty() || consumed != number.size() || !std::isfinite(gib) || gib <= 0.0 ||
             static_cast<long double>(gib) * (UINT64_C(1) << 30) > static_cast<long double>(actual_bytes))
-            throw std::runtime_error("Native Direct WAI max_vram_gib must be positive and no larger than the real owned pool");
+            throw std::runtime_error("Native Direct Anima max_vram_gib must be positive and no larger than the real owned pool");
     }
 
     bool partial_taesd_gpu_decode(const std::string& gpu_name) const {
@@ -180,9 +177,11 @@ struct PS5AIEngineConfig {
     }
 
     void apply_context(sd_ctx_params_t& params) const {
-        params.model_path = model.c_str();
-        params.vae_path = vae.empty() ? nullptr : vae.c_str();
-        params.taesd_path = taesd.empty() ? nullptr : taesd.c_str();
+        params.model_path = nullptr;
+        params.diffusion_model_path = model.c_str();
+        params.llm_path = llm.c_str();
+        params.vae_path = vae.c_str();
+        params.taesd_path = nullptr;
         params.backend = backend.c_str();
         params.params_backend = reference_params_backend.c_str();
         params.clip_vision_path=clip_vision_path.empty()?nullptr:clip_vision_path.c_str();
@@ -190,8 +189,7 @@ struct PS5AIEngineConfig {
         params.max_vram = max_vram.empty() ? nullptr : max_vram.c_str();
         params.n_threads = cpu_threads;
         params.enable_mmap = mmap;
-        // Keep WAI immutable; the selected adapter is applied by the existing
-        // runtime LoRA path. Its GLoRA conversion is specific to this checkpoint.
+        // No WAI-specific adapter is loaded; weights remain immutable.
         params.lora_apply_mode = LORA_APPLY_AT_RUNTIME;
         params.disable_prefetch = disable_prefetch;
         params.eager_load = eager_load;

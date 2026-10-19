@@ -4,7 +4,7 @@
  */
 #include "sha256.h"
 #include "openapi_schema.inc"
-#define OPENAI_MODEL "wai-illustrious-sdxl-v17.0"
+#define OPENAI_MODEL "anima-turbo-v1.1"
 #define IMAGE_URL_TTL 3600
 #define OPENAI_WAIT_MS UINT64_C(1800000)
 
@@ -49,7 +49,7 @@ static size_t base64_block(const unsigned char *in,size_t n,char *out) {
 }
 static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,char *err,size_t cap,char param[64]) {
     object *o=malloc(sizeof(*o));if(!o){snprintf(err,cap,"Unable to parse request");return 0;}
-    memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=8;r->cfg_scale=5;r->seed=-1;strcpy(r->sampler,"euler_a");r->manga_strength=1;r->denoise_strength=0.6;r->ip_adapter_strength=0.7;*url_format=0;param[0]=0;int ok=0;int64_t v;
+    memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=8;r->cfg_scale=1;r->seed=-1;strcpy(r->sampler,"euler");r->manga_strength=0;*url_format=0;param[0]=0;int ok=0;int64_t v;
     r->control_strength=1;
     if(!parse_object(body,o)){snprintf(err,cap,"Malformed, duplicate, nested, or oversized JSON field");goto done;}
     for(size_t i=0;i<o->count;i++){
@@ -57,6 +57,11 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         const char *keys[]={"prompt","negative_prompt","model","n","size","response_format","quality","background","output_format","stream","user","safety_identifier","steps","cfg_scale","seed","sampler","manga_strength","manga_monochrome","init_image_id","reference_image_id","mask_image_id","denoise_strength","ip_adapter_strength","controlnet","control_image_id","control_strength"};
         int known=0;for(size_t k=0;k<sizeof(keys)/sizeof(keys[0]);k++)known|=!strcmp(f->key,keys[k]);
         if(!known){snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
+        if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
+           !strcmp(f->key,"denoise_strength") || !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
+           !strcmp(f->key,"control_image_id") || !strcmp(f->key,"control_strength")){
+            snprintf(err,cap,"Anima Turbo v1.1 currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
+        }
         if(f->type==5 && strcmp(f->key,"prompt")) continue;
         if(!strcmp(f->key,"prompt") || !strcmp(f->key,"negative_prompt")){
             if(f->type!=1 || strlen(f->value)>4096){snprintf(err,cap,"Prompt fields require at most4096 UTF-8 bytes");goto done;}
@@ -74,7 +79,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         }else if(!strcmp(f->key,"response_format")){
             if(f->type!=1 || (strcmp(f->value,"b64_json") && strcmp(f->value,"url"))){snprintf(err,cap,"response_format must be b64_json or url");goto done;}*url_format=!strcmp(f->value,"url");
         }else if(!strcmp(f->key,"quality")){
-            if(f->type!=1 || (strcmp(f->value,"auto") && strcmp(f->value,"standard"))){snprintf(err,cap,"Only quality auto/standard are supported; use steps extension for WAI tuning");goto done;}
+            if(f->type!=1 || (strcmp(f->value,"auto") && strcmp(f->value,"standard"))){snprintf(err,cap,"Only quality auto/standard are supported; use steps extension for Anima tuning");goto done;}
         }else if(!strcmp(f->key,"background")){
             if(f->type!=1 || (strcmp(f->value,"auto") && strcmp(f->value,"opaque"))){snprintf(err,cap,"Transparent output is not supported");goto done;}
         }else if(!strcmp(f->key,"output_format")){
@@ -89,9 +94,9 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         }else if(!strcmp(f->key,"cfg_scale")){
             if(!get_double(f,0,30,&r->cfg_scale)){snprintf(err,cap,"cfg_scale must be finite0..30");goto done;}
         }else if(!strcmp(f->key,"manga_strength")){
-            if(!get_double(f,0,1.5,&r->manga_strength)){snprintf(err,cap,"manga_strength must be finite0..1.5");goto done;}
+            if(!get_double(f,0,0,&r->manga_strength)){snprintf(err,cap,"The SDXL manga LoRA is incompatible with Anima; manga_strength must be 0");goto done;}
         }else if(!strcmp(f->key,"manga_monochrome")){
-            if(f->type!=3 && f->type!=4){snprintf(err,cap,"manga_monochrome must be boolean");goto done;}r->manga_monochrome=f->type==3;
+            if(f->type!=4){snprintf(err,cap,"The SDXL manga LoRA is incompatible with Anima; manga_monochrome must be false");goto done;}
         }else if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id")){
             if(f->type!=1 || !valid_id(f->value)){snprintf(err,cap,"Invalid input image ID");goto done;}
             strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:!strcmp(f->key,"reference_image_id")?r->reference_image_id:r->mask_image_id,f->value);

@@ -1,6 +1,6 @@
 #include "phase_profile.h"
 #if defined(GGML_MAX_NAME) && GGML_MAX_NAME != 160
-#error Native Direct WAI must use the exact linked SD/GGML tensor ABI
+#error Native Direct Anima must use the exact linked SD/GGML tensor ABI
 #endif
 #ifndef GGML_MAX_NAME
 #define GGML_MAX_NAME 160
@@ -63,7 +63,6 @@ static std::string log_path = "/app0/ai-runtime/logs/engine.jsonl";
 static bool hardware_verified = false;
 static bool partial_taesd_gpu_decode = false;
 static std::atomic<bool> parameter_loading{false};
-static std::string loaded_controlnet;
 static std::atomic<uint64_t> cpu_clip_pool_live_bytes{0};
 static std::atomic<uint64_t> cpu_clip_pool_peak_bytes{0};
 extern "C" uint64_t ps5_ai_cpu_clip_shared_direct_live_bytes(void) {
@@ -81,18 +80,18 @@ static void set_error(char* error, size_t size, const char* message) {
 
 static nlohmann::json bounded_config(const char* path) {
     ps5_ai_native_config_mark(2,"config_FD_open_before");
-    if (!path) throw std::runtime_error("Native Direct WAI config path is missing");
+    if (!path) throw std::runtime_error("Native Direct Anima config path is missing");
     const size_t length = strnlen(path, 4097);
-    if (!length || length > 4096) throw std::runtime_error("Native Direct WAI config path is too long");
+    if (!length || length > 4096) throw std::runtime_error("Native Direct Anima config path is too long");
     const int descriptor = open(path, O_RDONLY | O_NOFOLLOW);
-    if (descriptor < 0) throw std::runtime_error("Native Direct WAI config could not be opened read-only");
+    if (descriptor < 0) throw std::runtime_error("Native Direct Anima config could not be opened read-only");
     ps5_ai_native_config_mark(3,"config_FD_open_returned");
     struct Close { int fd; ~Close() { close(fd); } } owned = {descriptor};
     struct stat before = {}, after = {};
     ps5_ai_native_config_mark(4,"config_FD_fstat_before");
     if (fstat(descriptor, &before) || !S_ISREG(before.st_mode) || before.st_size <= 0 ||
         static_cast<uint64_t>(before.st_size) > PS5_AI_MEMORY_PLAN_MAX_CONFIG_BYTES)
-        throw std::runtime_error("Native Direct WAI config must be a regular file of1..65536 bytes");
+        throw std::runtime_error("Native Direct Anima config must be a regular file of1..65536 bytes");
     ps5_ai_ggml_report("NATIVE_CONFIG FD_metadata regular=1 bytes=%llu reported_UID_not_ownership_proof=1",static_cast<unsigned long long>(before.st_size));
     ps5_ai_native_config_mark(5,"config_FD_fstat_returned");
     std::string bytes(static_cast<size_t>(before.st_size), '\0');
@@ -101,7 +100,7 @@ static nlohmann::json bounded_config(const char* path) {
     while (done < bytes.size()) {
         const ssize_t count = read(descriptor, bytes.data() + done, bytes.size() - done);
         if (count < 0 && errno == EINTR) continue;
-        if (count <= 0) throw std::runtime_error("Native Direct WAI config read was incomplete");
+        if (count <= 0) throw std::runtime_error("Native Direct Anima config read was incomplete");
         done += static_cast<size_t>(count);
     }
     ps5_ai_native_config_mark(7,"config_FD_read_complete");
@@ -111,7 +110,7 @@ static nlohmann::json bounded_config(const char* path) {
     if (eof != 0 || fstat(descriptor, &after) || before.st_dev != after.st_dev ||
         before.st_ino != after.st_ino || before.st_size != after.st_size ||
         before.st_mtime != after.st_mtime || before.st_ctime != after.st_ctime)
-        throw std::runtime_error("Native Direct WAI config changed while being read");
+        throw std::runtime_error("Native Direct Anima config changed while being read");
     ps5_ai_native_config_mark(8,"config_FD_stability_complete");
     ps5_ai_native_config_mark(9,"public_localeconv_before_JSON");
     const auto* conventions=std::localeconv();
@@ -130,7 +129,7 @@ static nlohmann::json bounded_config(const char* path) {
     ps5_ai_native_config_mark(11,"JSON_parse_before");
     auto config = nlohmann::json::parse(bytes);
     ps5_ai_native_config_mark(12,"JSON_parse_returned");
-    if (!config.is_object()) throw std::runtime_error("Native Direct WAI config must be a JSON object");
+    if (!config.is_object()) throw std::runtime_error("Native Direct Anima config must be a JSON object");
     return config;
 }
 
@@ -138,7 +137,7 @@ extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan*
                                           char* error, size_t error_size) noexcept {
     if (out) *out = {};
     try {
-        if (!out) throw std::runtime_error("Native Direct WAI memory-plan output is missing");
+        if (!out) throw std::runtime_error("Native Direct Anima memory-plan output is missing");
         const auto config = bounded_config(path);
         if(!ps5_ai_native_journal_configure_debug(ps5_ai_log_policy_debug(config)))
             throw std::runtime_error("Native journal policy must be fixed once before AGC initialization");
@@ -152,7 +151,7 @@ extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan*
         set_error(error, error_size, exception.what());
     } catch (...) {
         ps5_ai_native_config_mark(15,"memory_plan_unknown_exception_caught");
-        set_error(error, error_size, "Native Direct WAI memory-plan config failed");
+        set_error(error, error_size, "Native Direct Anima memory-plan config failed");
     }
     return -1;
 }
@@ -204,7 +203,7 @@ extern "C" void ps5_ai_profile_add(unsigned id,uint64_t ns,uint64_t bytes,int va
 static void phase_profile_begin(){for(auto& c:phase_counters){c.ns=0;c.calls=0;c.bytes=0;c.invalid=0;}phase_profile_active=true;}
 static void phase_profile_report(){
     phase_profile_active=false;
-    const char* groups[]={"unet","controlnet","other_runners"};
+    const char* groups[]={"dit","controlnet_unused","other_runners"};
     const char* phases[]={"graph_total","weight_prepare_including_capacity","workspace_prepare_allocate","activation_upload","graph_call_including_internal_wait","explicit_workspace_wait","output_capture_readback","cleanup_including_wait"};
     const char* extras[]={"weight_tensor_copy_set","weight_transfer_explicit_wait","startup_log_fsync","Direct_pool_log_fsync","engine_structured_log","startup_stderr_mirror","backend_quiescence_call_including_logging","backend_idle_poll_without_logging"};
     nlohmann::json metrics=nlohmann::json::object();
@@ -257,7 +256,7 @@ static void engine_log(enum sd_log_level_t level, const char* text, void*) noexc
     }
 }
 
-static std::atomic<uint64_t> precision_outputs{0}, precision_values{0}, precision_nonfinite{0}, precision_unet_outputs{0};
+static std::atomic<uint64_t> precision_outputs{0}, precision_values{0}, precision_nonfinite{0}, precision_dit_outputs{0}, precision_vae_outputs{0};
 static bool precision_announced=false,precision_fp16=false;
 static ggml_log_callback precision_previous_log=nullptr;
 static void *precision_previous_log_data=nullptr;
@@ -273,7 +272,8 @@ extern "C" int ps5_ai_precision_check_output(const float *data,unsigned long lon
     if(!data && count) invalid=count;
     else for(unsigned long long i=0;i<count;++i)invalid+=!std::isfinite(data[i]);
     precision_outputs.fetch_add(1);precision_values.fetch_add(count);precision_nonfinite.fetch_add(invalid);
-    if(stage && std::strcmp(stage,"unet")==0)precision_unet_outputs.fetch_add(1);
+    if(stage && std::strcmp(stage,"anima")==0)precision_dit_outputs.fetch_add(1);
+    if(stage && std::strcmp(stage,"wan_vae")==0)precision_vae_outputs.fetch_add(1);
     return invalid==0;
 }
 static void verify_native_hardware() {
@@ -348,9 +348,9 @@ struct InferenceObservation {
     void* user;
     ps5_ai_stats* stats;
     uint64_t gpu_math_nodes;
-    uint64_t gpu_unet_math_nodes;
+    uint64_t gpu_dit_math_nodes;
     uint64_t gpu_flash_attention_nodes;
-    const ggml_tensor* requested_unet;
+    const ggml_tensor* requested_dit;
     const ggml_tensor* requested_flash;
     int requested_steps;
     int last_sampler_step;
@@ -361,6 +361,8 @@ struct InferenceObservation {
     bool wants_controlnet=false;
     uint64_t gpu_controlnet_math_nodes=0;
     const ggml_tensor* requested_controlnet=nullptr;
+    uint64_t gpu_vae_math_nodes=0;
+    const ggml_tensor* requested_vae=nullptr;
 };
 
 static InferenceObservation* active_reference_observation = nullptr;
@@ -384,22 +386,26 @@ extern "C" void ps5_ai_reference_phase(int phase, int value, double seconds) {
     catch(...){fallback_log("reference phase logging unavailable");}
 }
 
-static unsigned char* load_reference_input(const char* path,const char* expected_sha,sd_image_t& image,bool mask=false) {
-    const std::string name(path);
-    if(name.rfind("/app0/ai-runtime/inputs/",0)!=0 || name.find("..")!=std::string::npos)
-        throw std::runtime_error("Reference input path was not resolved by native admission");
-    unsigned char* rgb=nullptr;uint32_t w,h;uint64_t bytes;char hash[65];
-    if(!(mask?ps5_ai_mask_info(path,&w,&h,&bytes,hash):ps5_ai_input_info(path,&w,&h,&bytes,hash)) || std::strcmp(hash,expected_sha) ||
-       !(mask?ps5_ai_mask_read(path,&rgb,&w,&h):ps5_ai_input_read(path,&rgb,&w,&h)))throw std::runtime_error("Pinned reference input is missing or its SHA changed");
-    image={w,h,mask?1U:3U,rgb};return rgb;
-}
-
-static const char* unet_weight_name(const ggml_tensor* tensor) {
+static const char* dit_weight_name(const ggml_tensor* tensor) {
     if (!tensor || (tensor->op != GGML_OP_MUL_MAT && tensor->op != GGML_OP_CONV_2D)) return nullptr;
     const ggml_tensor* weight = tensor->src[0];
     for (unsigned depth = 0; weight && depth < 8; ++depth) {
         const char* name = ggml_get_name(weight);
-        if (name && std::strncmp(name, "model.diffusion_model.", 22) == 0) return name;
+        constexpr char prefix[] = "model.diffusion_model.net.";
+        if (name && std::strncmp(name, prefix, sizeof(prefix)-1) == 0) return name;
+        weight = weight->view_src;
+    }
+    return nullptr;
+}
+
+static const char* vae_weight_name(const ggml_tensor* tensor) {
+    if (!tensor || (tensor->op != GGML_OP_MUL_MAT && tensor->op != GGML_OP_CONV_2D &&
+                    tensor->op != GGML_OP_CONV_3D)) return nullptr;
+    const ggml_tensor* weight = tensor->src[0];
+    for (unsigned depth = 0; weight && depth < 8; ++depth) {
+        const char* name = ggml_get_name(weight);
+        constexpr char prefix[] = "first_stage_model.decoder.";
+        if (name && std::strncmp(name, prefix, sizeof(prefix)-1) == 0) return name;
         weight = weight->view_src;
     }
     return nullptr;
@@ -427,6 +433,7 @@ static bool is_gpu_math_tensor(const ggml_tensor* tensor) {
     switch (tensor->op) {
         case GGML_OP_MUL_MAT:
         case GGML_OP_CONV_2D:
+        case GGML_OP_CONV_3D:
         case GGML_OP_FLASH_ATTN_EXT:
             return true;
         default:
@@ -441,14 +448,18 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
         if(observation->wants_controlnet && !observation->gpu_controlnet_math_nodes && !observation->requested_controlnet && controlnet_weight_name(tensor)){
             observation->requested_controlnet=tensor;return true;
         }
-        // Request only the first UNet-weight and first flash-attention witnesses.
+        // Request one DiT-weight, one VAE decoder-weight and one attention witness.
         // Each true ask partitions and synchronizes the graph in SD.cpp; all
         // other nodes still execute normally, without per-node proof barriers.
-        if (!observation->gpu_unet_math_nodes && !observation->requested_unet && unet_weight_name(tensor)) {
-            observation->requested_unet = tensor;
+        if (!observation->gpu_dit_math_nodes && !observation->requested_dit && dit_weight_name(tensor)) {
+            observation->requested_dit = tensor;
             return true;
         }
-        const char* weight=unet_weight_name(tensor);
+        if (!observation->gpu_vae_math_nodes && !observation->requested_vae && vae_weight_name(tensor)) {
+            observation->requested_vae = tensor;
+            return true;
+        }
+        const char* weight=dit_weight_name(tensor);
         if(observation->wants_ip && !observation->gpu_ip_math_nodes && !observation->requested_ip &&
            weight && std::strstr(weight,".to_k_ip.weight")){
             observation->requested_ip=tensor;return true;
@@ -459,22 +470,27 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
         }
         return false;
     }
-    const bool unet = tensor == observation->requested_unet && !observation->gpu_unet_math_nodes;
+    const bool dit = tensor == observation->requested_dit && !observation->gpu_dit_math_nodes;
+    const bool vae = tensor == observation->requested_vae && !observation->gpu_vae_math_nodes;
     const bool flash = tensor == observation->requested_flash && !observation->gpu_flash_attention_nodes;
     const bool ip=tensor==observation->requested_ip && !observation->gpu_ip_math_nodes;
     const bool control=tensor==observation->requested_controlnet && !observation->gpu_controlnet_math_nodes;
-    if ((!unet && !flash && !ip && !control) || !is_gpu_math_tensor(tensor) || ((unet || ip) && !unet_weight_name(tensor)) || (control && !controlnet_weight_name(tensor))) return false;
+    if ((!dit && !vae && !flash && !ip && !control) || !is_gpu_math_tensor(tensor) ||
+        ((dit || ip) && !dit_weight_name(tensor)) || (vae && !vae_weight_name(tensor)) ||
+        (control && !controlnet_weight_name(tensor))) return false;
     ++observation->gpu_math_nodes;
-    if (unet) ++observation->gpu_unet_math_nodes;
+    if (dit) ++observation->gpu_dit_math_nodes;
+    if (vae) ++observation->gpu_vae_math_nodes;
     if (flash) ++observation->gpu_flash_attention_nodes;
     if(ip){++observation->gpu_ip_math_nodes;observation->stats->gpu_ip_attention_verified=1;}
     if(control){++observation->gpu_controlnet_math_nodes;observation->stats->gpu_controlnet_verified=1;}
     try {
-        nlohmann::json event = {{"event", control ? "gpu_controlnet_math_completed" : ip ? "gpu_ip_attention_math_completed" : unet ? "gpu_unet_model_math_completed" : "gpu_flash_attention_math_completed"},
+        nlohmann::json event = {{"event", control ? "gpu_controlnet_math_completed" : ip ? "gpu_ip_attention_math_completed" : dit ? "gpu_dit_model_math_completed" : vae ? "gpu_vae_decoder_math_completed" : "gpu_flash_attention_math_completed"},
             {"op", ggml_op_name(tensor->op)}, {"tensor", ggml_get_name(tensor)},
             {"device", ggml_backend_dev_name(gpu_device)},
             {"scope", "sampled completed witness after backend synchronization; not total GPU operation count"}};
-        if (unet || ip) event["weight"] = unet_weight_name(tensor);
+        if (dit || ip) event["weight"] = dit_weight_name(tensor);
+        if (vae) event["weight"] = vae_weight_name(tensor);
         if(control)event["weight"]=controlnet_weight_name(tensor);
         write_event(event);
     } catch (...) { fallback_log("ps5-ai: completed GPU witness structured log unavailable"); }
@@ -484,9 +500,9 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
 
 static void observe_progress(int step, int steps, float, void* data) noexcept {
     auto* observation = static_cast<InferenceObservation*>(data);
-    // Ignore model-loader byte progress and pre-UNet conditioning callbacks.
+    // Ignore model-loader byte progress and pre-DiT conditioning callbacks.
     // Tiling callbacks arrive after the terminal sampler step and are ignored.
-    if (!observation->progress || !observation->gpu_unet_math_nodes || parameter_loading.load() ||
+    if (!observation->progress || !observation->gpu_dit_math_nodes || parameter_loading.load() ||
         steps != observation->requested_steps || step <= observation->last_sampler_step || step > steps) return;
     observation->last_sampler_step = step;
     /* Same accepted sampler phase scale as the API; only validated PNG reaches 100%. */
@@ -502,16 +518,16 @@ static void verify_flash_attention_support() {
     ggml_context* context = ggml_init({8 * ggml_tensor_overhead(), nullptr, true});
     if (!context) throw std::runtime_error("Flash-attention capability metadata allocation failed");
     struct Cleanup { ggml_context* value; ~Cleanup() { ggml_free(value); } } cleanup{context};
-    auto* q = ggml_new_tensor_3d(context, GGML_TYPE_F32, 64, 4096, 20);
-    auto* k = ggml_new_tensor_3d(context, GGML_TYPE_F16, 64, 4096, 20);
-    auto* v = ggml_new_tensor_3d(context, GGML_TYPE_F16, 64, 4096, 20);
-    auto* attention = ggml_flash_attn_ext(context, q, k, v, nullptr, 0.125f, 0.f, 0.f);
+    auto* q = ggml_new_tensor_3d(context, GGML_TYPE_F32, 128, 1024, 16);
+    auto* k = ggml_new_tensor_3d(context, GGML_TYPE_F16, 128, 1024, 16);
+    auto* v = ggml_new_tensor_3d(context, GGML_TYPE_F16, 128, 1024, 16);
+    auto* attention = ggml_flash_attn_ext(context, q, k, v, nullptr, 1.f/std::sqrt(128.f), 0.f, 0.f);
     ggml_prec_set_acc(attention, GGML_PREC_F32);
     const bool supported = ggml_backend_dev_supports_op(gpu_device, attention);
     write_event({{"event", "native_flash_attention_capability"}, {"supported", supported},
-        {"head_size", 64}, {"q_type", "F32"}, {"kv_type", "F16"},
+        {"model", "Anima"}, {"head_size", 128}, {"heads", 16}, {"q_type", "F32"}, {"kv_type", "F16"},
         {"scope", "metadata capability only; completed generation witness still required"}});
-    if (!supported) throw std::runtime_error("Native Vulkan UNet flash attention is unsupported; fallback is disabled");
+    if (!supported) throw std::runtime_error("Native Vulkan Anima DiT flash attention is unsupported; fallback is disabled");
 }
 
 static int engine_init_impl(const char* config_path, char* error, size_t error_size) {
@@ -539,7 +555,7 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         if (prepared.phase != PS5_AI_FLEX_GPU_READY || prepared.ownership_uncertain ||
             prepared.requested_bytes != engine_config.gpu_pool_bytes ||
             prepared.working_reserve_bytes != engine_config.working_reserve_bytes)
-            throw std::runtime_error("Native Direct WAI configured memory plan differs from actual prepared pool admission");
+            throw std::runtime_error("Native Direct Anima configured memory plan differs from actual prepared pool admission");
         verify_native_hardware();
         // Backend registration is explicit; no remote/RPC fallback is compiled.
         ggml_log_get(&precision_previous_log,&precision_previous_log_data);
@@ -565,30 +581,28 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         verify_flash_attention_support();
         partial_taesd_gpu_decode = engine_config.partial_taesd_gpu_decode(gpu_name);
         std::snprintf(current_status.backend, sizeof(current_status.backend), "%s",
-            "SD.cpp CPU CLIP; Vulkan UNet/TAESD owned Direct imports");
+            "SD.cpp CPU Qwen3; Vulkan Anima DiT/Qwen VAE");
         current_status.gpu_available = 1;
         current_status.available = 1;
         write_event({{"event", "engine_configured"}, {"model", engine_config.model},
+                     {"architecture", "Anima"}, {"llm_path", engine_config.llm}, {"vae_path", engine_config.vae},
                      {"backend", engine_config.backend}, {"params_backend", engine_config.params_backend},
-                     {"taesd_path", engine_config.taesd}, {"tae_preview_only", engine_config.tae_preview_only},
+                     {"latent_channels",16}, {"taesd_enabled",false},
                      {"vae_tile_image_pixels", engine_config.vae_tile_size},
                      {"vae_tile_overlap", engine_config.vae_tile_overlap},
                      {"eager_load", engine_config.eager_load},
-                      {"lora_apply_mode", "at_runtime"}, {"configured_LoRA_inputs", 1},
-                      {"manga_lora_path", engine_config.manga_lora_path},
-                      {"manga_default_strength", 1.0},
+                      {"configured_LoRA_inputs", 0}, {"mode", "text2img"},
                       {"model_mmap_policy", "read-only; existing public mmap provider; no whole-file prefault"},
                      {"flash_attn_mode", engine_config.flash_attn_mode}, {"batched_cfg", engine_config.batched_cfg},
                      {"conditioning_cache_size", engine_config.conditioning_cache_size},
-                     {"gpu_observation", "first UNet and first FLASH_ATTN completed witnesses; not total operation counts"},
+                     {"gpu_observation", "first DiT, Qwen VAE decoder and FLASH_ATTN completed witnesses; not total operation counts"},
                      {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
-                     {"gpu_stage", "UNet denoising and learned TAESD decode on Vulkan; CLIP CPU"},
+                     {"gpu_stage", "Anima DiT denoising and 16-channel Qwen-Image VAE decode on Vulkan; Qwen3 text encoding CPU"},
                      {"owned_direct_data_reserved_bytes", pool.reserved_bytes},
                      {"owned_direct_data_free_bytes", pool.free_bytes},
                      {"working_reserve_bytes", engine_config.working_reserve_bytes},
                      {"working_reserve_scope", "accounting admission outside GPU pool; not GPU workspace"},
                      {"max_vram_gib", engine_config.max_vram},
-                     {"wai_v17_fp16_unet_reference_bytes", UINT64_C(5134927368)},
                      {"residency_scope", "GPU parameters retained if capacity fits; existing manager may demote to disk; workspace also required"},
                      {"whole_pool_GPU_verified", false},
                      {"direct_heap_report_unchanged", true},
@@ -737,47 +751,38 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     }
     *stats = {};
     phase_profile_begin();
-    InferenceObservation observation = {progress, user, stats, 0, 0, 0, nullptr, nullptr, request->steps, 0,
-                                       request->reference_image_id[0]!=0,0,nullptr,false};
+    InferenceObservation observation = {};
+    observation.progress=progress;observation.user=user;observation.stats=stats;
+    observation.requested_steps=request->steps;
     active_reference_observation=&observation;
-    observation.wants_controlnet=request->controlnet[0]!=0;
     parameter_loading.store(false);
-    precision_outputs.store(0);precision_values.store(0);precision_nonfinite.store(0);precision_unet_outputs.store(0);
+    precision_outputs.store(0);precision_values.store(0);precision_nonfinite.store(0);
+    precision_dit_outputs.store(0);precision_vae_outputs.store(0);
     sd_image_t* images = nullptr;
     int image_count = 0;
-    unsigned char* init_rgb=nullptr;
-    unsigned char* reference_rgb=nullptr;
-    unsigned char* control_rgb=nullptr;
-    unsigned char* mask_gray=nullptr;
     struct GenerationCleanup {
         sd_image_t** images;
         int* count;
-        unsigned char** init_rgb;
-        unsigned char** reference_rgb;
-        unsigned char** control_rgb;
-        unsigned char** mask_gray;
         ~GenerationCleanup() noexcept {
             try {
                 sd_set_backend_eval_callback(nullptr, nullptr);
                 sd_set_progress_callback(nullptr, nullptr);
                 if (*images) free_sd_images(*images, *count);
-                std::free(*init_rgb);std::free(*reference_rgb);
-                std::free(*control_rgb);
-                std::free(*mask_gray);
                 active_reference_observation=nullptr;
             } catch (...) {
                 fallback_log("ps5-ai: generation cleanup failed; reload title");
             }
         }
-    } cleanup = {&images, &image_count, &init_rgb, &reference_rgb, &control_rgb, &mask_gray};
+    } cleanup = {&images, &image_count};
     const auto start = std::chrono::steady_clock::now();
     int result = -1;
     try {
-        if (!std::isfinite(request->manga_strength) || request->manga_strength < 0 || request->manga_strength > 1.5)
-            throw std::runtime_error("Manga strength is outside the finite 0..1.5 range");
-        if(request->reference_image_id[0] && (engine_config.clip_vision_path.empty() || engine_config.ip_adapter_path.empty()))
-            throw std::runtime_error("IP-Adapter weights are not configured; reference request was not run as txt2img");
-        ps5_ai_native_capacity_snapshot("before_manga_generation");
+        if (!std::isfinite(request->manga_strength) || request->manga_strength != 0 || request->manga_monochrome)
+            throw std::runtime_error("Anima Turbo text2img does not support the WAI-specific manga LoRA or monochrome option");
+        if (request->init_image_id[0] || request->reference_image_id[0] || request->mask_image_id[0] ||
+            request->controlnet[0] || request->control_image_id[0])
+            throw std::runtime_error("Anima Turbo currently supports text2img only; SDXL IP-Adapter/ControlNet, img2img and inpainting were not run");
+        ps5_ai_native_capacity_snapshot("before_anima_generation");
         if (!model_context) {
             sd_ctx_params_t context_params;
             sd_ctx_params_init(&context_params);
@@ -788,10 +793,14 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             context_params.conv_direct_mode="on";
             write_event({{"event","native_conv_policy"},{"mode","on"},{"basis","direct GPU convolution passed independent CPU oracle"}});
             ps5_ai_native_ui_phase(PS5_AI_STATUS_LOADING);
-            ps5_ai_native_ui_log("Loading WAI-Illustrious-SDXL v17.0 checkpoint");
+            ps5_ai_native_ui_log("Loading Anima Turbo v1.1 + Qwen3 + Qwen-Image VAE");
             model_context = new_sd_ctx(&context_params);
             if (!model_context) {
-                throw std::runtime_error("Checkpoint load failed; see engine-native-wai.jsonl");
+                throw std::runtime_error("Anima split model load failed; see engine.jsonl");
+            }
+            if (std::strcmp(sd_get_model_version_name(model_context), "Anima") != 0) {
+                free_sd_ctx(model_context);model_context=nullptr;
+                throw std::runtime_error("Loaded diffusion architecture is not Anima; no WAI/SDXL fallback was run");
             }
             {
                 std::lock_guard<std::mutex> lock(status_mutex);
@@ -799,75 +808,13 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             }
             write_event({{"event", "model_loaded"}, {"path", engine_config.model},
                          {"architecture", sd_get_model_version_name(model_context)}});
-            ps5_ai_native_capacity_snapshot("after_WAI_model_load");
+            ps5_ai_native_capacity_snapshot("after_Anima_model_load");
         }
         sd_img_gen_params_t params;
         sd_img_gen_params_init(&params);
-        const std::string requested_control=request->controlnet;
-        if(requested_control!=loaded_controlnet){
-            if(!ps5_ai_ggml_wait_backend("before_ControlNet_model_switch",1))throw std::runtime_error("GPU not quiescent for ControlNet switch");
-            if(!loaded_controlnet.empty()){
-                if(!sd_ctx_unload_control_net(model_context))throw std::runtime_error("ControlNet unload failed");
-                loaded_controlnet.clear();
-            }
-            if(!requested_control.empty()){
-                const std::string* path=requested_control=="canny"?&engine_config.controlnet_canny_path:requested_control=="openpose"?&engine_config.controlnet_openpose_path:nullptr;
-                if(!path || !sd_ctx_load_control_net(model_context,path->c_str()) || !sd_ctx_has_control_net(model_context))
-                    throw std::runtime_error("Requested ControlNet checkpoint could not be loaded");
-                loaded_controlnet=requested_control;
-            }
-            write_event({{"event","controlnet_model_selected"},{"name",loaded_controlnet},{"compute_backend","Vulkan0"},{"only_one_controlnet_resident",true}});
-        }
-        if(!requested_control.empty()){
-            if(!request->control_image_id[0] || !std::isfinite(request->control_strength) || request->control_strength<0.01 || request->control_strength>1.5)
-                throw std::runtime_error("ControlNet requires its prepared input and finite strength");
-            control_rgb=load_reference_input(request->control_image_path,request->control_image_sha256,params.control_image);
-            if(params.control_image.width!=static_cast<uint32_t>(request->width) || params.control_image.height!=static_cast<uint32_t>(request->height))
-                throw std::runtime_error("Prepared ControlNet map dimensions must match output size");
-            params.control_strength=static_cast<float>(request->control_strength);
-            write_event({{"event","controlnet_request"},{"name",requested_control},{"image_sha256",request->control_image_sha256},{"strength",params.control_strength},{"input","prepared RGB edge/pose map; no pose detector"}});
-        }
-        if(request->init_image_id[0]){
-            if(!std::isfinite(request->denoise_strength) || request->denoise_strength<0.01 || request->denoise_strength>1)
-                throw std::runtime_error("Invalid img2img denoise strength");
-            init_rgb=load_reference_input(request->init_image_path,request->init_image_sha256,params.init_image);
-            params.strength=static_cast<float>(request->denoise_strength);
-        }
-        if(request->reference_image_id[0]){
-            if(!std::isfinite(request->ip_adapter_strength) || request->ip_adapter_strength<0.01 || request->ip_adapter_strength>1.5)
-                throw std::runtime_error("Invalid IP-Adapter strength");
-            reference_rgb=load_reference_input(request->reference_image_path,request->reference_image_sha256,params.ip_adapter_image);
-            params.ip_adapter_strength=static_cast<float>(request->ip_adapter_strength);
-        }
-        if(request->mask_image_id[0]){
-            if(!request->init_image_id[0])throw std::runtime_error("Mask requires init image");
-            mask_gray=load_reference_input(request->mask_image_path,request->mask_image_sha256,params.mask_image,true);
-            if(params.mask_image.width!=params.init_image.width || params.mask_image.height!=params.init_image.height ||
-               params.mask_image.width!=(uint32_t)request->width || params.mask_image.height!=(uint32_t)request->height)
-                throw std::runtime_error("Masked input, mask and output dimensions must match");
-        }
-        write_event({{"event","reference_request"},{"init_image_sha256",request->init_image_sha256},
-                     {"reference_image_sha256",request->reference_image_sha256},{"mask_image_sha256",request->mask_image_sha256},
-                     {"denoise_strength",request->init_image_id[0]?request->denoise_strength:0},
-                     {"ip_adapter_strength",request->reference_image_id[0]?request->ip_adapter_strength:0},
-                     {"clip_vision_compute","PS5 CPU"},{"clip_vision_params","disk; release after compute"}});
+        // Anima has its own Qwen conditioning; do not apply SDXL clip_skip=2
+        // or the WAI-specific adapter/prompt rewriting path.
         params.prompt = request->prompt;
-        params.clip_skip = 2; // Preserve SDXL's existing resolved default; converted adapter requires it.
-        std::string manga_prompt;
-        sd_lora_t manga_adapter = {false, static_cast<float>(request->manga_strength), engine_config.manga_lora_path.c_str()};
-        if (request->manga_strength > 0) {
-            if (request->manga_monochrome) {
-                manga_prompt = std::string("monochrome, ") + request->prompt;
-                params.prompt = manga_prompt.c_str();
-            }
-            params.loras = &manga_adapter;
-            params.lora_count = 1;
-        }
-        write_event({{"event", "manga_lora_request"}, {"strength", request->manga_strength},
-                     {"enabled", request->manga_strength > 0},
-                     {"automatic_monochrome", request->manga_monochrome != 0},
-                     {"trigger", request->manga_strength > 0 && request->manga_monochrome ? "monochrome" : ""},
-                     {"adapter", engine_config.manga_lora_path}, {"apply_mode", "at_runtime"}});
         params.negative_prompt = request->negative_prompt;
         params.width = request->width;
         params.height = request->height;
@@ -888,33 +835,22 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         }
         ps5_ai_native_ui_phase(PS5_AI_STATUS_GENERATING);
         if (!generate_image(model_context, &params, &images, &image_count) || image_count != 1 || !images || !images[0].data) {
-            throw std::runtime_error("Image generation failed; see engine-native-wai.jsonl");
+            throw std::runtime_error("Anima image generation failed; see engine.jsonl");
         }
-        stats->gpu_used = observation.gpu_unet_math_nodes > 0 ? 1 : 0;
+        stats->gpu_used = observation.gpu_dit_math_nodes > 0 ? 1 : 0;
         if (!stats->gpu_used || !observation.gpu_flash_attention_nodes) {
-            throw std::runtime_error("Image rejected: required completed native UNet/flash-attention witness is missing");
+            throw std::runtime_error("Image rejected: required completed native DiT/flash-attention witness is missing");
         }
         if(!stats->actual_steps || observation.last_sampler_step!=stats->actual_steps)
             throw std::runtime_error("Image rejected: sampler completion evidence is missing");
-        if(request->init_image_id[0] && !observation.init_encoded)
-            throw std::runtime_error("Image rejected: init-image encoder did not complete");
-        if(request->reference_image_id[0] && (stats->ip_adapter_tokens!=16 || !observation.gpu_ip_math_nodes))
-            throw std::runtime_error("Image rejected: Plus tokens or completed GPU IP-attention witness is missing");
-        if(observation.wants_controlnet && (!stats->gpu_controlnet_verified || stats->controlnet_evals<stats->actual_steps || stats->controlnet_tensors!=10))
-            throw std::runtime_error("Image rejected: ControlNet GPU/residual completion evidence is missing");
+        if (!observation.gpu_vae_math_nodes || !precision_dit_outputs.load() ||
+            !precision_vae_outputs.load() || precision_nonfinite.load())
+            throw std::runtime_error("Image rejected: completed GPU DiT/VAE and finite readback evidence is required");
         if (cpu_clip_pool_live_bytes.load() != 0)
-            throw std::runtime_error("CPU CLIP shared Direct weights were not returned after conditioning");
+            throw std::runtime_error("CPU Qwen shared Direct weights were not returned after conditioning");
         if(!ps5_ai_direct_pool_log_checkpoint())
             throw std::runtime_error("Direct pool log checkpoint failed; image not published");
         const auto& image = images[0];
-        if(request->mask_image_id[0]){
-            if(!stats->mask_prepared || image.channel!=3 || image.width!=(uint32_t)request->width || image.height!=(uint32_t)request->height ||
-               !ps5_ai_mask_composite(image.data,init_rgb,mask_gray,image.width,image.height,&stats->mask_preserved_pixels,&stats->mask_changed_pixels))
-                throw std::runtime_error("Image rejected: genuine mask pipeline or exact outside preservation failed");
-            write_event({{"event","mask_composite"},{"mask_sha256",request->mask_image_sha256},
-                {"mask_denoise_evaluations",stats->mask_denoise_evaluations},{"preserved_pixels",stats->mask_preserved_pixels},
-                {"changed_pixels",stats->mask_changed_pixels},{"location","PS5 CPU after GPU masked diffusion"}});
-        }
         const std::string temporary_path = std::string(output_path) + ".partial";
         if (!stbi_write_png(temporary_path.c_str(), image.width, image.height, image.channel,
                             image.data, image.width * image.channel)) {
@@ -949,13 +885,13 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         images = nullptr;
     }
     phase_profile_report();
-    stats->gpu_used = observation.gpu_unet_math_nodes > 0 ? 1 : 0;
+    stats->gpu_used = observation.gpu_dit_math_nodes > 0 ? 1 : 0;
     stats->generation_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     stats->peak_cpu_bytes = std::max(stats->peak_cpu_bytes, cpu_peak_bytes());
-    ps5_ai_native_capacity_snapshot("after_manga_generation");
+    ps5_ai_native_capacity_snapshot("after_anima_generation");
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
-    write_event({{"event", "generation_result"}, {"success", result == 0},
+    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "Anima"}, {"mode", "text2img"},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
                  {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},
                  {"mask_preserved_pixels",stats->mask_preserved_pixels},{"mask_changed_pixels",stats->mask_changed_pixels},
@@ -965,10 +901,12 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"controlnet",request->controlnet},{"gpu_controlnet_verified",stats->gpu_controlnet_verified!=0},
                  {"controlnet_evals",stats->controlnet_evals},{"controlnet_tensors",stats->controlnet_tensors},{"controlnet_seconds",stats->controlnet_seconds},
                  {"gpu_used", stats->gpu_used != 0}, {"gpu_math_nodes", observation.gpu_math_nodes},
-                 {"gpu_unet_math_nodes", observation.gpu_unet_math_nodes},
+                 {"gpu_dit_math_nodes", observation.gpu_dit_math_nodes},
+                 {"gpu_vae_math_nodes", observation.gpu_vae_math_nodes},
                  {"gpu_flash_attention_nodes", observation.gpu_flash_attention_nodes},
                  {"gpu_observation", "sampled completed witnesses; not total GPU operation counts"},
-                 {"unet_witness_requested", observation.requested_unet != nullptr},
+                 {"dit_witness_requested", observation.requested_dit != nullptr},
+                 {"vae_witness_requested", observation.requested_vae != nullptr},
                  {"flash_witness_requested", observation.requested_flash != nullptr},
                  {"owned_direct_data_reserved_bytes", pool.reserved_bytes},
                  {"owned_direct_data_used_bytes", pool.used_bytes},
@@ -977,12 +915,13 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"owned_direct_data_fault_retained", pool.fault_retained != 0},
                  {"cpu_clip_shared_direct_live_bytes",cpu_clip_pool_live_bytes.load()},
                  {"cpu_clip_shared_direct_peak_bytes",cpu_clip_pool_peak_bytes.load()},
-                 {"owned_pool_peak_includes_CPU_CLIP_weights",true},
+                 {"owned_pool_peak_includes_CPU_text_weights",true},
                  {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
                  {"backend", engine_config.backend},
                  {"fp16_math",precision_fp16},{"finite_checked_outputs",precision_outputs.load()},
                  {"finite_checked_values",precision_values.load()},{"nonfinite_values",precision_nonfinite.load()},
-                 {"finite_checked_unet_outputs",precision_unet_outputs.load()},
+                 {"finite_checked_dit_outputs",precision_dit_outputs.load()},
+                 {"finite_checked_vae_outputs",precision_vae_outputs.load()},
                  {"seconds_including_initial_model_load", stats->generation_seconds},
                  {"process_peak_rss_bytes", stats->peak_cpu_bytes ? nlohmann::json(stats->peak_cpu_bytes) : nlohmann::json(nullptr)},
                  {"peak_gpu_bytes", nullptr}, {"gpu_memory_measurement", "unavailable"}});

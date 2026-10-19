@@ -10,7 +10,7 @@ static int backend_socket_error(void) {
 #endif
 }
 #ifndef PS5_AI_UPSTREAM_PORT
-#define PS5_AI_UPSTREAM_PORT 8188
+#define PS5_AI_UPSTREAM_PORT 8190
 #endif
 static socket_t backend_connect(void) {
     socket_t fd=socket(AF_INET,SOCK_STREAM,0);if(fd==BAD_SOCKET)return BAD_SOCKET;
@@ -49,7 +49,7 @@ static int backend_http_bytes(const char *method,const char *path,const void *bo
     socket_t fd=backend_connect();if(fd==BAD_SOCKET)return 0;
     char header[1200],type_header[128]={0};
     if(body && snprintf(type_header,sizeof(type_header),"Content-Type: %s\r\n",body_type)>=(int)sizeof(type_header)){close_socket(fd);return 0;}
-    int h=snprintf(header,sizeof(header),"%s %s HTTP/1.1\r\nHost: %s:8188\r\nAuthorization: Bearer %s\r\nConnection: close\r\n%sContent-Length: %zu\r\n\r\n",method,path,bind_ip,api_token,type_header,body_n);
+    int h=snprintf(header,sizeof(header),"%s %s HTTP/1.1\r\nHost: %s:%d\r\nAuthorization: Bearer %s\r\nConnection: close\r\n%sContent-Length: %zu\r\n\r\n",method,path,bind_ip,PS5_AI_UPSTREAM_PORT,api_token,type_header,body_n);
     int ok=h>0 && (size_t)h<sizeof(header) && send_all(fd,header,(size_t)h) && (!body_n || send_all(fd,body,body_n));wipe_secret(header,sizeof(header));
     uint64_t deadline=0;if(!monotonic_ms(&deadline))ok=0;deadline+=120000;
     char received[8193];size_t used=0;
@@ -192,13 +192,13 @@ static int backend_json(const char *method,const char *path,const char *body,obj
 static int backend_true(object *o,const char *key){field *f=find_field(o,key);return f && f->type==3;}
 static const char *backend_text(object *o,const char *key){field *f=find_field(o,key);return f && f->type==1?f->value:"";}
 static void backend_status(ps5_ai_engine_status *s) {
-    memset(s,0,sizeof(*s));snprintf(s->backend,sizeof(s->backend),"HTTP gateway -> same-PS5 native GPU API8188");
+    memset(s,0,sizeof(*s));snprintf(s->backend,sizeof(s->backend),"HTTP gateway -> same-PS5 Anima native API%d",PS5_AI_UPSTREAM_PORT);
     object *o=malloc(sizeof(*o));int code=0;
-    if(!o || !backend_json("GET","/health",NULL,o,&code) || code!=200){snprintf(s->reason,sizeof(s->reason),"Same-PS5 native API8188 is unavailable");free(o);return;}
-    int model_ok=!strcmp(backend_text(o,"model"),"/app0/models/waiIllustriousSDXL_v170.safetensors");
-    s->available=model_ok && backend_true(o,"engine_available");s->gpu_available=backend_true(o,"gpu_available");s->gpu_verified=backend_true(o,"gpu_verified");s->model_loaded=backend_true(o,"model_loaded");
+    if(!o || !backend_json("GET","/health",NULL,o,&code) || code!=200){snprintf(s->reason,sizeof(s->reason),"Same-PS5 Anima native API%d is unavailable",PS5_AI_UPSTREAM_PORT);free(o);return;}
+    int model_ok=!strcmp(backend_text(o,"model"),"/app0/models/anima-turbo-v1.1-f16.safetensors");
+    s->available=model_ok && backend_true(o,"engine_available");s->gpu_available=model_ok && backend_true(o,"gpu_available");s->gpu_verified=model_ok && backend_true(o,"gpu_verified");s->model_loaded=model_ok && backend_true(o,"model_loaded");
     snprintf(s->device,sizeof(s->device),"%s",backend_text(o,"gpu_device"));snprintf(s->driver,sizeof(s->driver),"%s",backend_text(o,"gpu_driver"));snprintf(s->model,sizeof(s->model),"%s",backend_text(o,"model"));
-    if(!model_ok)snprintf(s->reason,sizeof(s->reason),"Native backend model is not configured WAI v17");else snprintf(s->reason,sizeof(s->reason),"%s",backend_text(o,"reason"));free(o);
+    if(!model_ok)snprintf(s->reason,sizeof(s->reason),"Native backend model is not configured Anima Turbo v1.1");else snprintf(s->reason,sizeof(s->reason),"%s",backend_text(o,"reason"));free(o);
 }
 int ps5_ai_engine_init(const char *config,char *error,size_t n){(void)config;ps5_ai_engine_status s;backend_status(&s);if(!s.available){snprintf(error,n,"%s",s.reason);return -1;}return 0;}
 void ps5_ai_engine_get_status(ps5_ai_engine_status *s){backend_status(s);}
@@ -227,7 +227,7 @@ int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_sta
     memset(stats,0,sizeof(*stats));char *body=malloc(51000),*prompt=malloc(24585),*negative=malloc(24585);object *o=malloc(sizeof(*o));int ok=0,code=0;
     if(!body || !prompt || !negative || !o){snprintf(error,cap,"Insufficient memory forwarding request");goto done;}
     if(!quote_json(prompt,24585,r->prompt) || !quote_json(negative,24585,r->negative_prompt)){snprintf(error,cap,"Unable to encode prompt");goto done;}
-    int n=snprintf(body,51000,"{\"prompt\":%s,\"negative_prompt\":%s,\"width\":%d,\"height\":%d,\"steps\":%d,\"cfg_scale\":%.17g,\"seed\":%" PRId64 ",\"sampler\":\"%s\",\"manga_strength\":%.17g,\"manga_monochrome\":%s",prompt,negative,r->width,r->height,r->steps,r->cfg_scale,r->seed,r->sampler,r->manga_strength,r->manga_monochrome?"true":"false");
+    int n=snprintf(body,51000,"{\"model\":\"anima-turbo-v1.1\",\"prompt\":%s,\"negative_prompt\":%s,\"width\":%d,\"height\":%d,\"steps\":%d,\"cfg_scale\":%.17g,\"seed\":%" PRId64 ",\"sampler\":\"%s\",\"manga_strength\":%.17g,\"manga_monochrome\":%s",prompt,negative,r->width,r->height,r->steps,r->cfg_scale,r->seed,r->sampler,r->manga_strength,r->manga_monochrome?"true":"false");
     if(n<0 || n>MAX_BODY){snprintf(error,cap,"Encoded request too large");goto done;}
     if(r->init_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"init_image_id\":\"%s\",\"denoise_strength\":%.17g",r->init_image_id,r->denoise_strength);
     if(r->reference_image_id[0])n+=snprintf(body+n,51000-(size_t)n,",\"reference_image_id\":\"%s\",\"ip_adapter_strength\":%.17g",r->reference_image_id,r->ip_adapter_strength);

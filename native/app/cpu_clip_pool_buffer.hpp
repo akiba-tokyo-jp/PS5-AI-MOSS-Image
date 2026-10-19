@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: MIT
- * CPU-only CLIP weights borrow owned Direct data claims. No Vulkan import,
+ * CPU-only text encoder weights borrow owned Direct data claims. The symbol
+ * names retain the ancestral CLIP ABI; Anima uses this for Qwen3 too.
+ * No Vulkan import,
  * physical allocation, driver modification or transfer of pool ownership.
  */
 #pragma once
 #include "ggml-backend.h"
 #include "ggml-backend-impl.h"
-#include "pool.h"
+#include "direct_pool.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -20,7 +22,13 @@ static void ps5_ai_cpu_clip_pool_buffer_free(ggml_backend_buffer_t buffer) {
 }
 
 static ggml_backend_buffer_t ps5_ai_cpu_clip_pool_buffer(size_t size) {
-    if (!size || size > (static_cast<size_t>(256) << 20)) return nullptr;
+    // Qwen3's BF16 [151936,1024] embedding alone needs 311,164,928 bytes.
+    // The manager's 256 MiB chunk preference permits an oversized tensor on
+    // its own. Bound that claim by a real owned region, not the old preference.
+    // This metadata snapshot grants no ownership: the pool still checks free
+    // pages, rounding, alignment and faults atomically in the single claim.
+    const uint64_t maximum = ps5_ai_direct_pool_max_claim_bytes();
+    if (!size || size > maximum) return nullptr;
     void* pointer = ps5_ai_flex_alloc(size, 64);
     if (!pointer) {
         ps5_ai_cpu_clip_pool_event("allocation_denied", size, 0);

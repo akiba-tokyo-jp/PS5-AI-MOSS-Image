@@ -1,0 +1,26 @@
+{
+  "model_id": "anima-turbo-v1.1",
+  "PS5_generation_verified": false,
+  "Windows_model_inference_performed": false,
+  "historical_WAI_results_are_Anima_evidence": false,
+  "host_tests": {
+    "engine_configuration_checks": 42,
+    "API_protocol_checks": 90,
+    "CPU_Qwen_Direct_buffer_checks": 39,
+    "Anima_operator_bound_checks": 42,
+    "actual_GGML_operator_constructor_checks": 8,
+    "legacy_scratch_regression_checks": 24,
+    "scope": "Host-only configuration, protocol and rejection tests. No model inference."
+  },
+  "native_SELF_build_verified": true,
+  "native_SELF_bytes": 107366775,
+  "native_SELF_sha256": "d671a74a1b344dbf7a9b147edde0dee421230a58238feb0e25daa7131c1a730f",
+  "gateway_ELF_bytes": 199712,
+  "gateway_ELF_sha256": "945d89f979b299f012578d8f21417ad36b2de9a16b2792aa32725118a85f0ffa",
+  "SELF_integrity_valid": true,
+  "stripped_PT_LOAD_segments_identical": 4,
+  "native_runtime_dependency_count": 6,
+  "native_registration_verified": false,
+  "PS5_GPU_readback_verified": false,
+  "OpenAI_gateway_PNG_retrieval_verified": false
+}

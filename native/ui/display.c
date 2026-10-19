@@ -149,7 +149,7 @@ int ps5_ai_status_start_after_gate(const struct ps5_ai_status_gate_v1 *gate) {
     if(pthread_mutex_lock(&lock))return -1;
     memset(&latest,0,sizeof(latest));latest.abi_bytes=sizeof(latest);latest.abi_version=1;
     latest.process_id=gate->process_id;latest.valid=PS5_AI_STATUS_MODEL;
-    memcpy(latest.model,"WAI-Illustrious-SDXL v17.0",sizeof("WAI-Illustrious-SDXL v17.0"));
+    memcpy(latest.model,"Anima Turbo v1.1",sizeof("Anima Turbo v1.1"));
     state.thread_started=1;(void)pthread_mutex_unlock(&lock);
     int rc=pthread_create(&owner_thread,NULL,display_owner,NULL);
     if(rc){if(!pthread_mutex_lock(&lock)){state.thread_started=0;state.display_fault=1;state.stopped=1;state.error_stage=0;state.error_code=rc;(void)pthread_mutex_unlock(&lock);}return -1;}

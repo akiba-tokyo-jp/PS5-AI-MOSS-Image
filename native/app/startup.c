@@ -277,7 +277,7 @@ static void *native_ui_publish_loop(void *unused) {
         uint64_t revision=atomic_load(&ui_state_revision);
         int phase_coherent=!atomic_load(&ui_state_writers);
         view.valid=PS5_AI_STATUS_MODEL|PS5_AI_STATUS_PHASE;
-        memcpy(view.model,"WAI-Illustrious-SDXL v17.0",sizeof("WAI-Illustrious-SDXL v17.0"));
+        memcpy(view.model,"Anima Turbo v1.1",sizeof("Anima Turbo v1.1"));
         view.phase=atomic_load(&ui_phase);
         if(view.phase==PS5_AI_STATUS_GENERATING&&atomic_load(&ui_progress_known)) {
             view.progress_basis_points=atomic_load(&ui_progress);view.valid|=PS5_AI_STATUS_PROGRESS;
@@ -735,7 +735,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     }
     probe_pid=getpid();
     size_t linked=__init_array_start&&__init_array_end?(size_t)(__init_array_end-__init_array_start):0;
-    ps5_ai_ggml_report("BEGIN pid=%d unix_time=%lld code=ps5-ai-native-wai-api-v1 native_CRT=1 payload_CRT=0 private_FW_or_credential_queries=0 manual_constructor_replay=0 config=%s",(int)probe_pid,(long long)time(NULL),config_path);
+    ps5_ai_ggml_report("BEGIN pid=%d unix_time=%lld code=ps5-ai-native-anima-api-v1 native_CRT=1 payload_CRT=0 private_FW_or_credential_queries=0 manual_constructor_replay=0 config=%s",(int)probe_pid,(long long)time(NULL),config_path);
     ps5_ai_ggml_report("constructors linked_initializer_slots=%zu own_witness_executed=%u SCE_constructor_effects=unknown",linked,constructor_witness_count);
     if(probe_pid<=0||linked!=PS5_AI_NATIVE_EXPECTED_INITIALIZER_SLOTS||constructor_witness_count!=1||!log_healthy||!radv_ps5_platform_runs_gpu())
         return init_error(error,error_size,"Native constructor/hardware/log guard failed");
@@ -957,7 +957,7 @@ int main(int argc, char **argv) {
     (void)argc; (void)argv;
     /* Native LaunchApp argv semantics are not assumed. Own fixed defaults are
      * compiled in; this does not accept or reinterpret arbitrary OS args. */
-    char program[]="native-wai-direct"; char *fixed_argv[]={program,NULL};
+    char program[]="native-anima-turbo-v11"; char *fixed_argv[]={program,NULL};
     int rc = ps5_ai_server_main(1, fixed_argv);
     ps5_ai_native_ui_phase(PS5_AI_STATUS_STOPPING);
     ps5_ai_native_ui_log("API stopped; cooperative exit requires checked shutdown");

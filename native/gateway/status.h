@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Optional native status display. Not linked into any current WAI package.
+ * Optional native status display. Gateway builds do not initialize a display.
  * Publishers copy measured POD data only; no renderer/GPU calls under engine locks.
  */
 #ifndef PS5_AI_STATUS_DISPLAY_V1_H
@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #define PS5_AI_STATUS_ABI 1u
-#define PS5_AI_STATUS_APP_NAME "PS5 AI WAI"
+#define PS5_AI_STATUS_APP_NAME "PS5 AI Anima"
 #define PS5_AI_STATUS_FRAME_BYTES UINT64_C(16777216)
 #define PS5_AI_STATUS_SCANOUT_BYTES UINT64_C(33554432)
 #define PS5_AI_STATUS_MAX_ROWS 24

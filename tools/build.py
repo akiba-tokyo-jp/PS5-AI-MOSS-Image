@@ -146,7 +146,7 @@ def main():
                 raise RuntimeError('Missing/duplicate native optimization provider: '+name)
         native=out/'eboot.elf';stubs=[str(Path(c['DEPS'])/n) for n in ['libSceAgc.so','libSceAgcDriver.so']]+[str(Path(c['SDK'])/'target/lib'/n) for n in ['libSceVideoOut.so','libSceSystemService.so']]
         run(['${NATIVE_TOOL}','link','--in',str(deploy),'--out',str(native),'--stub-dir','${SDK}/target/lib',*sum((['--stub',s] for s in stubs),[]),'--module-sdk','0x02000009','--companion-sdk','0x08050001','--file-name','eboot.elf'])
-        title=out/'title/PPSA99188';(title/'sce_sys').mkdir(parents=True,exist_ok=True)
+        title=out/'title/PPSA99189';(title/'sce_sys').mkdir(parents=True,exist_ok=True)
         for name in ('param.json','icon0.png'):shutil.copyfile(ROOT/'assets/sce_sys'/name,title/'sce_sys'/name)
         (title/'licenses').mkdir(exist_ok=True)
         shutil.copyfile(ROOT/'licenses/WAI-Dashboard-Glyphs-OFL.txt',title/'licenses/WAI-Dashboard-Glyphs-OFL.txt')

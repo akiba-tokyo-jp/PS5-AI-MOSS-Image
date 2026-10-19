@@ -1,89 +1,32 @@
-# 配置と運用
+# Animaの配置・切替
 
-この版は既にネイティブHomebrewを起動できるFW12.40の検証環境を使っています。
-初回登録・Jailbreak・互換payloadの導入を自動化したインストーラーではありません。
-既存の登録・起動環境がないPS5へ、FTPでebootを置くだけでは起動しません。
-
-## 検証済みレイアウト
+新タイトルの実機登録は未実施です。既存WAIの登録を上書きする更新ではありません。[WAIの旧配置資料](wai-base-deployment.md)は履歴として保持しています。
 
 ```text
-/data/ai/
-├── models/                         元のモデル
-├── output/                         確認済みPNGの保存
-├── openai-gateway/                 CPUアダプター設定・ジョブ・出力
-└── native-wai-direct/PPSA99188/
-    ├── eboot.bin
-    ├── sce_sys/param.json          PS5 AI WAI
-    ├── sce_sys/icon0.png           WAIで生成した採用アイコン
-    ├── sce_module/libc.prx         既存の検証済み公開runtime
-    ├── models/                    ネイティブから /app0/models
-    ├── licenses/
-    └── ai-runtime/                ネイティブから /app0/ai-runtime
-        ├── config.json
-        ├── config/api-token       起動時だけ存在
-        ├── jobs/
-        ├── output/
-        └── logs/
+/data/ai/native-anima-turbo-v11/PPSA99189/
+  eboot.bin
+  sce_sys/param.json
+  sce_sys/icon0.png
+  sce_module/libc.prx
+  models/anima-turbo-v1.1-f16.safetensors
+  models/qwen_3_06b_base.safetensors
+  models/qwen_image_vae-f16.safetensors
+  licenses/
+  ai-runtime/config.json
+  ai-runtime/config/api-token
+  ai-runtime/logs/
+  ai-runtime/jobs/
+  ai-runtime/output/
 ```
 
-この登録済みタイトルには既存のアプリ用aliasがあります。今回の更新・検証でmountやシステムメタデータを変更していません。
-このaliasを一般的なPS5に自動作成する処理は公開していません。
-タイトルID PPSA99188を別アプリが使っている場合は上書きしないでください。
+native APIは8190、別CPUプロセスのOpenAI gatewayは8191です。gatewayのrootは`/data/ai/anima-openai-gateway`。WAIの8188/8189と別ですが、GPUアプリは同時起動しません。
 
-## 配置前に揃えるもの
+nativeのbind IPv4は`native/app/server.c`に固定されています。自分のprivate LANアドレスに合わせてビルドしてください。`0.0.0.0`やインターネットへ公開しません。
 
-自身のネイティブアプリが登録済みで、公開SystemServiceの通常起動・終了経路を使えることが前提です。
-検証版はLaunchAppの引数に依存せず、native APIのパスとbind IPv4をコンパイル時に固定しています。
-**`native/app/server.c`の`bind_ip`を自身のプライベートIPv4へ変更してから再ビルド**してください。
-公開ソースの既定値は検証機のプライベートアドレスです。0.0.0.0や公開IPv4に変更しないでください。
+設定は[Anima設定例](../config/anima-native.json.example)を使用します。WAIの設定や一度限りtokenを流用しません。runtime/configはアプリUIDの0700、tokenは0600です。新規登録された本人のPID・起動時刻・TitleID・bootを確認してから設定を渡し、native bootstrapを進めます。tokenは読込後削除されます。
 
-ゲートウェイは`--root /data/ai/openai-gateway --bind <PS5_IP> --port 8189`を指定して起動します。
-同じbind IPの8188へ転送するため、両者のIPを揃えます。
-既存WebSrv8080は維持し、生成API機能をWebSrv本体へ追加していません。
+ホーム画面への新規登録には、専用メタデータとmount準備が必要です。FTPでebootを置くだけでは登録できません。システム領域への操作を含む初期登録は、対象と復旧境界を確認した別の管理工程です。一般向けの自動登録installerは本リポジトリに含めていません。
 
-## 設定と秘密トークン
+切替は、元のnative/gatewayのrunning_jobsとqueued_jobsが0であること、正しいownerであることを確認し、通常のOS終了を使います。元アプリのPID消失とBigApp状態を確認してから次を起動します。強制終了やGPU reset、共有Directの手動解放で切り替えません。
 
-エンジン設定は[config/native.json.example](../config/native.json.example)を基準にします。
-実際のmodel copyのサイズ・全内容SHAを確認し、別モデルを同じファイル名で配置しないでください。
-runtimeとconfigのディレクトリはアプリUID1・0700、トークンは0600で、32〜256の印刷可能ASCIIを使用します。
-トークンをソース、URL、Git、共有スクリーンショットに含めないでください。
-
-native bootstrapは設定と一度限りのトークンを待ちます。
-既存環境では、所有者・起動時刻・タイトル・bootが確定してから設定とtokenを渡し、UID1/0700へ戻して解放しています。
-途中でroot所有に戻したままGPU処理を継続するとアプリの書き込みを妨げます。
-このshsrvでは`chown 1 PATH`の数値形式を使用し、`1:1`形式を使いません。
-FTPのmetadataで実所有者を確認します。SDK statのUID欄だけで成功としません。
-
-## 起動後の順序
-
-```mermaid
-flowchart TD
-  A[登録済みネイティブタイトルを通常起動] --> B[設定と一度限りtokenの受渡し]
-  B --> C[AGC / RADV / Vulkan 初期化]
-  C --> D[64MiB Compute読み戻し照合]
-  D --> E[テレビ状態画面と8188 API]
-  E --> F[CPU OpenAIアダプター8189を起動]
-  F --> G[Windowsから生成 / PNG取得]
-```
-
-`GET /health`を認証付きで確認し、GPU unavailableやdegradedのまま生成を繰り返さないでください。
-モデルは最初の生成で読み込まれ、その後同じアプリ内で保持します。再起動後の初回読込は必要です。
-生成中のweight staging/graph segment転送までゼロになるという意味ではありません。
-
-## ログと復旧
-
-| 場所 | 上限・用途 |
-|---|---|
-| `/download0/ai-native-bounded-logs-v2/` | startup / driver / pool、各4MiB×2世代、計最大24MiB |
-| `/app0/ai-runtime/logs/engine.jsonl` | engine結果、16MiB×2世代 |
-| `/app0/ai-runtime/` | bootstrap、API、ジョブ、画像。データ側 |
-
-HTTPタイムアウトだけで再生成せず、既知のjob_idを確認します。
-retained状態ではGPU資源を勝手に解放・再利用せず、本人のアプリID/PID/起動時刻を確認して通常のOS終了経路を使います。
-ネイティブのshutdown409は、止まったワーカーを安全にjoinできないことを示します。
-ゲートウェイの終了でネイティブGPUアプリを止める実装にはしていません。
-
-本体やサービスの応答がなければ、自動でpayloadやアプリを重ねて起動しません。
-本体を復帰した後、既存のFTP/Telnet/WebSrvを起動し、保存ログとモデル・タイトルの配置を確認します。
-停止原因を確定できないままDirect Memory手動解放、予算値変更、システムファイルの書換えを行いません。
-FW更新・初期化・外部公開はこの運用手順に含みません。
+Anima起動後はAGC/RADVの初期化、64MiB Compute読み戻し、health、512×512の実生成、PNG取得の順に確認します。初期Computeだけではモデル推論のGPU成功と扱いません。DiT/VAEの実計算完了・有限値証拠と出力PNGを別に確認します。

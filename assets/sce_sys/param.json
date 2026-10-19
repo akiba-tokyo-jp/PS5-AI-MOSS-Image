@@ -7,9 +7,9 @@
   "attribute": 0,
   "attribute2": 0,
   "attribute3": 0,
-  "conceptId": "99188",
+  "conceptId": "99189",
   "contentBadgeType": 1,
-  "contentId": "UP9000-PPSA99188_00-PS5AIGPUPROBE001",
+  "contentId": "UP9000-PPSA99189_00-PS5AIANIMA000001",
   "contentVersion": "01.000.000",
   "downloadDataSize": 256,
   "gameIntent": {
@@ -22,7 +22,7 @@
   "localizedParameters": {
     "defaultLanguage": "en-US",
     "en-US": {
-      "titleName": "PS5 AI WAI"
+      "titleName": "PS5 AI Anima"
     }
   },
   "masterVersion": "01.00",
@@ -33,7 +33,7 @@
   },
   "requiredSystemSoftwareVersion": "0x0000000000000000",
   "sdkVersion": "0x0000000000000000",
-  "titleId": "PPSA99188",
+  "titleId": "PPSA99189",
   "versionFileUri": "",
   "amm": {
     "multimapVaRangeInGib": 512,

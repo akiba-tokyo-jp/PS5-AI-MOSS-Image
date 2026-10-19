@@ -37,4 +37,7 @@ v=json.loads((ROOT/'docs/verification.json').read_text())
 for test in v['tests']:
     image=ROOT/'docs/images'/('wai-1024.png' if test['size']=='1024x1024' else 'wai-256.png')
     assert hashlib.sha256(image.read_bytes()).hexdigest()==test['PNG_sha256']
-print(json.dumps({'staged_files_checked':len(files),'source_hashes':'PASS','image_hashes':'PASS','authored_markdown_links':'PASS','json_svg':'PASS','embedded_schema':'PASS','public_file_policy':'PASS','inference_performed':False}))
+anima=json.loads((ROOT/'docs/anima-verification.json').read_text())
+assert anima['model_id']=='anima-turbo-v1.1'
+assert anima['PS5_generation_verified'] is False
+print(json.dumps({'staged_files_checked':len(files),'source_hashes':'PASS','historical_WAI_image_hashes':'PASS','Anima_PS5_generation_verified':False,'authored_markdown_links':'PASS','json_svg':'PASS','embedded_schema':'PASS','public_file_policy':'PASS','inference_performed':False}))

@@ -1,1193 +1,1594 @@
 {
-  "scope": "Historical source origins plus V18 IP lifetime overlays and sanitized current documentation. Legacy top-level SELF hash fields are retained as historical records; current V18 artifacts are explicitly versioned below. The portable public rebuild is separate from the console-tested native SELF.",
+  "scope": "Anima development source inventory. Anima has not been executed on PS5. Historical WAI evidence is explicitly separate.",
+  "parent_repository": "https://github.com/akiba-tokyo-jp/PS5-AI-WAI",
+  "parent_commit": "86393645bb1f663c78f2cd2ac08ad67fa84e3812",
+  "Anima_console_executed": false,
+  "Anima_console_SELF_sha256": null,
+  "historical_WAI_inventory": "docs/wai-base-source-snapshot.json",
   "files": [
     {
       "file": ".gitattributes",
-      "sha256": "804eb245be5585fa3d1f1c38ef07ce63b289cf325db1d57c26cdd18dcbf5f854",
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "published_sha256": "f5cbc93b623e043d07fd2d35c9a3df11207a857152f6d026fc5d6b1c51130294",
-      "published_bytes": 622,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "published_sha256": "28f444fa06cbce3e8c79cf461d3c6a24071bacc1193103571f164f55e872f199",
+      "published_bytes": 2230,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": ".gitignore",
+      "published_sha256": "10e44b72b27ed176c5d05fcdda009afc556ae7e4de0c399beff44d0e76aa3546",
+      "published_bytes": 180,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "LICENSE",
+      "published_sha256": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809",
+      "published_bytes": 35823,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "README.md",
-      "sha256": "ec663425db44c42dbcbb509350b2242eaf4da866a5c8d9a5344b7d23b43d79df",
+      "published_sha256": "3ed1541e76363b9a6298049c33494acc198a8771fab862d1366a1e2c31d9a392",
+      "published_bytes": 3522,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "THIRD_PARTY_NOTICES.md",
+      "published_sha256": "1bbeca6f8818c58df3a2e418923930618384f523e4fdc32b6d2424fb236c0ea0",
+      "published_bytes": 3486,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "WAI-BASE-README.md",
       "published_sha256": "ec663425db44c42dbcbb509350b2242eaf4da866a5c8d9a5344b7d23b43d79df",
       "published_bytes": 17535,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input.",
-      "bytes": 17535,
-      "normalization_or_provider_update": false
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "assets/sce_sys/icon-provenance.json",
+      "published_sha256": "00c528eebe31df3d02796a5a234184a6747226e9616353b30645461bfa6fa726",
+      "published_bytes": 433,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "assets/sce_sys/icon0.png",
+      "published_sha256": "679e887f2c23b8948189ce1d51f2973a000e71756b00dc3dcdb715293880f745",
+      "published_bytes": 426329,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "assets/sce_sys/param.json",
+      "published_sha256": "dd72089a9672f60eece2b99453b49b4791e447d49d54179eac457e6983c9e80a",
+      "published_bytes": 1093,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "build-profiles/native.json",
       "published_sha256": "389505cf9e1831a5ed5a3f85e2b265c08dd3585566c2dca9684bc3c7399fc2dc",
       "published_bytes": 26625,
-      "sha256": "389505cf9e1831a5ed5a3f85e2b265c08dd3585566c2dca9684bc3c7399fc2dc",
-      "identical_to_tested_input": false,
-      "validation_scope": "Portable public build/configuration wiring; runtime adoption evidence is recorded separately.",
-      "normalization_or_provider_update": true,
-      "bytes": 26625
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "config/anima-native.json.example",
+      "published_sha256": "436598076efb4b1f981aa9ee6615f37234a02b892643f534a601308f0c7b4b1f",
+      "published_bytes": 791,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "config/build.json.example",
       "published_sha256": "d30e32e9ae093df072c77262ea79c246a035a50d67f9b1421a17c6a6bba66622",
       "published_bytes": 737,
-      "sha256": "7d74bb1b8459d28f2d6c5dd1a7ee174857246a28f3879578716fa2dab4be1b6a",
-      "identical_to_tested_input": false,
-      "validation_scope": "Git LF checkout normalization; model calculation sources unchanged.",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "config/native.json.example",
       "published_sha256": "b31a8ab18aa4c427e122cd011a2a8f831a0305a8616b4f448e5a009e073dbe49",
       "published_bytes": 1212,
-      "normalization_or_provider_update": true,
-      "identical_to_tested_input": false,
-      "sha256": "b31a8ab18aa4c427e122cd011a2a8f831a0305a8616b4f448e5a009e073dbe49",
-      "bytes": 1212,
-      "validation_scope": "Portable public build/configuration wiring; runtime adoption evidence is recorded separately."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "dependencies.lock.json",
+      "published_sha256": "e9ddf1991ea7bb9fb09acb1e12fc766599176db89cd22fc84d9d7854402eb0de",
+      "published_bytes": 1494,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/anima-model-derivatives.json",
+      "published_sha256": "cd9561ab21c99cf1bcccab7f925440f0a6855cd80694bfc811783e13593a41c7",
+      "published_bytes": 4565,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/anima-models.md",
+      "published_sha256": "5d6d982e77dea8cbc3e02e6f5b54786a0ecba20b9d9636619acf95f6852ae7b1",
+      "published_bytes": 1923,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/anima-verification.json",
+      "published_sha256": "7c3442fb0f77763ac04b847268f4a29de95af855e94907e8b2b0f71790137776",
+      "published_bytes": 1062,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/api.md",
-      "sha256": "de3068f0893134849f16be8427725432aa630f81440d45800fee831502c394ac",
-      "published_sha256": "de3068f0893134849f16be8427725432aa630f81440d45800fee831502c394ac",
-      "published_bytes": 7373,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input.",
-      "bytes": 7373,
-      "normalization_or_provider_update": false
+      "published_sha256": "1303d3b69e4681c383d4ebc8de30c571ab51e036eb6b40939376ff75049dcc21",
+      "published_bytes": 2356,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/build-verification.json",
+      "published_sha256": "59949f4e48dc5511605d8ae7d6179beed44a291ece13e16d1935af9af6d52bbc",
+      "published_bytes": 1564,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/build.md",
-      "sha256": "b1e29f5581730e1896261166d4e452df3f44124e15037f134a974cbb12f92a49",
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "published_sha256": "06e4c30a172e66830ce5eb7a7feb6213f4ca79dd89176121d64d9443af5d7492",
-      "published_bytes": 12410,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "published_sha256": "c68aa51fac1da4dea5ba82497620f84fa255c63fd8961c02a1f638a285b3bf26",
+      "published_bytes": 3402,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/controlnet-verification.json",
+      "published_sha256": "202000211bfbfc2094080d16932af9aad290eb82bcc1fbb62435a28a273f7d39",
+      "published_bytes": 5022,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/controlnet.md",
-      "sha256": "97d1d6f5577c6c0186448912d17a1aa7bb51981d560e737a6f81fc487eb1881e",
       "published_sha256": "97d1d6f5577c6c0186448912d17a1aa7bb51981d560e737a6f81fc487eb1881e",
       "published_bytes": 7931,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/dashboard-verification.json",
+      "published_sha256": "c2dd91c08288dc05e00ff0f1721dafcd4b9242b32e0f7143fa347c2506eee3fc",
+      "published_bytes": 2998,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/dashboard.md",
+      "published_sha256": "bc45c739744b8bd69896906f1556fd1b491605c158afe52027d540a5a30bbc8e",
+      "published_bytes": 6022,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/deployment.md",
+      "published_sha256": "6f44e489c69420ef73cefa854e026a17ac281b473f61f10661e5a628e05741ca",
+      "published_bytes": 2373,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/feature-classification-20261019.md",
-      "sha256": "8a3848bd3ab62e7b1f2ca1696296815c776576d552465169307a6cbc937825ad",
-      "bytes": 18950,
       "published_sha256": "9d92be6eedc11cd1691b2c23ed684ceec878cd0f171f95e24ce36be2cf82bf6c",
       "published_bytes": 15940,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/architecture.svg",
+      "published_sha256": "cab5eed0146cb973fe042b0472dad0b68f6ae4e2ea0d26645bb1f7fe1ed20741",
+      "published_bytes": 2743,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/controlnet-canny-map.png",
+      "published_sha256": "bbb2b14734ade1aef6d63c7c4316a69ff33a4e8f9f858757739e09684e16c4e5",
+      "published_bytes": 113669,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/controlnet-canny1024.png",
+      "published_sha256": "10d715bb9a1b8facd7d54cc93bf971552943e192c93f808633cba03f6dd6eb62",
+      "published_bytes": 2784007,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/controlnet-openpose-map.png",
+      "published_sha256": "a7ec146e015128aaede222fbf6e7dec087842a55b5fccd35c99c5cc40b909f10",
+      "published_bytes": 11467,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/controlnet-openpose1024-logsync.png",
+      "published_sha256": "1c201e82b28ae840a589a7d578ccc8efa5b3f49e28820ca08622d23dcd7f1a14",
+      "published_bytes": 251855,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/controlnet-openpose1024.png",
+      "published_sha256": "98eaa144fa64e8160352709df84f34420249d09023f03e108682d95de9dd8b0d",
+      "published_bytes": 505949,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/dashboard-colour-preview.png",
+      "published_sha256": "6877d783854a6d7c07f12955bc59f2d8f809ff165868e9f2a83a95969000f08b",
+      "published_bytes": 91823,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/dashboard-preview.png",
+      "published_sha256": "4886d09814b7e7520e4d43e80024f1bb4b41a97dccdd7e15a271b4ae605684a5",
+      "published_bytes": 108115,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/dashboard-success.png",
+      "published_sha256": "c1443baa5e4631fefdc237da99ad0fe4a5263209a78dec2f696ead7d39b59910",
+      "published_bytes": 380508,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/log-modes-continuous-six.png",
+      "published_sha256": "7ba4f3321a905775501cbaaa4c0a27db3866759cd6fa89756ec7b0ed116a58f7",
+      "published_bytes": 464233,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/log-modes-same-768x1024.png",
+      "published_sha256": "763b3eca54fda750cbc03081570dafb0d3127824abc0a834c70ae493175ba8cd",
+      "published_bytes": 941994,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/manga-256.png",
+      "published_sha256": "db3125688d59826fc9fd800228273d87ac7faaaa0d992653e3300072c358f3df",
+      "published_bytes": 44796,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/manga-verification.png",
+      "published_sha256": "d53af91d2a4dc5a7e59b17c78d543e060e0f59a84e45e23d6f346fbbe4cd5e5e",
+      "published_bytes": 336183,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/precision-comparison.png",
+      "published_sha256": "0783d6025380d98a72c2fb85028a24401e02ebe012fdd78dad22bcdd37a08316",
+      "published_bytes": 500480,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/verification.png",
+      "published_sha256": "094f308ab99e602bf83c07bdfe86a366ee602a62b74887a1a67cb812bd6d7ed3",
+      "published_bytes": 445806,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/wai-1024.png",
+      "published_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986",
+      "published_bytes": 857419,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/wai-256.png",
+      "published_sha256": "5170c8ba35689ab634a3c3786f969410b880a62282582bf4f471210bf791a826",
+      "published_bytes": 86190,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/wai-cfg-batch-1024.png",
+      "published_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986",
+      "published_bytes": 857419,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/images/wai-fp16-1024.png",
+      "published_sha256": "21cffabc24d2d37f2d5f8320c05667a2ecd3e8bade7c379254c0a464caefb417",
+      "published_bytes": 880950,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/ip-lifecycle-20261019-evidence.json",
-      "sha256": "5460e0cfb974599c9da4664a09f495a5846ce1d49b48d9b10921a1d6a3437f1e",
-      "bytes": 9372,
       "published_sha256": "b01cd10370b9222739a298da61242bc167cce92952b49d6f0479bd305b42fb1e",
       "published_bytes": 11418,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/ip-lifecycle-20261019.md",
-      "sha256": "53167d79692b78791ff8cbdc2ed93bbeedabe717e3995483b840fb26af7ca212",
-      "bytes": 9708,
       "published_sha256": "60205e50f46f66a91f6d95f408a277542e6a1a3e09fa996ef3a835cdbecc492a",
       "published_bytes": 12532,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/logging-verification.json",
+      "published_sha256": "c95d72ac932628464b330402cd8832883451aed4bbe1c1b729f93189e8bf0769",
+      "published_bytes": 5640,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/logging.md",
+      "published_sha256": "ab418090f74441a577c94b861f3dbff7702975cd9a6565062bfd048320d647d7",
+      "published_bytes": 7541,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/manga-build-verification.json",
+      "published_sha256": "84bf5c043d1a9a7dab4c23ff10e82304f9ec6f20aa432c478d6956a00d21ff77",
+      "published_bytes": 12719,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/manga-verification.json",
+      "published_sha256": "f0f166a535da790aa2e8d8fe2f4589f0323c93c0c1a1832645b22d77a3d60769",
+      "published_bytes": 5652,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/manga.md",
+      "published_sha256": "7179d34d8bf00e46a53e9d2c1ebf78d7f9b8dbbccfb021587424b3de6ca66eb6",
+      "published_bytes": 5492,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/mask-api.md",
-      "sha256": "14830d09216e3c01e65eb7b373b820b61f49f782a25d95774a9a895224ae351d",
-      "bytes": 3556,
       "published_sha256": "14830d09216e3c01e65eb7b373b820b61f49f782a25d95774a9a895224ae351d",
       "published_bytes": 3556,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/masked-inpainting-20261019-evidence.json",
-      "sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
       "published_sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
       "published_bytes": 6635,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/masked-inpainting-20261019.md",
-      "sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
       "published_sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
       "published_bytes": 3832,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/controlnet-canny1024.mp4",
+      "published_sha256": "eefb16a25a9228e29b48851f870df0a50e2edd92b80f52e1c8deddcdde1adbc5",
+      "published_bytes": 112046,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/controlnet-openpose1024-logsync.mp4",
+      "published_sha256": "313346c6ca72383c275aaa18e4d0c9b5d32ea16d991c9417e8d7a852b22d4b69",
+      "published_bytes": 65982,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/controlnet-openpose1024.mp4",
+      "published_sha256": "1f230329706b3b0b43248799ba90668a7174d6ec8a39a48b2966db0cf2a1e849",
+      "published_bytes": 76033,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/dashboard-success.mp4",
+      "published_sha256": "8a2d34481832d254ddf7712f6357bc00c17d7a4baf347ffff981734a0772a313",
+      "published_bytes": 85646,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/log-modes-continuous-six.mp4",
+      "published_sha256": "6524e07a5d50f466b41130d79ab678e4d4e9ef33c60558b816ce928799826f1e",
+      "published_bytes": 94397,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/manga-verification.mp4",
+      "published_sha256": "bb27c759b9ca58591098720174c122fb4030e580d0037357eccd054d3ff06a3f",
+      "published_bytes": 175839,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/media/optimization-openpose1024-cold.mp4",
-      "sha256": "8d5dab6794ee63c08fd4fb41d00a335dd7f5638560e32313adae17b5057d01e6",
       "published_sha256": "8d5dab6794ee63c08fd4fb41d00a335dd7f5638560e32313adae17b5057d01e6",
       "published_bytes": 65762,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/media/optimization-openpose1024.mp4",
-      "sha256": "36f94552bc4176e0c050d991f9d86c1bac1973733dd6e260cc31d97a03d2c933",
       "published_sha256": "36f94552bc4176e0c050d991f9d86c1bac1973733dd6e260cc31d97a03d2c933",
       "published_bytes": 67698,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/precision-cfg-verified.mp4",
+      "published_sha256": "e5d114de322cc4dba36680d66102cd280e06d5f16c191accc507c3802214b504",
+      "published_bytes": 573718,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/media/verified-results.mp4",
+      "published_sha256": "6c3f798f78ce4e6a5ff4e8dbca7f185dfc7aa9d27c070174c5074dd617c85bc7",
+      "published_bytes": 570806,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/models.md",
+      "published_sha256": "9652d2119e077c1c56525d9ab499595d5cbd6d9b2a62d282f8b52ba32a06a1be",
+      "published_bytes": 2097,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/openapi.json",
-      "sha256": "df5bba11c343b6cfab7276ade2679dae9e05420e3a6bd6f0acfbbd90f0de6144",
-      "bytes": 37748,
-      "published_sha256": "df5bba11c343b6cfab7276ade2679dae9e05420e3a6bd6f0acfbbd90f0de6144",
-      "published_bytes": 37748,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "published_sha256": "b4aefdaf13fbf38f9d52b28712551d416767e024a6d8d837800a99b5222ebd93",
+      "published_bytes": 21875,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/operations-recovery-20261019-evidence.json",
-      "sha256": "4c9e5f7bd8a2622bb3b0280e642ee2fc72e0d3a1bb5fab2fd167c916dd6d24a8",
-      "bytes": 9704,
       "published_sha256": "c1d208a6974fbf056b4af4943d65c1ddde175b9355e6d17476415dfed944cc93",
       "published_bytes": 9456,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/operations-recovery-20261019.txt",
-      "sha256": "511e8eb2023df0abee061dbd3b1e6a9080c4d9464abdd11ba56a64a11dc3b1c5",
-      "bytes": 3619,
       "published_sha256": "a3d108a86a8882bc8cf04d7c76c41b3ab97e4a65b7d67c073150e421cda654ae",
       "published_bytes": 3587,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/optimization-20261019-evidence.json",
-      "sha256": "97a2c92dd2cc1f9b87f6360d7899669a62a9a9b3c738840591f45483ac498806",
       "published_sha256": "87f0ff8d4452c9a6570768367898ba00992b2869c763366bce16a4e45741a622",
       "published_bytes": 38999,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/optimization-20261019.md",
-      "sha256": "a938750e1026a18a717c446744d6b98a118b6e3549d4f710f8fbd101626c2706",
       "published_sha256": "a4e2f7aede6a18ad25d2337341a6221b79e2977ecefd85452a62b848e3cc7331",
       "published_bytes": 13047,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/precision-build-verification.json",
+      "published_sha256": "fb502dd0c3bd2f4383b4ed23ab19fa9d0cc386f835e748718f8d9a5528a6dcba",
+      "published_bytes": 1381,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/precision-verification.json",
+      "published_sha256": "b81ca59356f386fa9bb4d20de28f2cc6db7c1600e87a9ae93811cf5f427b8f97",
+      "published_bytes": 11498,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/precision.md",
+      "published_sha256": "c1ea6762a96492753413841c7044d877ec2b3c82d9977910b259adde5747bf1b",
+      "published_bytes": 4818,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "docs/status.md",
-      "sha256": "d411b86392506775bdcc7e62c5158fbf4d06f3e08a871aa893a4a53fcc7f2b69",
+      "published_sha256": "649c50987cb809d4a0b8abda2da32b1caf99073b4a2b40ce41688d73f7935674",
+      "published_bytes": 2148,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/unet-profiling.json",
+      "published_sha256": "ea78ac6a88698e42a648cea6f89086de040a773b6c9c045e12766aff7b498644",
+      "published_bytes": 10525,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/unet-profiling.md",
+      "published_sha256": "a5b41e3445976831f4020214917c5b29c65947d2d2fc1133277cd08553572d92",
+      "published_bytes": 9439,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/verification.json",
+      "published_sha256": "c569cd744076170477e75023ac76fc921c91075ca67f05f5f63a54a4b60455b9",
+      "published_bytes": 3261,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/verification.md",
+      "published_sha256": "cf126ff37e35e6476894fc07f978a563eb9e9952c52a67ef956639e7323659db",
+      "published_bytes": 4642,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/wai-base-api.md",
+      "published_sha256": "de3068f0893134849f16be8427725432aa630f81440d45800fee831502c394ac",
+      "published_bytes": 7373,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/wai-base-build.md",
+      "published_sha256": "06e4c30a172e66830ce5eb7a7feb6213f4ca79dd89176121d64d9443af5d7492",
+      "published_bytes": 12410,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/wai-base-deployment.md",
+      "published_sha256": "8d7a7206815364d33ab1102e9318716e335f918f0617ade5496fd31440f78cb9",
+      "published_bytes": 5495,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/wai-base-source-snapshot.json",
+      "published_sha256": "9dc8906730e8023aa338f0bcacfff23572426f9f01ad460509e6b1ac676defc9",
+      "published_bytes": 58691,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "docs/wai-base-status.md",
       "published_sha256": "d411b86392506775bdcc7e62c5158fbf4d06f3e08a871aa893a4a53fcc7f2b69",
       "published_bytes": 2818,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input.",
-      "bytes": 2818,
-      "normalization_or_provider_update": false
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Anima-model-LICENSE.md",
+      "published_sha256": "ee956174133d7c2cdcf220440c7726187eaf4b50e8e48ee32194353a22164d15",
+      "published_bytes": 18259,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Artwork-NOTE.txt",
+      "published_sha256": "9bffee5b85a07253f53388454dc5b65bc6a7885d614ef5c02cf24299a0e31c7f",
+      "published_bytes": 280,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/IP-Adapter-Apache-2.0.txt",
+      "published_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "published_bytes": 11357,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/LLVM-LICENSE.txt",
+      "published_sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+      "published_bytes": 15141,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/MIT.txt",
+      "published_sha256": "4e76049398df734a97db46f3bd4b5cbc460cb5f6bfaf737cdc3d6fbb8ab3de27",
+      "published_bytes": 1082,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa-license.rst",
+      "published_sha256": "e272a136f6ce1b855afeef2fbe44f94f17d3b4d91cef29f8364af5800c5838a8",
+      "published_bytes": 1866,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/Apache-2.0",
+      "published_sha256": "aeae52465380b8b7959c940355e869cbbc277d4559a7ababa49cbc4818c051f5",
+      "published_bytes": 10232,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/BSL-1.0",
+      "published_sha256": "cf7105f24feaf70f28b8de10074e4d37bef89b8f3ae0a5f1280237f027d77ec0",
+      "published_bytes": 1666,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/GPL-1.0-or-later",
+      "published_sha256": "13ff2a162a56796d863de9373ea46860a0fc28da81c192e76da9704dc117c27b",
+      "published_bytes": 13307,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/GPL-2.0-only",
+      "published_sha256": "535fe49430f3098603b190f07040d5b0c65eb8ed5fe173108e26eb668e758c00",
+      "published_bytes": 18774,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/MIT",
+      "published_sha256": "a1179eae4e8b0ef06cbad6b6a2e324bb1c1cd9281cf40b42c0b15b0e34df2683",
+      "published_bytes": 1402,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/SGI-B-2.0",
+      "published_sha256": "8299bbd83c4d77eb5ae767cf250e9b3b470218e863714cba2e5e7eaed51285f2",
+      "published_bytes": 1844,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/Mesa/exceptions/Linux-Syscall-Note",
+      "published_sha256": "d3a16686cf8797fd8a7b35564b9de8586e6ed8e19c9447e16ab6dda0d411215d",
+      "published_bytes": 1281,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/PS5LM-LICENSE.txt",
+      "published_sha256": "bfde1fd94c3b17b89fbbfa6321660c8284f631bf126db1e0a32c897944a842db",
+      "published_bytes": 35825,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/PS5_PayloadSDK-GPL-3.0.txt",
+      "published_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "published_bytes": 35149,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/PS5_Vulkan-NOTICE.md",
+      "published_sha256": "71aa81af4fd3acee9ca38c961f394ad168cff70d8a5a12e499d3dccd5f09feba",
+      "published_bytes": 7553,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/WAI-Dashboard-Glyphs-OFL.txt",
+      "published_sha256": "93fed46019c38bbe566b479d22148e2e8a1e85ada614accb0211c37b2c61c19b",
+      "published_bytes": 4414,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/controlnet/Apache-2.0.txt",
+      "published_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "published_bytes": 11358,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/controlnet/controlnet-illustrious-canny-f16.safetensors.model-card.md",
+      "published_sha256": "7fd97d944ab38625b66fbc89e37edf2af2910b0f2a8bceda1695927df7dcd49e",
+      "published_bytes": 1156,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/controlnet/controlnet-models-attribution.txt",
+      "published_sha256": "d4678e7048b5e758222b51f4c7ada057dd489531ce2d947cfee517d31d83e31e",
+      "published_bytes": 688,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/controlnet/controlnet-xinsir-openpose-sdxl-f16.safetensors.model-card.md",
+      "published_sha256": "e3db57745d01512496e88dfa173f7aa8b8492727eb220948f66674f86ce2e431",
+      "published_bytes": 7509,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/ggml-MIT.txt",
+      "published_sha256": "bcd8ec749126d45cb06737d0690295d73df4b6e7e194205bcf91190368f27285",
+      "published_bytes": 1099,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/manga-LoRA-attribution.txt",
+      "published_sha256": "efb8e6c2c83138925a5d539e849410e213f6590d857f90a50105ed05e8064aa2",
+      "published_bytes": 183,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "licenses/stable-diffusion-MIT.txt",
+      "published_sha256": "4e76049398df734a97db46f3bd4b5cbc460cb5f6bfaf737cdc3d6fbb8ab3de27",
+      "published_bytes": 1082,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/arena.h",
-      "sha256": "01110dd93c490a4198748923db3a2f7e6b2b4d64fe3594910bb1d43f9cb73bb8",
-      "bytes": 1970,
       "published_sha256": "01110dd93c490a4198748923db3a2f7e6b2b4d64fe3594910bb1d43f9cb73bb8",
-      "identical_to_tested_input": true,
-      "published_bytes": 1970
+      "published_bytes": 1970,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/bootstrap.inc",
-      "sha256": "67a067cfc1c7ee92a5cad7227f33a0c3630511187a4490d7e8c91cc277b0ac93",
-      "bytes": 17577,
       "published_sha256": "67a067cfc1c7ee92a5cad7227f33a0c3630511187a4490d7e8c91cc277b0ac93",
-      "identical_to_tested_input": true,
-      "published_bytes": 17577
+      "published_bytes": 17577,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/bounded_journal.h",
-      "sha256": "c0cb57e2eec74a96f6b2ec0075aaee0d3618f7400c89bfb28805a59af9d1e38c",
-      "bytes": 2199,
       "published_sha256": "c0cb57e2eec74a96f6b2ec0075aaee0d3618f7400c89bfb28805a59af9d1e38c",
-      "identical_to_tested_input": true,
-      "published_bytes": 2199
+      "published_bytes": 2199,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/bounded_stdio_log.h",
       "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
       "published_bytes": 1408,
-      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
-      "bytes": 1408,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "native/app/cpu_clip_pool_buffer.hpp",
+      "published_sha256": "a0a25b47c4e7468b25fd4a9f0007edd6480d81bf2ec24d6c95cb502a90bec713",
+      "published_bytes": 2515,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/direct_pool.h",
-      "sha256": "45939d3512558590bbf7ac488a5167407aca084cc192aec1e42be18366cafd75",
-      "bytes": 1257,
       "published_sha256": "45939d3512558590bbf7ac488a5167407aca084cc192aec1e42be18366cafd75",
-      "identical_to_tested_input": true,
-      "published_bytes": 1257
+      "published_bytes": 1257,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/driver_journal_impl.inc",
-      "sha256": "3b35ccabbf53d50f016313223023b54e31cb46849533e9daa63fac7b4c0f614b",
-      "bytes": 6403,
       "published_sha256": "3b35ccabbf53d50f016313223023b54e31cb46849533e9daa63fac7b4c0f614b",
-      "identical_to_tested_input": true,
-      "published_bytes": 6403
+      "published_bytes": 6403,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/engine.h",
-      "sha256": "ff3fed361903f100db9386aacb806ab4270d9d5ba0c0c57e8b3c97fcbcccacec",
-      "bytes": 2924,
       "published_sha256": "f1a33afdb3a457acfc5f781f9bf17b3f650b16bb3810afa21b888a5a4aaa916b",
-      "identical_to_tested_input": false,
       "published_bytes": 2848,
-      "normalization_or_provider_update": true,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/engine_config.h",
-      "sha256": "fc17b2027053fe37115172691fdd9dbc41255b41f528109645820a117c7f6597",
-      "bytes": 11402,
-      "published_sha256": "16d5061c306c4066431e309ad1e022d772c8c1c7026a4f759d2bc3cd13c964cb",
-      "identical_to_tested_input": true,
-      "published_bytes": 13214
+      "published_sha256": "f0766c928f3a4b6b5bcda0580c948ee7df3d4fa77aa07e90b387274a593d0298",
+      "published_bytes": 12886,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "sha256": "6cec6d69e75934d21b4a35afecf0c54ed5a53e0634b43df7133b808a06376f3e",
-      "bytes": 64900,
-      "published_sha256": "43c47078c73ea85bc5d3612cb6c5cae034d49c81ed983ae018c59a2a624a6e02",
-      "identical_to_tested_input": false,
-      "published_bytes": 63833,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply.",
-      "normalization_or_provider_update": true
+      "published_sha256": "e46e5dbaab8ced1b802efa97dd28bfccd0939029117d185441ff5e0d49f28232",
+      "published_bytes": 58121,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/host_shim.h",
-      "sha256": "814939143f0f9a0e5d8ab78768f85a8b033a4d21a4e2f53c3888f7ec7a217147",
-      "bytes": 314,
       "published_sha256": "814939143f0f9a0e5d8ab78768f85a8b033a4d21a4e2f53c3888f7ec7a217147",
-      "identical_to_tested_input": true,
-      "published_bytes": 314
+      "published_bytes": 314,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/host_test.c",
-      "sha256": "ed49dcb2db92566fd40432ff72d5d9de5bf14677f362b9e6b323aa5420863779",
-      "bytes": 10539,
       "published_sha256": "ed49dcb2db92566fd40432ff72d5d9de5bf14677f362b9e6b323aa5420863779",
-      "identical_to_tested_input": true,
-      "published_bytes": 10539
+      "published_bytes": 10539,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/journal_metrics.h",
-      "sha256": "326ee6978e0f5c543c1c07e8d3693c534ce45470a6ff166c0f50f55f4f82e234",
-      "bytes": 1483,
       "published_sha256": "326ee6978e0f5c543c1c07e8d3693c534ce45470a6ff166c0f50f55f4f82e234",
-      "identical_to_tested_input": true,
-      "published_bytes": 1483
+      "published_bytes": 1483,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/kick_impl32.c",
-      "sha256": "e81480e731add25418fe54a1a2348543c0928e5d7a52a7725eb21789b1ceee91",
-      "bytes": 8423,
       "published_sha256": "e81480e731add25418fe54a1a2348543c0928e5d7a52a7725eb21789b1ceee91",
-      "identical_to_tested_input": true,
-      "published_bytes": 8423
+      "published_bytes": 8423,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/log_policy.h",
       "published_sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
       "published_bytes": 726,
-      "sha256": "f8023515c85532ebf6af20710815ac78a348d513e08a8dd728607e3fa7983819",
-      "bytes": 726,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/memory_plan.h",
-      "sha256": "8d08d5b74d5ea665f737118d110ec3418fa2846b3966005caa4e42e6eef93216",
-      "bytes": 1224,
       "published_sha256": "8d08d5b74d5ea665f737118d110ec3418fa2846b3966005caa4e42e6eef93216",
-      "identical_to_tested_input": true,
-      "published_bytes": 1224
+      "published_bytes": 1224,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "native/app/native_constructor_expect.h",
+      "published_sha256": "cf0e6a131bd65951ab31c82c5489b61310748f7b6af79b112abe319e04a239ee",
+      "published_bytes": 54,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/native_gate.h",
-      "sha256": "7caa83fb92cdb5a9caeb6bce99a0b479a7491391a14e7110883cfe3a5ba50d9a",
-      "bytes": 311,
       "published_sha256": "7caa83fb92cdb5a9caeb6bce99a0b479a7491391a14e7110883cfe3a5ba50d9a",
-      "identical_to_tested_input": true,
-      "published_bytes": 311
+      "published_bytes": 311,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/perbo_owner_impl.c",
-      "sha256": "5b92043f8db791810e93d9a1e1e262fbf9edc054815c2858c4c6a6ee826c03d9",
-      "bytes": 19568,
-      "published_sha256": "5b92043f8db791810e93d9a1e1e262fbf9edc054815c2858c4c6a6ee826c03d9",
-      "identical_to_tested_input": true,
-      "published_bytes": 19568
+      "published_sha256": "30ba42536be9b724a3d8aee8a5d9a08b6c73f30e5a3e74ee2df52b52b6be26ff",
+      "published_bytes": 19581,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "native/app/phase_profile.h",
+      "published_sha256": "18c3f19e25fbe19cf2c54b100f6e0a0ada65a42996e3303772245422f7a51b07",
+      "published_bytes": 1638,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/placement.h",
-      "sha256": "30b47e02bec4d27b908b34535382521fba9075de102de5b8f14ce4729527a76a",
-      "bytes": 1212,
       "published_sha256": "94be5fd7cb125d8f50c9dd6fb0cd2f5e0d682f117efa905413bce167efcf66be",
-      "identical_to_tested_input": false,
       "published_bytes": 1193,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Reviewed v16 source after LF normalization; runtime adoption evidence is recorded separately."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/pool.c",
-      "sha256": "b72aca2cdaa45e44ea81fa13320e2670f1815738ec8af34f30954c9414c1e44f",
-      "bytes": 26652,
-      "published_sha256": "e4bbe60d799c15fe3d972763c990de09718400177dbc69f93e68275488d37ac0",
-      "identical_to_tested_input": false,
-      "published_bytes": 30635,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "published_sha256": "05f4af0fc2e14583a4104a52ef8be9adbf66b6c93d2a267a3dfea750242bde09",
+      "published_bytes": 30648,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/pool.h",
-      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
-      "bytes": 2697,
       "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
-      "identical_to_tested_input": false,
       "published_bytes": 3207,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/pool_host_test.c",
-      "sha256": "6eb0fc90240d1305f00d8fedebdcef387203e562e75b5db231a22317709a9b17",
-      "bytes": 13271,
       "published_sha256": "6eb0fc90240d1305f00d8fedebdcef387203e562e75b5db231a22317709a9b17",
-      "identical_to_tested_input": true,
       "published_bytes": 13271,
-      "normalization_or_provider_update": true,
-      "validation_scope": "33 host ownership/admission cases on the actual pool source,9422MiB/19 regions/final206MiB; physical memory and GPU idle mocked. No model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/precision_conv_gate.inc",
-      "sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
-      "bytes": 4787,
       "published_sha256": "5e28a4c50b5ca4c066f5b5f8901f537808c8b3615da9c2eb698b8b411fec174d",
       "published_bytes": 4787,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/precision_gate.inc",
-      "sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
-      "bytes": 5002,
       "published_sha256": "529235ca010bc6f5d5debc70c2dd7e5b7facb66b44c82b1005240ba13212efc4",
       "published_bytes": 5002,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/precision_mode.h",
-      "sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
-      "bytes": 80,
       "published_sha256": "90e6f1fc1095e29be7693e2d98cf30fdbecaaad8518252da33ceaf5f97bd50dc",
       "published_bytes": 80,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/probe.h",
-      "sha256": "1eba9d8e70fb861f73824826986a3cc83e2057044c9ab265006a5e70eec5b8f3",
-      "bytes": 1177,
       "published_sha256": "1eba9d8e70fb861f73824826986a3cc83e2057044c9ab265006a5e70eec5b8f3",
-      "identical_to_tested_input": true,
-      "published_bytes": 1177
+      "published_bytes": 1177,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/radv_ps5_platform_native.c",
-      "sha256": "e25624fce939ec3ac298db561f75a2e93f27de32b5674a6a0e75dc20e9475a2d",
-      "bytes": 18887,
       "published_sha256": "e25624fce939ec3ac298db561f75a2e93f27de32b5674a6a0e75dc20e9475a2d",
-      "identical_to_tested_input": true,
-      "published_bytes": 18887
+      "published_bytes": 18887,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/reference_image.c",
-      "sha256": "1972b5cec30ce701cc55080bd9988fcabce07fa1eb700844a475f6536a53837a",
-      "bytes": 9718,
       "published_sha256": "1972b5cec30ce701cc55080bd9988fcabce07fa1eb700844a475f6536a53837a",
       "published_bytes": 9718,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/reference_image.h",
-      "sha256": "ab4e1d21198445b196a3f2df5a869e18408276f47861dd04478a1f70fed45256",
-      "bytes": 1527,
       "published_sha256": "ab4e1d21198445b196a3f2df5a869e18408276f47861dd04478a1f70fed45256",
       "published_bytes": 1527,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/reference_store.inc",
-      "sha256": "2f6c986d4334a4f560de9a8ce4fc7247d160b33c2f9e788e75cacc85d39b273b",
-      "bytes": 8729,
       "published_sha256": "2f6c986d4334a4f560de9a8ce4fc7247d160b33c2f9e788e75cacc85d39b273b",
       "published_bytes": 8729,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/retained_fault.inc",
-      "sha256": "1e6758af2e4c61e741a8237bc1b924ec097d4ec495804582a6767da1e497f067",
-      "bytes": 1594,
       "published_sha256": "1e6758af2e4c61e741a8237bc1b924ec097d4ec495804582a6767da1e497f067",
-      "identical_to_tested_input": true,
-      "published_bytes": 1594
+      "published_bytes": 1594,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/server.c",
-      "sha256": "3f39292cdd056b65e4262f72dda909363488755a0674fcd623661ca88a58b79c",
-      "bytes": 60234,
-      "published_sha256": "3f39292cdd056b65e4262f72dda909363488755a0674fcd623661ca88a58b79c",
-      "identical_to_tested_input": true,
-      "published_bytes": 60234,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "af2ee935a9599ebfc58af1c21b105ba80b9ff9730bc56dfe48aba42eb2bb1ebd",
+      "published_bytes": 61374,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/shutdown_policy.h",
-      "sha256": "377b44be4c645426087bf3c1c87384878de2bca2ab4f165abe5ac5396246f2d0",
-      "bytes": 1111,
       "published_sha256": "377b44be4c645426087bf3c1c87384878de2bca2ab4f165abe5ac5396246f2d0",
-      "identical_to_tested_input": true,
-      "published_bytes": 1111
+      "published_bytes": 1111,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/startup.c",
-      "sha256": "b6f9d9bae4dfbc75243daaa6daeee35a5e5e63182ebb64bb918a294c1846154f",
-      "bytes": 60849,
-      "published_sha256": "9aac9c4965e6b1450f47221e2222ab2ca005e2de5bda0c170606b5fc2f9bf71d",
-      "identical_to_tested_input": false,
-      "published_bytes": 59861,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Reviewed v16 source after LF normalization; runtime adoption evidence is recorded separately."
+      "published_sha256": "6362f730b3a458bcc2b0ad9340573424ceec396b5575d1a60a3063ffdd02b93e",
+      "published_bytes": 59848,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/status.h",
-      "sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "bytes": 5386,
-      "published_sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "identical_to_tested_input": true,
-      "published_bytes": 5386
+      "published_sha256": "7be3cfc40a661885c8f42ab8c16c615dd1da36f6e89dfe1e2700d9382449b6d4",
+      "published_bytes": 5388,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/storage_probe.inc",
-      "sha256": "ad11c4e0dad3414169bea0a201059441d8005344fbc9526dd25a490c6307f6d4",
-      "bytes": 1584,
       "published_sha256": "ad11c4e0dad3414169bea0a201059441d8005344fbc9526dd25a490c6307f6d4",
-      "identical_to_tested_input": true,
-      "published_bytes": 1584
+      "published_bytes": 1584,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/test_retained_engine.inc",
-      "sha256": "1254e449899868977bac5e6b66950b73f187b3abe85ed2e0c8d835841f7b97d5",
-      "bytes": 831,
       "published_sha256": "1254e449899868977bac5e6b66950b73f187b3abe85ed2e0c8d835841f7b97d5",
-      "identical_to_tested_input": true,
-      "published_bytes": 831
+      "published_bytes": 831,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/ui_hooks.h",
-      "sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
-      "bytes": 581,
       "published_sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
-      "identical_to_tested_input": true,
-      "published_bytes": 581
+      "published_bytes": 581,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/v3_shutdown.h",
-      "sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
-      "bytes": 659,
       "published_sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
-      "identical_to_tested_input": true,
-      "published_bytes": 659
+      "published_bytes": 659,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/app/vulkan_bridge.cpp",
-      "sha256": "a993ee224d76243bcb45d2a2928fecf7ae0379f0957d28d5726a6d9cb8245c0e",
-      "bytes": 12930,
       "published_sha256": "a993ee224d76243bcb45d2a2928fecf7ae0379f0957d28d5726a6d9cb8245c0e",
-      "identical_to_tested_input": true,
-      "published_bytes": 12930
+      "published_bytes": 12930,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/bounded_stdio_log.h",
       "published_sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
       "published_bytes": 1408,
-      "sha256": "ad76a7c91935cc49fa89fceaaca3824be56ff817cd841dd3c7679a32329eebdb",
-      "bytes": 1408,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/cpu_hooks.c",
-      "sha256": "7f3c6a2eaf2fad7d4bb663bbc7857cb7f14fa79d5b3d70f2d2df804e4b1f97fc",
-      "bytes": 495,
       "published_sha256": "7f3c6a2eaf2fad7d4bb663bbc7857cb7f14fa79d5b3d70f2d2df804e4b1f97fc",
-      "identical_to_tested_input": true,
-      "published_bytes": 495
+      "published_bytes": 495,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/engine.h",
-      "sha256": "ff3fed361903f100db9386aacb806ab4270d9d5ba0c0c57e8b3c97fcbcccacec",
-      "bytes": 2924,
-      "published_sha256": "f1a33afdb3a457acfc5f781f9bf17b3f650b16bb3810afa21b888a5a4aaa916b",
-      "identical_to_tested_input": false,
-      "published_bytes": 2848,
-      "normalization_or_provider_update": true,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "458301bad3bb683f22ea8586c60ef273cb1c0391be40b144a1758a9d6c39306f",
+      "published_bytes": 2861,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/engine_bridge.inc",
-      "sha256": "98496b32777a6fc79f15106e563f031ff0d5dfa51b8a0ffd478261f45a8f2756",
-      "bytes": 19291,
-      "published_sha256": "98496b32777a6fc79f15106e563f031ff0d5dfa51b8a0ffd478261f45a8f2756",
-      "identical_to_tested_input": true,
-      "published_bytes": 19291,
-      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input.",
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "2d6351126061e882762174766c36d9f14ab330f4a79e69922cdadab9c3a0c530",
+      "published_bytes": 19429,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/multipart.inc",
-      "sha256": "4acbd6f4c7aee1af55ee1a4259082f13e6614c87d9512e494fa7692afb443851",
-      "bytes": 13707,
-      "published_sha256": "4acbd6f4c7aee1af55ee1a4259082f13e6614c87d9512e494fa7692afb443851",
-      "published_bytes": 13707,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "691b13f9d96ef25b67a00e2fe014c43833c70f13a10a00c71a09147dad380545",
+      "published_bytes": 14098,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/openai.inc",
-      "sha256": "de7dd0415347855d75d39fe854b6f21f59997ece82dea837a2fdb7ed40efa7d5",
-      "bytes": 16644,
-      "published_sha256": "de7dd0415347855d75d39fe854b6f21f59997ece82dea837a2fdb7ed40efa7d5",
-      "identical_to_tested_input": true,
-      "published_bytes": 16644,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "7196ee7740012011fa090793e716861e3750ba9baae9422a8c4a3f54b29c0d6e",
+      "published_bytes": 17085,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/openapi_schema.inc",
-      "sha256": "6d7e0fd8c2296dd142fa0b14bb9a396a8c3597d5d0b7d6c264b76a74deb633b6",
-      "bytes": 18873,
-      "published_sha256": "db04750671a2ea73511e34c1b67ab69ff73bf353d951ce119dc0327da86fcd0c",
-      "identical_to_tested_input": false,
-      "published_bytes": 18967,
-      "normalization_or_provider_update": true,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "60dabda6d596c20b7cb2d87c77c42d1d0f75bb6a5dedecbc95b4c6fc8d163e6b",
+      "published_bytes": 10401,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/server.c",
-      "sha256": "74ddd72f56ae02fe4d14cb416287aef59d698d3f583108bae138d91f8cbf426f",
-      "bytes": 56633,
-      "published_sha256": "74ddd72f56ae02fe4d14cb416287aef59d698d3f583108bae138d91f8cbf426f",
-      "identical_to_tested_input": true,
-      "published_bytes": 56633,
-      "normalization_or_provider_update": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "published_sha256": "7611a1ccb1e7cfee9c85b87240be07d028bfed844375096075b4882d6ed80238",
+      "published_bytes": 57419,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/status.h",
-      "sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "bytes": 5386,
-      "published_sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "identical_to_tested_input": true,
-      "published_bytes": 5386
+      "published_sha256": "81aaceca6470c4a882fafa3e36ed6cb493c6b23c77f0758876b03a96e3f9bfbb",
+      "published_bytes": 5391,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/test_failure_bridge.inc",
-      "sha256": "9a68734b6544c6ac4cd95c865c47326c17162a9c529a85f89b6a6f7bbbefc29d",
-      "bytes": 1439,
       "published_sha256": "3e2f90c66ed9072b568f809684fbd3698d38fa856d7ca6f7b71528d027a1dc83",
-      "identical_to_tested_input": false,
       "published_bytes": 1426,
-      "normalization_or_provider_update": true,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/ui_hooks.h",
-      "sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
-      "bytes": 581,
-      "published_sha256": "5f6966964e70c7ca467940cabe3b5cde05c9da3413408126da0dd9bb98d014b1",
-      "identical_to_tested_input": true,
-      "published_bytes": 581
+      "published_sha256": "dfd4981490f6a361e85bd640419a0af6d7d35a4428e090177c18103e9166730a",
+      "published_bytes": 585,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/gateway/v3_shutdown.h",
-      "sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
-      "bytes": 659,
       "published_sha256": "e10ca2fc6c47ed042b7548f5a74469a7fe7786b0907cefd306ae478ebef63fe9",
-      "identical_to_tested_input": true,
-      "published_bytes": 659
+      "published_bytes": 659,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/link/agc_canary_link_stub.c",
-      "sha256": "c01388bcf00659a3c56d6afac705efb359b1b89c01f998fc5a72a7d5748dda75",
-      "bytes": 3430,
       "published_sha256": "c01388bcf00659a3c56d6afac705efb359b1b89c01f998fc5a72a7d5748dda75",
-      "identical_to_tested_input": true,
-      "published_bytes": 3430
+      "published_bytes": 3430,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/link/agc_driver_canary_link_stub.c",
-      "sha256": "601e1c7ef28bbba8a860d7bb65188690b5df9ca48da94ebcd79ddaf2bbbf103b",
-      "bytes": 1259,
       "published_sha256": "601e1c7ef28bbba8a860d7bb65188690b5df9ca48da94ebcd79ddaf2bbbf103b",
-      "identical_to_tested_input": true,
-      "published_bytes": 1259
+      "published_bytes": 1259,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/link/app-symbols.map",
-      "sha256": "470ce72a27a7be8e35dd7a25b485faa733d61570bdaf24d3c75bb4e3e3c63cf7",
-      "bytes": 284,
       "published_sha256": "470ce72a27a7be8e35dd7a25b485faa733d61570bdaf24d3c75bb4e3e3c63cf7",
-      "identical_to_tested_input": true,
-      "published_bytes": 284
+      "published_bytes": 284,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/link/app_crt.cpp",
-      "sha256": "0c9d229f4053d87ff6b4f2fdbd7a86d6ae14fa3ec50f0535f63127b1408bb5db",
-      "bytes": 2585,
       "published_sha256": "0c9d229f4053d87ff6b4f2fdbd7a86d6ae14fa3ec50f0535f63127b1408bb5db",
-      "identical_to_tested_input": true,
-      "published_bytes": 2585
+      "published_bytes": 2585,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "native/link/compat.c",
+      "published_sha256": "d76f2ebf70d9bfe365b331829e138c71d357b33f9a0a606d2b55c1122289147c",
+      "published_bytes": 2483,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/link/platform-local.map",
-      "sha256": "109d87a036eafbe616acaeb99b7b89cbbf34314862f88a35c6aa9cc330f40be2",
-      "bytes": 1422,
       "published_sha256": "109d87a036eafbe616acaeb99b7b89cbbf34314862f88a35c6aa9cc330f40be2",
-      "identical_to_tested_input": true,
-      "published_bytes": 1422
+      "published_bytes": 1422,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/link/ps5-pie-unwind.ld",
-      "sha256": "fed519884d92e96b079e6b2b3421de06d192be474dd323e7e2b35ac25478adbf",
-      "bytes": 776,
       "published_sha256": "fed519884d92e96b079e6b2b3421de06d192be474dd323e7e2b35ac25478adbf",
-      "identical_to_tested_input": true,
-      "published_bytes": 776
+      "published_bytes": 776,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "native/link/sd-constant-tls.hpp",
+      "published_sha256": "ed2e06353a820c05dc3c2a6053d6d2d724af326749fd23e6905122740f1d57ee",
+      "published_bytes": 388,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/payload_crt/credential_preserving_patch.c",
-      "sha256": "6e84f21a71d4f3286053bcfd7aff5e05f3bc79277f814e6691947d427a82b5be",
-      "bytes": 1755,
       "published_sha256": "6e84f21a71d4f3286053bcfd7aff5e05f3bc79277f814e6691947d427a82b5be",
-      "identical_to_tested_input": true,
-      "published_bytes": 1755
+      "published_bytes": 1755,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/runtime/cpp_allocation.cpp",
-      "sha256": "c56c77b97e252b31b9ab1b76a16fe745c8be8ee11289f63527df0374493c6329",
-      "bytes": 3638,
       "published_sha256": "c56c77b97e252b31b9ab1b76a16fe745c8be8ee11289f63527df0374493c6329",
-      "identical_to_tested_input": true,
-      "published_bytes": 3638
+      "published_bytes": 3638,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/runtime/cxa_owned.c",
-      "sha256": "9b305e8b5ad5a2b98508c4d6d5497a8bf2c12f301396637f1a2817c34f9e3185",
-      "bytes": 2183,
       "published_sha256": "9b305e8b5ad5a2b98508c4d6d5497a8bf2c12f301396637f1a2817c34f9e3185",
-      "identical_to_tested_input": true,
-      "published_bytes": 2183
+      "published_bytes": 2183,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/runtime/threads.c",
-      "sha256": "fd070060e44c1397463af284e1a9653c728c20a29951a523a364be016370e8c3",
-      "bytes": 13322,
       "published_sha256": "fd070060e44c1397463af284e1a9653c728c20a29951a523a364be016370e8c3",
-      "identical_to_tested_input": true,
-      "published_bytes": 13322
+      "published_bytes": 13322,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/sha256/sha256.c",
-      "sha256": "a96b214e6d02d797eea1633009420ba3ea7dc894d3eb902875ea10d2580e273a",
-      "bytes": 3249,
       "published_sha256": "a96b214e6d02d797eea1633009420ba3ea7dc894d3eb902875ea10d2580e273a",
-      "identical_to_tested_input": true,
-      "published_bytes": 3249
+      "published_bytes": 3249,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/sha256/sha256.h",
-      "sha256": "a8f2383b877161375a0a644875a86c99054a995dde00085348da78319cb91203",
-      "bytes": 417,
       "published_sha256": "a8f2383b877161375a0a644875a86c99054a995dde00085348da78319cb91203",
-      "identical_to_tested_input": true,
-      "published_bytes": 417
+      "published_bytes": 417,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/dashboard.h",
-      "sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
-      "bytes": 8896,
-      "published_sha256": "b713a4fb2ccf05935e84bdc52bbf071993a0b24d73258e52be6c60ac3a33a7ad",
-      "published_bytes": 8896,
-      "identical_to_tested_input": true
+      "published_sha256": "233b387c7f61130bf0d0e76b7734623dc7a5e7d4c4227de057e1e8616f7276a1",
+      "published_bytes": 8906,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/dashboard_brand.h",
-      "sha256": "2c2b7683bcc97007aadca71c3c2bb04d2342831dc647df60feaee8e6e76dedad",
-      "bytes": 47416,
       "published_sha256": "0888893e0a1bae091acce1ebb69709ace5848502439784120a6ea6efaab4f804",
       "published_bytes": 46939,
-      "identical_to_tested_input": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/dashboard_font.h",
-      "sha256": "87c20e4c90717fda7e2e8774c3fdfea07ffad010180b988dc4a4444880cf0f9f",
-      "bytes": 585475,
       "published_sha256": "8f01c913b1a90934bd4d0d5091fe792ce34d9ac92fe84df08eb3f0f347b06649",
       "published_bytes": 585496,
-      "identical_to_tested_input": false,
-      "publication_note": "License path comment corrected for the public tree; bitmap data and rendering code unchanged."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/display.c",
-      "sha256": "d7e67e97af63758dbaf3dad6d2b0bd9692fa3467c2978f3d7cc72d6432a46e7f",
-      "bytes": 10335,
-      "published_sha256": "b625bbe628658cade35b78c34a8d137804cc72e0a7b0d5b4ddae2cf40f190069",
-      "identical_to_tested_input": false,
-      "published_bytes": 10189,
-      "publication_note": "Public repository line endings retained; source logic identical to the console-tested input."
+      "published_sha256": "a980a81ca6fb5435e1c7509f2c0c458f1c375dda7a3fef181de6ec4d7464787f",
+      "published_bytes": 10169,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "native/ui/font-provenance.json",
+      "published_sha256": "a0296ff89dd02ed1413772da0958f3227d8d0dff73b23827b5482db210e19832",
+      "published_bytes": 864,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/font.h",
-      "sha256": "751f2cae8df83726ab70d27abce820ebfd517002ccad1c9ef61d9fc2fb194688",
-      "bytes": 1416,
       "published_sha256": "751f2cae8df83726ab70d27abce820ebfd517002ccad1c9ef61d9fc2fb194688",
-      "identical_to_tested_input": true,
-      "published_bytes": 1416
+      "published_bytes": 1416,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/format.c",
-      "sha256": "15778e91b4fa23a3ccfccfb688a8ebcb4822525b39d3ca1418c5ebe13ed30f2e",
-      "bytes": 5838,
       "published_sha256": "15778e91b4fa23a3ccfccfb688a8ebcb4822525b39d3ca1418c5ebe13ed30f2e",
-      "identical_to_tested_input": true,
-      "published_bytes": 5838
+      "published_bytes": 5838,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/raster.h",
-      "sha256": "02bf9043f5513edba7c86d24d760a28f42200c0a1041e0bc6a046dd10ccc7a43",
-      "bytes": 648,
       "published_sha256": "02bf9043f5513edba7c86d24d760a28f42200c0a1041e0bc6a046dd10ccc7a43",
-      "identical_to_tested_input": true,
-      "published_bytes": 648
+      "published_bytes": 648,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "native/ui/status.h",
-      "sha256": "e5b3c5d06a0dc602cc2b1f8e99cb87ec4c74cfc788327c859c96abc5da322a75",
-      "bytes": 5386,
-      "published_sha256": "8a4b76b656267686c3cc204a36cbc8b548b1662fa1c442954397037a0619c0a6",
-      "identical_to_tested_input": false,
-      "published_bytes": 5380,
-      "publication_note": "Comment corrected to reflect integration; API and ABI unchanged."
+      "published_sha256": "605ade91b5fff1aa74a4a738c6607a66712dabc9f863deff76fe37208349ad50",
+      "published_bytes": 5382,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "patches/mesa/changes.patch",
+      "published_sha256": "0790cb64f4f940be1ed9dc9e58d96202b8eef367a399186c8bfdb3245e0e48f3",
+      "published_bytes": 8869,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "patches/mesa/overlay/src/amd/vulkan/heap.h",
+      "published_sha256": "b949318a272e87725b9c46454259c2cb5d76e5102c5e0c98a5e7c71e3d1df0a9",
+      "published_bytes": 521,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/mesa/overlay/src/amd/vulkan/pool.h",
       "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
       "published_bytes": 3207,
-      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "patches/mesa/overlay/src/amd/vulkan/radv_device.c",
+      "published_sha256": "241a066d00b153dfab3350d6f9412490de867f7a806955d926c759b8d7701ba6",
+      "published_bytes": 84342,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "patches/mesa/overlay/src/amd/vulkan/radv_device_memory.c",
+      "published_sha256": "4e3be50f040858ead89928e98ff0101ba6a1101cb212a3d8794c298ec0dfafde",
+      "published_bytes": 17752,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "patches/mesa/overlay/src/amd/vulkan/radv_physical_device.c",
+      "published_sha256": "3fe42418514fce4a57a966cce4a56e63c76e2a256515098543198bbce41385ec",
+      "published_bytes": 165101,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/changes.patch",
-      "sha256": "5012f223481827cfc88c9b6429d9176673d2f3fa78b8f8be546736705f2fcabb",
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "published_sha256": "5012f223481827cfc88c9b6429d9176673d2f3fa78b8f8be546736705f2fcabb",
-      "published_bytes": 134192,
-      "bytes": 134192,
-      "validation_scope": "Consolidated LF patch reconstructed against pinned upstream and compared with the full portable overlay."
+      "published_sha256": "44d2af60010c6ef17b685e437da329f56cb49bfb64c15e9429a5476e53ea25dc",
+      "published_bytes": 139786,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c",
-      "sha256": "6f3b92df071bdb9469adeefda854efe3c1484c9de0a37afb43d27b9ee8e24f1c",
-      "bytes": 50330,
       "published_sha256": "6f3b92df071bdb9469adeefda854efe3c1484c9de0a37afb43d27b9ee8e24f1c",
-      "identical_to_tested_input": true,
-      "published_bytes": 50330
+      "published_bytes": 50330,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-plan-admission.h",
-      "sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "bytes": 822,
       "published_sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "identical_to_tested_input": true,
-      "published_bytes": 822
+      "published_bytes": 822,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp",
-      "sha256": "0f6efc6cde616626f2881eed14541a064de42c19de414c5aab88739bfc8ed8d3",
-      "bytes": 33924,
       "published_sha256": "0f6efc6cde616626f2881eed14541a064de42c19de414c5aab88739bfc8ed8d3",
-      "identical_to_tested_input": true,
-      "published_bytes": 33924
+      "published_bytes": 33924,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-common.h",
       "published_sha256": "6ee618834ccff51a9d7ee71e26e776016dc8e408366a6d3335feeb685abef619",
       "published_bytes": 26734,
-      "sha256": "297b9def219df07377e16fd7567a9efd29afd17be3b1cbfcd4da4f765ef2ba00",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-push-constants.h",
       "published_sha256": "688ed58f8ff94118c648d3d39404cc703806047c8f45ad50ad87d8715bceb973",
       "published_bytes": 35729,
-      "sha256": "15700e6983c3bf58ab5970fc1f37cd34a2338fd1c5a87aefae585f18bb3b1538",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-types.h",
-      "sha256": "8eee194fb2737a5bfa509535c02f03ff81ea0475b9c06afe79311dcca90942b2",
-      "bytes": 53902,
       "published_sha256": "8eee194fb2737a5bfa509535c02f03ff81ea0475b9c06afe79311dcca90942b2",
-      "identical_to_tested_input": true,
-      "published_bytes": 53902
+      "published_bytes": 53902,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp",
-      "sha256": "e57f0e80b07e616b2f0ba01d57daf05c620953a9ebc8367ac7df9306c890b116",
-      "bytes": 892364,
       "published_sha256": "379a2c4da8f588c51e57ad42623c2c320e77ea3700a320af2021801fe4361aed",
-      "identical_to_tested_input": false,
       "published_bytes": 883732,
-      "validation_scope": "36 synthetic host cases; final public native build and PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/pool.h",
-      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
-      "bytes": 1370,
       "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
-      "identical_to_tested_input": false,
       "published_bytes": 3207,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/probe.h",
-      "sha256": "1eba9d8e70fb861f73824826986a3cc83e2057044c9ab265006a5e70eec5b8f3",
-      "bytes": 961,
       "published_sha256": "1eba9d8e70fb861f73824826986a3cc83e2057044c9ab265006a5e70eec5b8f3",
-      "identical_to_tested_input": false,
       "published_bytes": 1177,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending"
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/conditioning/conditioner.hpp",
       "published_sha256": "05b80e76e0d0deca06504513842d145753e8e9bed0ec59fd2a9f844c18c2f036",
       "published_bytes": 188144,
-      "sha256": "9b2be86bf7d64e46a688b514335f181bcf2b6fc61162ab4d7dc3940cb57c5b83",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/controlnet_cfg.hpp",
       "published_sha256": "331aa5baa5042e823de5ec80d02ac9b6b33bb5888ced96c1b6105f767d687129",
       "published_bytes": 3796,
-      "sha256": "331aa5baa5042e823de5ec80d02ac9b6b33bb5888ced96c1b6105f767d687129",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending"
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/ggml-plan-admission.h",
-      "sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "bytes": 822,
       "published_sha256": "a0c0552d8768a80f21f823ee11908359e8059b4b8de798b8fa28c7638b6f9a78",
-      "identical_to_tested_input": true,
-      "published_bytes": 822
+      "published_bytes": 822,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/ggml_graph_cut.cpp",
       "published_sha256": "c7419a9654531a296b979724ddf6a4e2aca5c9f55b34c22ee28472c790955fde",
       "published_bytes": 48360,
-      "sha256": "f46b7ea809705f00a74fe78e174cfc1835b9a093aebcdd3b74276616540fc0e6",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/ggml_runner.cpp",
-      "sha256": "e86bbcadaa88b71aa64d7fe43043d05410fcbced72baaa17cb543e7f3b31b1c6",
-      "bytes": 43602,
       "published_sha256": "18c0f6fe932b679aacbd21f346c1d2219e5dd37ab771f0931ebc5c5485957605",
-      "identical_to_tested_input": true,
-      "published_bytes": 44672
+      "published_bytes": 44672,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/src/core/host_scratch_test.cpp",
+      "published_sha256": "8a0672ce5f21d1ca58a70196a879bd7074fa9c8aaca1b69cb121ae2fa702f44c",
+      "published_bytes": 6328,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/pool.h",
-      "sha256": "6d62b7ac404da038b03ae5b527bfc58aa9947ba044933e29bf722f4635dc2839",
-      "bytes": 2697,
       "published_sha256": "710dbf2a30890f0df691976d5729e7d4686d5732dde2209b3ca6be6a88e250eb",
       "published_bytes": 3207,
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/runner_admission.hpp",
-      "sha256": "d2a3e83cebd44efbd24cfd66a9eb46ff4acf433c0acb5fed917db021389e2fe8",
-      "bytes": 9563,
       "published_sha256": "d2a3e83cebd44efbd24cfd66a9eb46ff4acf433c0acb5fed917db021389e2fe8",
-      "identical_to_tested_input": true,
-      "published_bytes": 9563
+      "published_bytes": 9563,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp",
-      "sha256": "6c08628a6e2a6174778d2e18ef117b5e8f7017de634c6b0034d64856113d1af8",
-      "bytes": 9176,
-      "published_sha256": "4cc429c865b6319ace745119086a00cb0d30dc27323688a1f1f5204b97c4fe92",
-      "published_bytes": 10061,
-      "identical_to_tested_input": true
+      "published_sha256": "838a284d7b6571feca023bd985cab08b03da199943416308c0b9e23952538a08",
+      "published_bytes": 15562,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/common/block.hpp",
-      "sha256": "4b964432a9a488e0dd9a811422da494b9f86c235e1f01a32c172cd26e98bcb42",
-      "bytes": 28541,
       "published_sha256": "4b964432a9a488e0dd9a811422da494b9f86c235e1f01a32c172cd26e98bcb42",
-      "identical_to_tested_input": true,
-      "published_bytes": 28541
+      "published_bytes": 28541,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/diffusion/control.hpp",
       "published_sha256": "2f3800ba066748c80f17595ed59d055ef80bc158d24849b4596fa87ece650292",
       "published_bytes": 22683,
-      "sha256": "93d3f2b1ecc9cad54862de3383dfdfff78faf293de8f3a0cf6d2039576a35dc6",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/diffusion/unet.hpp",
-      "sha256": "3768a983ce96911f50eaf62ff7a61b5ff329c90193a6765e57f04c864296e397",
-      "bytes": 44302,
       "published_sha256": "cdf3f05fb54a82dfff803d819a187b36b5382a639f3d289a84c5929322ec67aa",
-      "identical_to_tested_input": false,
       "published_bytes": 44386,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/te/clip.hpp",
       "published_sha256": "858a963e783e3eb78c362bc178aa6b6a5597871f8265e83aa58ad812ce7f41cb",
       "published_bytes": 32524,
-      "sha256": "eb85e72a7b8fa1c088604ef1ff7c01cb9abe4d42585913e80f4d58cdd437e8cf",
-      "identical_to_tested_input": false,
-      "validation_scope": "Host-tested optimization candidate; PS5 adoption pending",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model_loader.cpp",
-      "sha256": "595f39d931fbc75fb85abf33ca8c2d5a7c777cc9f24c82d6e5448c7047b8a595",
-      "bytes": 67695,
       "published_sha256": "595f39d931fbc75fb85abf33ca8c2d5a7c777cc9f24c82d6e5448c7047b8a595",
-      "identical_to_tested_input": true,
-      "published_bytes": 67695
+      "published_bytes": 67695,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model_manager.cpp",
-      "sha256": "5c5a09f249db961e6f93ef7fe427070d339387db4aed2c9f41fdc70300215c74",
-      "bytes": 88170,
       "published_sha256": "ef483eb67ee07aa203d2c0d0e9ee6150ac94e941d34eb53bd2b2a72911814068",
-      "identical_to_tested_input": false,
       "published_bytes": 86129,
-      "validation_scope": "Reviewed v16 source after LF normalization; runtime adoption evidence is recorded separately.",
-      "normalization_or_provider_update": true
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/pipeline/diffusion_engine.cpp",
       "published_sha256": "d8b3ce20e3ba7d498fe6fd3a6714b63b38881a02f253501a9999a6ba4da07f99",
       "published_bytes": 159573,
-      "sha256": "fba5f367a554616c698b1ed58efd6b25596916df2c4af3982f5d007756522bf4",
-      "identical_to_tested_input": false,
-      "validation_scope": "Frozen V18 native source; actual GPU IP1024 and combined LoRA/IP/OpenPose/mask1024 success, owner-policy and graph-dependency host checks. Portable build is separately inspected and not console-executed.",
-      "normalization_or_provider_update": true,
-      "bytes": 163019
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "patches/stable-diffusion/overlay/src/pipeline/image.cpp",
-      "sha256": "15f08cb495403fa9ea2c844480828c096e7cece78b9d4f958f92b9dce816c472",
-      "bytes": 55627,
       "published_sha256": "9afe405629662abde9d491245df77eb9ca0ee2a6ea1c9b765c703cd38a36cfa6",
       "published_bytes": 54536,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "Frozen V18 native source; actual GPU IP1024 and combined LoRA/IP/OpenPose/mask1024 success, owner-policy and graph-dependency host checks. Portable build is separately inspected and not console-executed."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "scripts/Assert-GeneratedPng.ps1",
+      "published_sha256": "afe6bdc7104a2d13a19d73021d7a08760e85d85af1884c6c971493debb05a3b7",
+      "published_bytes": 4610,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "scripts/Invoke-AnimaOpenAI.ps1",
+      "published_sha256": "7b0a8a591e7ed0096bd8db875b649c51318a80fd0e5c61467a65163680352712",
+      "published_bytes": 5041,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "scripts/Invoke-WaiControlNet.ps1",
+      "published_sha256": "4aca3e361487edf0ded905684d590867a7b1120671e9fb292c441fbef2ae0611",
+      "published_bytes": 7927,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "scripts/Invoke-WaiOpenAI.ps1",
+      "published_sha256": "5955c55bbe6f6be7473ea7997440e6b305bc780191c0ff6506a5d87c9bd26e70",
+      "published_bytes": 5017,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "scripts/Invoke-WaiReference.ps1",
-      "sha256": "b3dc9e1df357a8dfdb89efc6b8289358b87cb1ff15d33f393878e8ad19449545",
-      "bytes": 7561,
       "published_sha256": "0e145f7c7bea70ed2c156d7e10b0b6df944e08fea9f1f3888f1b47353958244c",
       "published_bytes": 7664,
-      "identical_to_tested_input": false,
-      "normalization_or_provider_update": true,
-      "validation_scope": "CRLF checkout per existing PowerShell attributes; protocol-tested script content unchanged after newline normalization."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/anima_api_protocol.py",
+      "published_sha256": "1f8981d46d028de941a5f452de7f54f77ffaea51c699ca399d042628bfe7b6fe",
+      "published_bytes": 14617,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/anima_cpu_text_pool.cpp",
+      "published_sha256": "3433eea7bccb637b217f9e447a62006b7fb9a3b5f915db45339b795aa72713de",
+      "published_bytes": 5135,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/anima_engine_config.cpp",
+      "published_sha256": "73ae4eefac002a5f8baecdce44a7ec8fcad1b4df14b3b97895e2830af8a489d8",
+      "published_bytes": 4597,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/anima_engine_config.py",
+      "published_sha256": "cd1741de34dedd0750533f37c2583920be2fcba85bbc22d65d91c280403632b6",
+      "published_bytes": 3152,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/anima_operator_bounds.cpp",
+      "published_sha256": "1d8110001a9854ac35151952238f4b8f10eee645977989a9c327dd9bdc3caefc",
+      "published_bytes": 8110,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/anima_operator_constructor.cpp",
+      "published_sha256": "3a421629991360498addea5d1c4a638eed61f7d483f5e0b4fbf14d73593a018a",
+      "published_bytes": 2925,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/backend_health.c",
+      "published_sha256": "4367cfff9351dd56dfa1ef8e1fd40c27f3bdf04a2f1f927da365e6fba4846a0a",
+      "published_bytes": 1604,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/controlnet_powershell_client.py",
+      "published_sha256": "8522414abc4f32ddbe7142cef04c8845d3f5edddce018271994229d170513df7",
+      "published_bytes": 2608,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/controlnet_protocol.py",
+      "published_sha256": "2fefcf437800ec2cd02b6ce3f3365a866573724b122270d54befa4f156602de4",
+      "published_bytes": 5899,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/dashboard.py",
+      "published_sha256": "02efa035acc09acc26318795045980262003b4acd946100aef0d926672710b60",
+      "published_bytes": 2129,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/dashboard_preview.c",
+      "published_sha256": "d1efd26a5e3c0e6281071220e54c254cc3e59a2457e977cc32e79f46353b0dc5",
+      "published_bytes": 2965,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/direct_logsync_host.py",
+      "published_sha256": "e91b4bb3677370ed68151a1c5d1127145df4dc45e90b2e323afa746c6e93d517",
+      "published_bytes": 3887,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/manga_request_parser_v1.c",
+      "published_sha256": "183f921bed185115f22048561e1435ba5f42e7228f355b7cc1cd3a1f815b0d0b",
+      "published_bytes": 2425,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_api_protocol.py",
-      "sha256": "9665122172a4e18badf7e1442ff2f53d11f16916af8ea4443521d9db2ed4196f",
-      "bytes": 23766,
       "published_sha256": "9665122172a4e18badf7e1442ff2f53d11f16916af8ea4443521d9db2ed4196f",
       "published_bytes": 23766,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_completion_contract.c",
-      "sha256": "4b2629241a6d26cfefe838aa9ece929f9877766eb76f7e7f4ec6429cdbda2f3d",
-      "bytes": 3345,
       "published_sha256": "4b2629241a6d26cfefe838aa9ece929f9877766eb76f7e7f4ec6429cdbda2f3d",
       "published_bytes": 3345,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_composite.c",
-      "sha256": "6add45bf60ae41ecf5dc9712fb1c3cadbb9e57da8e9d96f72323806a7daf80ec",
-      "bytes": 1414,
       "published_sha256": "6add45bf60ae41ecf5dc9712fb1c3cadbb9e57da8e9d96f72323806a7daf80ec",
       "published_bytes": 1414,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_controlnet_protocol.py",
-      "sha256": "196411216d19c7a6c512f20e12a8f130abf6fba01da8d46ae3fbec752fe81251",
-      "bytes": 7403,
       "published_sha256": "196411216d19c7a6c512f20e12a8f130abf6fba01da8d46ae3fbec752fe81251",
       "published_bytes": 7403,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_export_profile.py",
-      "sha256": "c5c203c9005aa22bee0a526dce5f21e07ea126dab164864c1ce34bdc78f77a94",
-      "bytes": 2701,
       "published_sha256": "c5c203c9005aa22bee0a526dce5f21e07ea126dab164864c1ce34bdc78f77a94",
       "published_bytes": 2701,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_native_owner.c",
-      "sha256": "b43385fea55cb830d835a10bcf14600c1737a6010126147a74b0b11dd6520c06",
-      "bytes": 4138,
       "published_sha256": "b43385fea55cb830d835a10bcf14600c1737a6010126147a74b0b11dd6520c06",
       "published_bytes": 4138,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_native_restart.py",
-      "sha256": "649b3c5f95ca62baf19a4b0351f41351c02983848fd87d272c6f1f9ab7f9280b",
-      "bytes": 8167,
       "published_sha256": "649b3c5f95ca62baf19a4b0351f41351c02983848fd87d272c6f1f9ab7f9280b",
       "published_bytes": 8167,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/mask_powershell_client.py",
-      "sha256": "a99d7bcd2050dbff7d67dcf055eeec0c2951615845e7017633aa257f4efca569",
-      "bytes": 3520,
       "published_sha256": "a99d7bcd2050dbff7d67dcf055eeec0c2951615845e7017633aa257f4efca569",
       "published_bytes": 3520,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/native_log_policy.py",
+      "published_sha256": "5cd37806cd008a20563c02bcdd0793b37a9c7c5aa2c066c501ad1b83b0d7c1f3",
+      "published_bytes": 4329,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/native_log_stdio.py",
+      "published_sha256": "d9e07c2f264a7fc83c1fc874ae5f84bc848212e1827fe877b30fa8b8d91b68c9",
+      "published_bytes": 1848,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/native_log_storage.py",
+      "published_sha256": "ca6b13e5b77fbe8c712ba028a4fbe046de1666b52d0027710ea5e93a137b34a1",
+      "published_bytes": 6462,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/native_precision.py",
+      "published_sha256": "a95c4cf7a08447347cca5c64b2934ebd010af8df259dbdfb4b7566d343f49c0d",
+      "published_bytes": 2848,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/native_scratch.cpp",
+      "published_sha256": "5a65e97ddafda72e0e05cc54846ad39f1dd75a7dfbb8c0c038f1fe8631365194",
+      "published_bytes": 5406,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/openai_gateway_protocol.py",
+      "published_sha256": "b73c23f14903b78a910e5e0e4a4873f3867e9d881a3e95f6a8eb597b8dcfc5fb",
+      "published_bytes": 6316,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tests/optimization_build_profile.py",
       "published_sha256": "5dc341f3a145fd4793fed851aa89377a6816f69ed1dfbbd1ac0dcf2ee2647e7a",
       "published_bytes": 4892,
-      "sha256": "5dc341f3a145fd4793fed851aa89377a6816f69ed1dfbbd1ac0dcf2ee2647e7a",
-      "identical_to_tested_input": false,
-      "validation_scope": "Portable build wiring; no PS5 execution implied"
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/phase_profile_host.cpp",
+      "published_sha256": "491e3ef67c93de7221d25d929b8dc15d5e32afb6d2f9d570a03a9ec2c6dac73d",
+      "published_bytes": 932,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/reference_engine_failure_v1.c",
+      "published_sha256": "a331697f22c3ab90e7719cba3c7c23071b00a7289a500515500cdab30901c422",
+      "published_bytes": 1237,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tests/test_manga_lora_conversion_v1.py",
+      "published_sha256": "dc6964e7752f8b32dffab5ad39855d98790f4bd1abbda101f0904a490329656c",
+      "published_bytes": 1604,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tools/build.py",
-      "published_sha256": "ccaf8eabb9aadc4315a010265329b589c6822165293e31785dac20c8ff381122",
+      "published_sha256": "86bc746dcc504d61f3298a9c4f4e3a73d5f67e5e6eadb679b475dbea873ac64e",
       "published_bytes": 13147,
-      "sha256": "ccaf8eabb9aadc4315a010265329b589c6822165293e31785dac20c8ff381122",
-      "identical_to_tested_input": false,
-      "validation_scope": "Portable build wiring; no PS5 execution implied"
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/build_controlnet_tests.py",
+      "published_sha256": "2281adab8a106492ebf2192374ae200b8462bb562c50f6dae67e404d3b025ba0",
+      "published_bytes": 1767,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/build_gateway.py",
+      "published_sha256": "9ece8dd9e139c815e72e08e61f70caa8dea3e69c4709f831b253b7bb76b8fd7b",
+      "published_bytes": 3014,
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tools/build_mask_controlnet_tests.py",
-      "sha256": "fee8760cf8189b9e5a8733c12f735a2b4c7981b8e6660b4c147285db3fb272a4",
-      "bytes": 2353,
       "published_sha256": "fee8760cf8189b9e5a8733c12f735a2b4c7981b8e6660b4c147285db3fb272a4",
       "published_bytes": 2353,
-      "identical_to_tested_input": true,
-      "normalization_or_provider_update": false,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "identical_to_PS5_tested_Anima_input": false
     },
     {
       "file": "tools/check_publication.py",
-      "published_sha256": "2bbf24c26b24494e0670ac84ae7d53c1fb7041f684ff1f8c8a160d5a57966371",
-      "published_bytes": 3116,
-      "identical_to_tested_input": false,
-      "validation_scope": "Verify exact index/checkout sources with explicit eol=crlf conversion for PowerShell; no inference."
+      "published_sha256": "1912a08c30c1992dd4478e5e46c5717f92745d6b6fd13e5218a32e91c2b470d7",
+      "published_bytes": 3331,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/download_anima.py",
+      "published_sha256": "fc6880baab4252016f50bae64642ef22ca6f61df5e10dc5f94e3b6482d26f92e",
+      "published_bytes": 3246,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/models/convert_anima_bf16_f16.py",
+      "published_sha256": "f653b8959baf43d8ec4bfea165492300a58bcf61b44f6f74fc33d84f9b16a9d3",
+      "published_bytes": 21102,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/prepare_ip_adapter.py",
+      "published_sha256": "b754433e2da1494370574d9881a9ed999679789e571789c834161ee5840e4560",
+      "published_bytes": 6516,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/prepare_manga_lora_v1.py",
+      "published_sha256": "1727e95fc3e1f8b4014a86c59c7c80f5c3101244daa360750278038c145d5697",
+      "published_bytes": 13693,
+      "identical_to_PS5_tested_Anima_input": false
+    },
+    {
+      "file": "tools/prepare_sources.py",
+      "published_sha256": "e0f946ffe6eb3480df8d522bb41acc2a2dd65612ed746c29fabad3f2dd6c114f",
+      "published_bytes": 1636,
+      "identical_to_PS5_tested_Anima_input": false
     }
-  ],
-  "actual_console_native_eboot_sha256": "be1067a7520dce661129a2a1cab8c85fd92bd01be17d1d82b91917199679fac6",
-  "actual_console_gateway_elf_sha256": "d9976a1e8885bd455c80f46c7b2872341001a057c059ec6ad7764e2b3e2d16e2",
-  "optimization_native_SELF_sha256": "8c018da85427c927d95d9f33e585b1bb73d64c26ba92a3ab13609ff4f61ef921",
-  "public_rebuild_SELF_sha256": "74660e4b0ad92785fdca326908d265f308469ba3cab00eeee891c1625934bda7",
-  "public_rebuild_SELF_PS5_executed": false,
-  "ip_lifecycle_v18": {
-    "native_SELF_sha256": "512c3d9e04b2d520d2847c89c61e228a05948bfb8893cc097aad2b49338f6c5b",
-    "portable_SELF_sha256": "20256bca2cb607bef806e36f5b9e22b0052fbd8963cae7be5bb078ba2f72c98a",
-    "portable_SELF_PS5_executed": false,
-    "critical_runtime_evidence": "docs/ip-lifecycle-20261019-evidence.json",
-    "compiled_source_changes_after_portable_build": false,
-    "operational_evidence": "docs/operations-recovery-20261019-evidence.json",
-    "operations_gate": "Operator-assisted disconnect recovery and6 representative continuous1024 jobs locally verified. Not original catalogue recurrence,full Cartesian,24-hour or GPU-fault/power-loss recovery."
-  }
+  ]
 }

@@ -1,13 +1,19 @@
-# 最新状況（2026-10-19 日本時間）
+# PS5 AI Anima 開発状況
 
-V18でIP-Adapterの重み寿命とCPUテキスト／Visionの処理順を修正しました。漫画LoRA1＋IP0.3＋OpenPose1＋マスク付きimg2imgの1024×1024は141.356660秒で完了し、マスク外変更0画素、GPU実行、有限値、OpenAI互換応答とネイティブPNGの一致を確認しました。[修正と実測](ip-lifecycle-20261019.md)・[成功値](ip-lifecycle-20261019-evidence.json)。
+2026-10-19。既存WAIから独立した新アプリとして構築中です。Animaの実機画像生成・速度・品質は未確認です。
 
-白黒soft mask、全編集マスク、Canny併用マスクも代表条件の1024を確認しました。参照人物の同一性、指定色、編集画質は未達があり、実行成功と品質合格を分けています。[全機能の確認範囲と制約](feature-classification-20261019.md)。通信切断後の運用者による結果回収と連続6件を確認しました。1024・短文プロンプトの6件は124.176〜124.446秒、中央値124.199秒で、この区間には4〜5倍の低下がありませんでした。元の長文カタログの厳密再現、24時間や任意組合せの保証ではありません。
+- 出発点：PS5 AI WAI commit `86393645bb1f663c78f2cd2ac08ad67fa84e3812`。
+- SD.cpp pin `8cd731e7b4667eb8f40a153315b9a7125d09a58d`はAnimaのDiT・Qwen conditionerを実装済みです。
+- 対象モデル：公式Anima Turbo v1.1、Qwen3-0.6B-Base、Qwen-Image VAE。
+- 公式HF revision：`f973fc41ec7545364ac9776c2440285f43ff2a30`。
+- 新アプリ候補PPSA99189、native8190、OpenAI gateway8191。WAIの8188／8189と分離します。
+- WAIと同時起動しません。通常終了・待機確認を伴うアプリ切替を使います。
+- まず512×512・8steps・CFG1・Eulerのtext2imgを検証します。256は公式の推奨解像度範囲外です。
+- SDXL用LoRA・IP-Adapter・ControlNetをAnimaに流用しません。
+- 公式モデル3ファイルの全内容ハッシュを検証済みです。GPU用DiT/VAEのF16保存形式への変換・全値検証・読み戻しも完了しました。[変換記録](anima-model-derivatives.json)。
+- ホストAPIの90検査、エンジン設定42検査、CPU共有Direct借用39検査が成功しています。実機モデル推論を行う検査ではありません。
+- Anima固有のRMSNorm・RoPE・3D畳み込みをscratch admissionへ追加し、実際のGGML constructorでも形状を確認しています。GPU計算結果の検証は未実施です。
+- native SELFとPS5用gatewayのcross buildが成功しました。SELF署名整合性、strip前後4つのPT_LOAD一致、6つのruntime依存、最終ソース／assetの一致を独立確認しています。[ビルドと検証記録](anima-verification.json)。
+- 新規タイトルの登録は未実施です。保護領域に必要なメタデータ／mountの範囲を確認した上で扱います。
 
-Direct9422MiB（約9.201GiB）、推論予算8.75GiB、FP32、既存GPUドライバー・設定を維持しました。CPUテキスト重みが0になってからCLIP-Visionを実行し、全機能併用後のCPU借用量0と障害保持なしを確認しました。高水位はCPU借用を含み、専用VRAM使用量ではありません。
-
-API契約は変更していません。[API仕様](api.md)・[マスク仕様](mask-api.md)・[従来の性能比較](optimization-20261019.md)を参照してください。新しい私有参照画像や生成画像、個人用ログはこの更新に含めず、検証動画も作成していません。公開手順で作ったSELFのホスト検査と、別のネイティブSELFでの実機結果は区別しています。
-
-生成中の通信切断も1件検証しました。GPUサンプリング開始後、進捗0.32（20steps中の少なくとも6steps完了に対応）で接続を閉じても、PS5上の生成は142.042663秒で完了しました。生成POSTは1回・自動再送0回で、別途回収したgateway経由とnativeのPNGは一致しました。切断した元の同期応答を受け取ったという意味ではなく、キャンセル・電源断・GPU障害の復旧試験でもありません。
-
-観測されたプロセス生涯Directピークは9,705,046,016バイト、予約内残量は約166.55MiB。CPU借用を含み、専用VRAM使用量ではありません。通常アプリ再起動と合成記録の復旧も確認しましたが、実GPUハングや電源断の復旧は未検証です。[運用・復旧の実機結果](operations-recovery-20261019.txt)・[機械可読値](operations-recovery-20261019-evidence.json)。
+既存のWAI成功資料は基盤の履歴であり、Animaの実機成功証明ではありません。Animaで取得したログ・PNGだけを、今後の成功として記録します。[元WAIの状況](wai-base-status.md)。

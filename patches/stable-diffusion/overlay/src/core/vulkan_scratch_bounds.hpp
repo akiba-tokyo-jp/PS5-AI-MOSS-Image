@@ -8,6 +8,7 @@
 #include "ggml.h"
 #include "ggml-impl.h"
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 
 namespace native_scratch_bounds {
@@ -146,6 +147,94 @@ static bool small_plain_softmax(const ggml_tensor * t) {
     for (unsigned i=0;i<4;++i) if (t->ne[i]!=t->src[0]->ne[i]) return false;
     return true;
 }
+
+/* Anima/Qwen-Image paths in the same frozen Vulkan provider. These handlers
+ * dispatch directly from tensor buffers and do not grow any of the four
+ * prealloc buffers under the required no-fusion profile. Keep their shader
+ * integer addressing/type/shape bounds explicit instead of allowing new ops
+ * solely by enum. This is not a claim of aggregate memory or GPU correctness. */
+static bool u32_float_storage(const ggml_tensor * t, bool contiguous=false) {
+    uint64_t elements=0;
+    if (!float_tensor(t,elements)) return false;
+    const uint64_t element_bytes=t->type==GGML_TYPE_F16?2:4;
+    uint64_t bytes=0,span=element_bytes,expected=element_bytes;
+    if (!mul(elements,element_bytes,bytes) || bytes>UINT32_MAX || t->nb[0]!=element_bytes) return false;
+    for(unsigned i=0;i<4;++i) {
+        if (t->nb[i]>UINT32_MAX || t->nb[i]%element_bytes ||
+            (contiguous && t->ne[i]>1 && t->nb[i]!=expected)) return false;
+        uint64_t offset=0;
+        if (!mul(uint64_t(t->ne[i]-1),uint64_t(t->nb[i]),offset) || offset>UINT32_MAX-span) return false;
+        span+=offset;
+        if (!mul(expected,uint64_t(t->ne[i]),expected)) return false;
+    }
+    return true;
+}
+static bool same_shape(const ggml_tensor * a,const ggml_tensor * b) {
+    if(!a || !b)return false;
+    for(unsigned i=0;i<4;++i)if(a->ne[i]!=b->ne[i])return false;
+    return true;
+}
+static bool plain_rms_norm(const ggml_tensor * t) {
+    if (!t || t->op!=GGML_OP_RMS_NORM || t->type!=GGML_TYPE_F32 ||
+        !t->src[0] || t->src[0]->type!=GGML_TYPE_F32 || !same_shape(t,t->src[0]) ||
+        !u32_float_storage(t) || !u32_float_storage(t->src[0])) return false;
+    // The plain handler dispatches one workgroup per ne1/ne2/ne3 row.
+    // Use Vulkan's guaranteed workgroup-count floor, not a guessed PS5 limit.
+    for(unsigned i=1;i<4;++i)if(t->ne[i]>65535)return false;
+    return true;
+}
+static bool plain_rope_apply(const ggml_tensor * t) {
+    if (!t || t->op!=GGML_OP_ROPE_APPLY || t->type!=GGML_TYPE_F32 ||
+        !t->src[0] || !t->src[1] || t->src[0]->type!=GGML_TYPE_F32 || t->src[1]->type!=GGML_TYPE_F32 ||
+        !u32_float_storage(t,true) ||
+        !u32_float_storage(t->src[0]) || !u32_float_storage(t->src[1])) return false;
+    const auto * x=t->src[0];const auto * pe=t->src[1];
+    // ggml_rope_apply converts [D,H,L,N] to [D,L,H*N,1].
+    uint64_t heads_batch=0;
+    return mul(uint64_t(x->ne[1]),uint64_t(x->ne[3]),heads_batch) && heads_batch<=UINT32_MAX &&
+        t->ne[0]==x->ne[0] && t->ne[1]==x->ne[2] && uint64_t(t->ne[2])==heads_batch && t->ne[3]==1 &&
+        x->ne[0]%2==0 && pe->ne[0]==2 && pe->ne[1]==2 &&
+        pe->ne[2]==x->ne[0]/2 && pe->ne[3]==x->ne[2];
+}
+static int32_t int_param(const ggml_tensor * t,unsigned index) {
+    int32_t value=0;std::memcpy(&value,reinterpret_cast<const char *>(t->op_params)+index*sizeof(value),sizeof(value));return value;
+}
+static bool convolution_axis(uint64_t input,uint64_t kernel,int32_t stride,int32_t padding,int32_t dilation,uint64_t output) {
+    if(!input || !kernel || stride<=0 || padding<0 || dilation<=0)return false;
+    uint64_t extent=0;
+    if(!mul(kernel-1,uint64_t(dilation),extent) || extent==UINT64_MAX)return false;
+    ++extent;
+    const uint64_t padded=input+2*uint64_t(padding);
+    return padded>=extent && (padded-extent)/uint64_t(stride)+1==output;
+}
+static bool plain_conv3d(const ggml_tensor * t) {
+    if (!t || t->op!=GGML_OP_CONV_3D || t->type!=GGML_TYPE_F32 || !t->src[0] || !t->src[1] ||
+        t->src[1]->type!=GGML_TYPE_F32 || !u32_float_storage(t,true) ||
+        !u32_float_storage(t->src[0],true) || !u32_float_storage(t->src[1],true)) return false;
+    const auto * w=t->src[0];const auto * x=t->src[1];
+    const int32_t ic=int_param(t,9),batch=int_param(t,10),oc=int_param(t,11);
+    if(ic<=0 || batch<=0 || oc<=0 || uint64_t(ic)*uint64_t(oc)!=uint64_t(w->ne[3]) ||
+       uint64_t(ic)*uint64_t(batch)!=uint64_t(x->ne[3]) || uint64_t(oc)*uint64_t(batch)!=uint64_t(t->ne[3]))return false;
+    for(unsigned i=0;i<3;++i)if(!convolution_axis(uint64_t(x->ne[i]),uint64_t(w->ne[i]),
+        int_param(t,i),int_param(t,i+3),int_param(t,i+6),uint64_t(t->ne[i])))return false;
+    return true;
+}
+static bool plain_im2col3d(const ggml_tensor * t) {
+    if (!t || t->op!=GGML_OP_IM2COL_3D || !t->src[0] || !t->src[1] ||
+        t->src[1]->type!=GGML_TYPE_F32 || !u32_float_storage(t,true) ||
+        !u32_float_storage(t->src[0],true) || !u32_float_storage(t->src[1])) return false;
+    const auto * w=t->src[0];const auto * x=t->src[1];
+    const int32_t ic=int_param(t,9);
+    if(ic<=0 || x->ne[3]%ic || w->ne[3]%ic)return false;
+    const uint64_t batch=uint64_t(x->ne[3])/uint64_t(ic);
+    uint64_t kernel=uint64_t(ic);
+    for(unsigned i=0;i<3;++i)if(!mul(kernel,uint64_t(w->ne[i]),kernel) || kernel>UINT32_MAX)return false;
+    if(uint64_t(t->ne[0])!=kernel || !batch || uint64_t(t->ne[3])%batch)return false;
+    const uint64_t output[]={uint64_t(t->ne[1]),uint64_t(t->ne[2]),uint64_t(t->ne[3])/batch};
+    for(unsigned i=0;i<3;++i)if(!convolution_axis(uint64_t(x->ne[i]),uint64_t(w->ne[i]),
+        int_param(t,i),int_param(t,i+3),int_param(t,i+6),output[i]))return false;
+    return true;
+}
 static bool zero_prealloc_op(ggml_op op) {
     /* Whitelist only handlers without prealloc_size writes in frozen8003.
      * This concerns the four prealloc buffers, not descriptor/staging/driver BOs. */
@@ -173,7 +262,11 @@ static Bounds inspect(const ggml_cgraph * graph,const Profile & profile) {
         const auto * t=graph->nodes[i];++result.inspected_nodes;
         bool known=t && (t->op==GGML_OP_MUL_MAT ? matmul(t,profile,result) :
                          t->op==GGML_OP_FLASH_ATTN_EXT ? dense_flash(t,profile,result) :
-                         t->op==GGML_OP_SOFT_MAX ? small_plain_softmax(t) : zero_prealloc_op(t->op));
+                         t->op==GGML_OP_SOFT_MAX ? small_plain_softmax(t) :
+                         t->op==GGML_OP_RMS_NORM ? plain_rms_norm(t) :
+                         t->op==GGML_OP_ROPE_APPLY ? plain_rope_apply(t) :
+                         t->op==GGML_OP_CONV_3D ? plain_conv3d(t) :
+                         t->op==GGML_OP_IM2COL_3D ? plain_im2col3d(t) : zero_prealloc_op(t->op));
         if (!known) {
             result.known=false;++result.unknown_nodes;
             if(result.unknown_nodes==1)result.first_unknown=t?t->op:GGML_OP_NONE;
