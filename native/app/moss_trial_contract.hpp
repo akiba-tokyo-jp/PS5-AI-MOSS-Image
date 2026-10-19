@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT -- one explicit verification attempt per process. */
+/* SPDX-License-Identifier: MIT -- bounded explicit verification attempts. */
 #pragma once
 #include "moss_runtime_admission.h"
 #include <atomic>
@@ -14,11 +14,23 @@
 #if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL && !PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
 #error The quality comparison requires the explicit experimental small-trial build
 #endif
+#ifndef PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+#define PS5_AI_MOSS_1024_COLD_WARM_TRIAL 0
+#endif
+#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL != 0 && PS5_AI_MOSS_1024_COLD_WARM_TRIAL != 1
+#error PS5_AI_MOSS_1024_COLD_WARM_TRIAL must be 0 or 1
+#endif
+#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL && (!PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL || PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL)
+#error The1024 cold/warm trial is distinct from production and the256 quality trial
+#endif
 
 static inline bool ps5_ai_moss_trial_request_valid(int width,int height,int steps,
                                                   double cfg,double flow_shift,
                                                   const char* sampler,int64_t seed=20261019) noexcept {
-#if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
+#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+    return width==1024 && height==1024 && steps==50 && cfg==3.0 && flow_shift==5.0 &&
+           seed==20261020 && sampler && !std::strcmp(sampler,"euler");
+#elif PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
     (void)seed;
     return width==256 && height==256 && (steps==4 || (PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL && steps==50)) && cfg==3.0 && flow_shift==5.0 &&
 #if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
@@ -32,8 +44,26 @@ static inline bool ps5_ai_moss_trial_request_valid(int width,int height,int step
 #endif
 }
 
+/* Separate helper preserves the original256 single-claim contract unchanged.
+ * Reservation is consumed before inference; neither failure nor completion
+ * resets it. The caller serializes jobs; CAS also bounds concurrent callers. */
+static inline bool ps5_ai_moss_benchmark_trial_claim(std::atomic<unsigned>& attempts,int width,int height) noexcept {
+#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+    if(width!=1024 || height!=1024)return false;
+    unsigned observed=attempts.load(std::memory_order_acquire);
+    while(observed<2) {
+        if(attempts.compare_exchange_weak(observed,observed+1,std::memory_order_acq_rel,std::memory_order_acquire))return true;
+    }
+    return false;
+#else
+    (void)attempts;(void)width;(void)height;return false;
+#endif
+}
+
 static inline bool ps5_ai_moss_trial_claim(std::atomic<bool>& claimed,int width,int height) noexcept {
-#if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
+#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+    (void)claimed;(void)width;(void)height;return false;
+#elif PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
     if (width!=256 || height!=256) return false;
     bool unused=false;
     return claimed.compare_exchange_strong(unused,true,std::memory_order_acq_rel);

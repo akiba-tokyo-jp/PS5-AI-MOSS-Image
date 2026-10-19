@@ -20,6 +20,7 @@ def main():
     p.add_argument('--manifest', type=Path, required=True)
     p.add_argument('--config', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--benchmark-1024', action='store_true', help='Permit only the reviewed gateway wait change, still requiring all actual core dependencies unchanged')
     a = p.parse_args()
     root = Path(__file__).resolve().parents[1]
     out = a.out.resolve()
@@ -38,7 +39,7 @@ def main():
 
     def refuse(path, mode, label):
         try:
-            build.validate_moss_core(path, baseline, config, mode)
+            build.validate_moss_core(path, baseline, config, mode, benchmark_gateway_only=a.benchmark_1024)
         except RuntimeError:
             checks.append(label)
             return
@@ -47,11 +48,20 @@ def main():
     refuse(a.manifest, False, 'strict original superset detects changed native inputs')
     refuse(a.manifest, 1, 'integer cannot impersonate explicit quality admission')
     carry = {}
-    build.validate_moss_core(a.manifest, baseline, config, True, carry)
+    build.validate_moss_core(a.manifest, baseline, config, True, carry, a.benchmark_1024)
     assert carry['actual_dependency_files_verified'] == 75
     assert carry['original_manifest_sha256'] == original_hash
     assert carry['original_manifest_unchanged'] and not carry['new_core_compilation']
     checks.append('all75 pinned compiler dependencies exclude the changed native-only inputs')
+    if a.benchmark_1024:
+        assert carry['reviewed_gateway_wait_only_change']['all_other_bytes_identical']
+        checks.append('gateway wait literal restoration exactly matches original core superset bytes')
+        gateway_record=next(row for row in original['header_inputs'] if row['path'].endswith('/native/gateway/openai.inc'))
+        altered=out/'gateway-unreviewed.inc'
+        altered.write_bytes((root/'native/gateway/openai.inc').read_bytes()+b'\n/* unreviewed */\n')
+        try:build.validate_moss_benchmark_gateway_wait_change(altered,gateway_record)
+        except RuntimeError:checks.append('any extra gateway byte change rejected')
+        else:raise AssertionError('Unreviewed gateway byte change accepted')
 
     # Copy only small dependency text, never archive/object/model payloads.
     clone = copy.deepcopy(original)

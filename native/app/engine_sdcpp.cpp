@@ -805,22 +805,32 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     *stats = {};
     if (!ps5_ai_moss_trial_request_valid(request->width,request->height,request->steps,
                                         request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
-        set_error(error,error_size,PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
+        set_error(error,error_size,PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+            ? "MOSS benchmark requires1024x1024,50steps,CFG3,shift5,Euler,seed20261020; production admission is not asserted"
+            : PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
             ? "MOSS quality trial requires 256x256,4 or50 steps,CFG3,flow shift5,Euler and seed20261019; production admission is not asserted"
             : "MOSS trial requires 256x256,4 steps,CFG3,flow shift5 and Euler; production admission is not asserted");
         return -1;
     }
-#if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
+#if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL || PS5_AI_MOSS_1024_COLD_WARM_TRIAL
     if (engine_config.moss_lora_strength!=0.7) {
-        set_error(error,error_size,"MOSS quality step comparison requires unchanged configured LoRA strength0.7");
+        set_error(error,error_size,"MOSS controlled trial requires unchanged configured LoRA strength0.7");
         return -1;
     }
 #endif
+#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+    static std::atomic<unsigned> experimental_attempts{0};
+    if(!ps5_ai_moss_benchmark_trial_claim(experimental_attempts,request->width,request->height)) {
+        set_error(error,error_size,"MOSS1024 cold/warm benchmark permits two attempts per process; failures consume claims and the third is refused");
+        return -1;
+    }
+#else
     static std::atomic<bool> experimental_attempt_claimed{false};
     if (!ps5_ai_moss_trial_claim(experimental_attempt_claimed,request->width,request->height)) {
         set_error(error,error_size,"MOSS experimental verification permits one256x256 generation attempt per process; failures do not reset this claim");
         return -1;
     }
+#endif
     phase_profile_begin();
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;

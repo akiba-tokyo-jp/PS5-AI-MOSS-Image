@@ -1,6 +1,6 @@
 # PS5 AI MOSS Image API
 
-privateの実験版です。2026-10-19に専用10GiB trialでMOSS＋指定LoRAの256×256・50steps生成とOpenAI互換API経由のPNG取得をPS5実機で確認しました。同条件4stepsの色縞は50stepsで解消しました。production runtime admissionは0を維持し、warm・高解像度・連続運用は未検証です。[実測の範囲](moss-native-small-trial-20261019.md)を参照してください。別のホスト用プロトコル検査は失敗専用の代替処理を使用し、モデル推論や画像生成を行いません。
+privateの実験版です。2026-10-20に専用10GiB trialでMOSS＋指定LoRAの1024×1024・50stepsを初回と同process2回目で生成し、OpenAI互換APIで両PNGを取得しました。PS5内生成時間は1242.706350秒／1177.725365秒で、正常な同一画像を確認しました。production runtime admission0／privateを維持し、現在のnative/gatewayは正常終了しています。[実測の範囲](moss-1024-cold-warm-20261020.md)を参照してください。別のホスト用プロトコル検査は失敗専用の代替処理で、モデル推論や画像生成を行いません。
 
 | 用途 | 接続先・識別子 |
 |---|---|
@@ -22,23 +22,24 @@ WAIは8188／8189、Animaは8190／8191を維持します。WAI・Anima・MOSS�
 ```json
 {
   "model": "moss-image-sft",
-  "prompt": "an adult woman with blue hair and glasses, smiling, anime illustration",
-  "size": "256x256",
+  "prompt": "A dazzling anime key visual of an adult woman with long flowing silver-white hair and violet eyes, wearing a stylish crimson jacket and a black pleated skirt, standing on a futuristic rooftop above a glowing neon city at night, a shower of shooting stars and a luminous galaxy across the sky, wind-swept hair, confident joyful smile, dramatic low-angle composition, vivid magenta and cyan rim lighting, intricate architecture, crisp clean line art, richly detailed beautiful anime illustration.",
+  "negative_prompt": "low quality, blurry",
+  "size": "1024x1024",
   "n": 1,
   "response_format": "b64_json",
   "steps": 50,
   "cfg_scale": 3.0,
   "flow_shift": 5.0,
-  "seed": 20261019,
+  "seed": 20261020,
   "sampler": "euler"
 }
 ```
 
 `steps`・`cfg_scale`・`flow_shift`・`seed`・`sampler`・`negative_prompt`はこのサーバー独自の拡張です。OpenAI Images API全体の実装を意味しません。応答形式はbase64 PNGまたは期限付きの画像専用署名URLです。`GET /v1/models`、`GET /health`、`GET /openapi.json`で識別と仕様を確認できます。[OpenAPI仕様](openapi.json)。JSON仕様と実機ビルドの埋込schemaは一致を維持しており、infoの`host-prepared`／実機未検証という説明文は初期ホスト構築時の履歴です。今回の結果は本資料で更新し、説明文だけのための再ビルドはしていません。
 
-通常のnative／gateway／PowerShellクライアントの既定stepsは元から50です。初回smokeの4stepsは別の試験契約で、推奨品質設定ではありません。今回の品質比較用SELFは256×256・4または50steps、CFG3、shift5、Euler、seed20261019、LoRA0.7に限定し、各プロセスは1件だけ受理します。上の256×256・50steps例が実測した形です。
+通常のnative／gateway／PowerShellクライアントの既定stepsは元から50です。4stepsは初回smoke限定値でした。上のJSONは今回実測したrequestと同じです。1024 benchmark用SELFは1024×1024・50steps、CFG3、shift5、Euler、seed20261020、LoRA0.7に限定し、1process最大2試行で失敗も消費、3回目は拒否します。旧256専用profileとは区別します。gateway待機は2時間、検証clientは7800秒で、timeout後もPOSTを再送しません。今回の2試行は完了し、追加の実行はこの結果から自動で許可されません。
 
-幅・高さは64〜1024の整数で、それぞれ16の倍数を指定します。`80x96`など、64の倍数に限らない寸法もプロトコル上は受け付けます。実機で生成可能な最大サイズやメモリ使用量を確認したという意味ではありません。
+幅・高さは64〜1024の整数で、それぞれ16の倍数を指定します。`80x96`など、64の倍数に限らない寸法もプロトコル上は受け付けます。1024×1024の今回2枚以外のサイズや最大能力を実証した意味ではありません。
 
 `flow_shift`はfloatへ変換しても正かつ有限である数を指定します。0・負数・NaN・無限大・floatで0に丸められる極小値を拒否します。省略またはOpenAI側の`null`では5を使用します。`quality: "auto"`／`"standard"`は受け付けますが、別の品質モデルへ切り替える指定ではありません。
 
@@ -60,4 +61,4 @@ PowerShellクライアントは[`Invoke-MossOpenAI.ps1`](../scripts/Invoke-MossO
 
 選定LoRAはアプリ設定の`moss_lora_path`と`moss_lora_strength`で指定し、HTTP要求から任意のモデルパスを渡す機能はありません。未知のengine設定キー、選定外のLoRAパス、0以下・1.5超・floatで有限正値にならない強度は、明示的GPU初期化前のmemory-plan検査で拒否します。構成上の対応とPS5での生成成功は分けて扱います。
 
-設定例のDirect予約目標は12GiB（12,884,901,888 bytes）、その内側のVulkan推論予算は11.5GiBです。`working_reserve_bytes`は1GiBを維持します。native総量報告11.4375GiBのため12GiB＋reserve1GiBは未達です。人が別途許可した試験では10GiB pool・予算9.5GiB・reserve1GiBを使用しました。通常設定の12GiB確保や高解像度対応が実証された意味ではありません。
+設定例のDirect予約目標は12GiB（12,884,901,888 bytes）、その内側のVulkan推論予算は11.5GiBです。`working_reserve_bytes`は1GiBを維持します。native総量報告11.4375GiBのため12GiB＋reserve1GiBは未達です。人が別途許可した試験では10GiB pool・予算9.5GiB・reserve1GiBを使用しました。通常設定の12GiB確保や任意条件・長時間運用が実証された意味ではありません。

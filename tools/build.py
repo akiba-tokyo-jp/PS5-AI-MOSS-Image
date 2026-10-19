@@ -21,27 +21,33 @@ MOSS_QUALITY_COMPARISON_CONTRACT={key:value for key,value in MOSS_SMALL_TRIAL_CO
 MOSS_QUALITY_COMPARISON_CONTRACT.update({
     'schema':'ps5-ai-moss-experimental-quality-step-comparison-v1','allowed_steps':[4,50],
     'seed':20261019,'moss_lora_strength':0.7})
+MOSS_BENCHMARK_1024_CONTRACT=dict(MOSS_SMALL_TRIAL_CONTRACT)
+MOSS_BENCHMARK_1024_CONTRACT.update({
+    'schema':'ps5-ai-moss-experimental-1024-cold-warm-v1','width':1024,'height':1024,
+    'steps':50,'seed':20261020,'moss_lora_strength':0.7,'max_generation_attempts':2})
 
 def same_typed_contract_value(actual,expected):
     return type(actual) is type(expected) and (
         len(actual)==len(expected) and all(same_typed_contract_value(a,e) for a,e in zip(actual,expected))
         if isinstance(expected,list) else actual==expected)
 
-def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False):
+def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False):
     """A trial is permission to RUN verification, never prior GPU admission."""
-    if type(enabled) is not bool or type(trial_10g) is not bool or type(quality_comparison) is not bool:
+    if any(type(value) is not bool for value in (enabled,trial_10g,quality_comparison,benchmark_1024)):
         raise RuntimeError('MOSS trial switches must be explicit booleans')
+    if quality_comparison and benchmark_1024:raise RuntimeError('MOSS trial modes are mutually exclusive')
     if not enabled:
-        if trial_10g or quality_comparison:raise RuntimeError('Trial switches require --experimental-small-trial')
+        if trial_10g or quality_comparison or benchmark_1024:raise RuntimeError('Trial switches require --experimental-small-trial')
         return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=0','-DPS5_AI_MOSS_TRIAL_10G=0']
-    expected_contract=MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
+    expected_contract=MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
     valid_contract=isinstance(contract,dict) and set(contract)==set(expected_contract) and all(
         same_typed_contract_value(contract[key],expected)
         for key,expected in expected_contract.items())
     if not trial_10g or not valid_contract:
         raise RuntimeError('Experimental MOSS requires the exact reviewed small10GiB trial profile and both switches')
     return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=1','-DPS5_AI_MOSS_TRIAL_10G=1']+(
-        ['-DPS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL=1'] if quality_comparison else [])
+        ['-DPS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL=1'] if quality_comparison else [])+(
+        ['-DPS5_AI_MOSS_1024_COLD_WARM_TRIAL=1'] if benchmark_1024 else [])
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 
@@ -69,7 +75,18 @@ def check_archive_update(before,after,allowed):
     changed=sorted(name for name in before if before[name]!=after[name])
     if not set(changed).issubset(set(allowed)):raise RuntimeError('Unreviewed archive members changed: '+str(changed))
     return changed
-def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None):
+def validate_moss_benchmark_gateway_wait_change(source,original):
+    """Only the reviewed1800000->7200000 literal may differ from core history."""
+    data=Path(source).read_bytes()
+    new=b'#define OPENAI_WAIT_MS UINT64_C(7200000)'
+    old=b'#define OPENAI_WAIT_MS UINT64_C(1800000)'
+    if data.count(new)!=1:raise RuntimeError('Expected exactly one reviewed2h gateway wait literal')
+    restored=data.replace(new,old,1)
+    if len(restored)!=original['bytes'] or hashlib.sha256(restored).hexdigest()!=original['sha256']:
+        raise RuntimeError('Gateway change exceeds the reviewed wait-only literal')
+    return {'old_wait_ms':1800000,'new_wait_ms':7200000,'all_other_bytes_identical':True,
+            'restored_original_sha256':original['sha256']}
+def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False):
     """Consume only a complete, immutable 75-member MOSS core rebuild."""
     manifest=json.loads(Path(manifest_path).read_text(encoding='utf-8'))
     if (manifest.get('schema')!='moss-core-build-v1' or
@@ -110,12 +127,19 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
             changed.append(record)
     if changed:
         # This exception is restricted to the three native-only inputs changed
-        # for the explicit quality trial. Every original compiler .d is pinned
+        # for explicit native-only trials. Every original compiler .d is pinned
         # and checked; a change to ANY consumed core input remains a hard error.
         allowed={ROOT/'native/app/moss_trial_contract.hpp',ROOT/'native/app/engine_sdcpp.cpp',
                  ROOT/'native/app/moss_precision_gate.inc'}
+        # The separately reviewed1024 gateway change only extends its wait.
+        # It still must be absent from all75 actual core dependency files.
+        if benchmark_gateway_only is True:allowed.add(ROOT/'native/gateway/openai.inc')
         if quality_native_only is not True or any(Path(row['path']).resolve() not in allowed for row in changed):
             raise RuntimeError('MOSS core source/header changed since compile: '+str(changed[0]['path']))
+        gateway_wait_proof={}
+        for row in changed:
+            if Path(row['path']).resolve()==ROOT/'native/gateway/openai.inc':
+                gateway_wait_proof=validate_moss_benchmark_gateway_wait_change(row['path'],row)
         members_proof=manifest.get('members',[])
         if len(members_proof)!=75 or {row['member'] for row in members_proof}!=set(members):
             raise RuntimeError('Missing all75 actual dependency records for native-only core carryforward')
@@ -141,6 +165,7 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
             carryforward.update({'schema':'moss-quality-native-only-core-carryforward-v1',
                 'original_manifest_sha256':digest(manifest_path),'original_manifest_unchanged':True,
                 'archive_sha256':archive['sha256'],'new_core_compilation':False,
+                'reviewed_gateway_wait_only_change':gateway_wait_proof,
                 'actual_dependency_files_verified':75,'actual_dependency_paths':len(consumed),
                 'changed_superset_files_not_consumed':[{'path':row['path'],'before':row,
                     'after':{'bytes':Path(row['path']).stat().st_size,'sha256':digest(row['path'])}} for row in changed],
@@ -152,13 +177,13 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
-    trial_path=ROOT/('build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
+    trial_path=ROOT/('build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
     trial_contract=json.loads(trial_path.read_text()) if a.experimental_small_trial else None
-    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial)
+    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -173,7 +198,8 @@ def main():
         raise RuntimeError('MOSS preparation build must retain runtime admission0')
     baseline_core=archive_members(Path(c['DEPS'])/'libstable-diffusion.graph-admission-1024-v3.a')
     core_carryforward={}
-    validate_moss_core(a.core_manifest,baseline_core,c,a.quality_step_comparison_trial,core_carryforward)
+    native_only_trial=a.quality_step_comparison_trial or a.benchmark_1024_cold_warm_trial
+    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial)
     batch_pair=profile.get('controlnet_batch_pair',0)
     if type(batch_pair)!=int or batch_pair not in (0,1):raise RuntimeError('ControlNet batch-pair profile must be 0 or 1')
     shader_header=profile['generated_shader_header'];shader_path=Path(expand(shader_header['path']))
@@ -229,7 +255,7 @@ def main():
         core_name='libstable-diffusion.graph-admission-1024-v3.a'
         baseline=archive_members(Path(c['DEPS'])/core_name)
         current_carryforward={}
-        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,a.quality_step_comparison_trial,current_carryforward)
+        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial)
         if current_carryforward!=core_carryforward:raise RuntimeError('Core native-only carryforward evidence changed during build')
         core=out/'libstable-diffusion.moss.a';shutil.copyfile(core_source,core)
         core_changed=sorted(name for name,record in archive_members(core).items() if record!=baseline[name])
@@ -292,7 +318,8 @@ def main():
             'model_family':'moss-image-sft','requested_direct_bytes':10737418240 if a.trial_10g else 12884901888,
             'user_requested_direct_target_bytes':12884901888,
             'experimental_small_trial':a.experimental_small_trial,'trial_10g':a.trial_10g,
-            'quality_step_comparison_trial':a.quality_step_comparison_trial,'core_native_only_carryforward':core_carryforward,
+            'quality_step_comparison_trial':a.quality_step_comparison_trial,
+            'benchmark_1024_cold_warm_trial':a.benchmark_1024_cold_warm_trial,'core_native_only_carryforward':core_carryforward,
             'trial_compile_flags':trial_flags,'trial_contract':trial_contract,
             'trial_contract_sha256':digest(trial_path) if a.experimental_small_trial else None,
             'runtime_admitted':False,'requested_precision':a.precision,'controlnet_batch_pair':batch_pair,

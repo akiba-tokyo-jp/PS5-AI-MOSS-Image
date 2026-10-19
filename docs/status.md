@@ -1,20 +1,21 @@
 # MOSS Imageの状態
 
-2026-10-19 JST。**privateの実験版です。PS5で256×256・50stepsの正常な画像を生成し、WindowsからOpenAI互換APIでPNGを取得しました。** 同一SELF・同一全条件で4stepsを再現してからstepsだけ50へ変え、強い色縞が解消しました。この条件の4stepsのsampling不足が原因と判断します。
+2026-10-20 JST。**privateの実験版です。PS5でMOSS＋指定LoRAの1024×1024・50stepsを2回生成し、WindowsからOpenAI互換APIで取得しました。両画像は正常な画質、同一PNGを確認しています。**
 
 | 確認項目 | 現在の結果 |
 |---|---|
 | 実機構成 | FW12.40、PPSA99190、MOSS-Image-SFT Q4_K＋Qwen3.5-9B Q4_K_M＋FLUX.2 small VAE＋指定rank16 LoRA |
-| GPU / CPU | RADV NAVI21でDiT/Flash Attention/VAE完了を観測、Qwen text encodingはPS5 CPU |
-| 指定LoRA | strength0.7、loaded/matched/used各504、skip0、実適用確認 |
-| 比較時間 | fresh processの256×256、Euler、CFG3、shift5、seed20261019。4steps 68.525607秒 → 50steps 148.133782秒（初回読込込み） |
-| API / 画像 | 50stepsのHTTP200応答149.406秒、RGB256×256 PNG194,931B、native GETと応答bytes一致。各process POST1回・自動再送0 |
-| 数値検証 | 6つの限定GPU読み戻しゲートがPASS。50stepsのDiT出力100・VAE出力1、textを含む3,854,336値でnonfinite0。全演算品質の普遍的証明ではない |
-| メモリ | 承認済みtrial10GiB pool。native総量11.4375GiBのため要求12GiB＋reserve1GiBは未達。API GPUピークはCPU weightsも含む共有poolの上界 |
-| 終了 | native432／gateway435を通常API終了後、別取得で両PID不在。独立observer005でGPU titleなし |
-| 継続する制限 | production admission0／privateを維持。warm、高解像度、連続運用、最小必要stepsは未検証。通常APIの既定stepsは元から50 |
+| GPU / CPU | RADV NAVI21でDiT/Flash Attention/VAE完了を観測、text encodingはPS5 CPU。VAE tile256/overlap0.5、49tile |
+| 条件 | 1024×1024、50steps、Euler、CFG3、shift5、seed20261020、LoRA0.7。同prompt・同native/gateway/SELF |
+| PS5生成時間 | 初回読込込み1242.706350秒／同process2回目1177.725365秒。差64.980985秒は純load時間ではない |
+| API往復 / Windows全検証 | 初回1243.907秒／1249.407秒、2回目1178.875秒／1184.609秒 |
+| 画像 / LoRA | RGB1024×1024 PNG2,496,997B、両回同一SHA、native GETとAPI返却bytes一致。LoRA各504/504/504、skip0 |
+| 検証scope | 各phase1POST・自動再送0。coldはOS disk cache未flush、warmでもweight再転送ゼロとは主張しない |
+| メモリ | trial10GiB pool、reserve1GiB。API CPU/GPU peaksは両回11,790,876,672B／4,868,833,280Bの累積上界。純VRAM値／各画像増分／加算可能値ではない |
+| 終了 | native466/gateway469を通常API終了後に両PID不在を別確認。独立observer007でGPU titleなし |
+| 継続する制限 | production admission0／private。要求12GiB＋reserve1GiBは未達。平均／分散、長時間連続、最小steps、他promptは未検証 |
 
-[実機結果・条件を固定した原因比較・メモリ・証拠の詳細](moss-native-small-trial-20261019.md)を参照してください。正常50stepsの小画像のみ同梱し、生ログ・失敗画像・重み・秘密はGitに含めません。
+[1024 cold/warmの詳細](moss-1024-cold-warm-20261020.md)。正常PNGは同一なので1枚だけ同梱し、生ログ・失敗画像・重み・秘密はGitに含めません。以前の[256×256・4対50steps比較](moss-native-small-trial-20261019.md)ではsampling不足による色縞を切り分けました。
 
 <details>
 <summary>初期ホスト構築時点の記録（実機試験前の履歴）</summary>

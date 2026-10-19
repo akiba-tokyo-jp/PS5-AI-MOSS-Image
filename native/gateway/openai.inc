@@ -6,7 +6,7 @@
 #include "openapi_schema.inc"
 #define OPENAI_MODEL "moss-image-sft"
 #define IMAGE_URL_TTL 3600
-#define OPENAI_WAIT_MS UINT64_C(1800000)
+#define OPENAI_WAIT_MS UINT64_C(7200000)
 
 static void finish_client(socket_t fd, uint64_t deadline);
 static void openai_error(socket_t fd, int code, const char *message, const char *param) {
