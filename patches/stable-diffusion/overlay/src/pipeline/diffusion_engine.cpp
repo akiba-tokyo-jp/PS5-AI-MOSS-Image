@@ -384,10 +384,43 @@ bool StableDiffusionGGML::register_runner_params(ModelComponent component,
     if (model_manager == nullptr) {
         return true;
     }
+    // Image-prompt projection weights are used only while preparing16 owned
+    // image tokens. Retain source/dtype and Vulkan execution, but let normal
+    // runner_end release their buffers before the next CPU text/Vision phase.
+    const bool transient_ip_projection = component == ModelComponent::IPAdapter;
     ModelManager::ResidencyMode residency_mode =
-        backend_manager.params_backend_is_disk(module) ? ModelManager::ResidencyMode::Disk : ModelManager::ResidencyMode::ParamBackend;
+        (backend_manager.params_backend_is_disk(module) || transient_ip_projection)
+            ? ModelManager::ResidencyMode::Disk : ModelManager::ResidencyMode::ParamBackend;
+
+    // IP K/V parameters belong to the UNet runner rather than IPAdapterRunner.
+    // Register only these exact optional cross-attention weights as reloadable.
+    // Separate residency groups prevent their storage blocks from mixing with
+    // resident WAI/ControlNet/LoRA weights. The existing manager enforces pins
+    // and frees them through normal runner_end, never while a graph is active.
+    std::map<std::string, ggml_tensor*> transient_ip_kv;
+    if (component == ModelComponent::Diffusion && sd_version_is_sdxl(version)) {
+        const std::string prefix = "model.diffusion_model.";
+        const std::string key_suffix = ".attn2.to_k_ip.weight";
+        const std::string value_suffix = ".attn2.to_v_ip.weight";
+        const auto ends_with = [](const std::string& name, const std::string& suffix) {
+            return name.size() >= suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+        };
+        for (auto it = group_tensors.begin(); it != group_tensors.end();) {
+            const auto& name = it->first;
+            if (name.rfind(prefix, 0) == 0 && (ends_with(name, key_suffix) || ends_with(name, value_suffix))) {
+                transient_ip_kv.insert(*it);
+                it = group_tensors.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
 
     std::vector<ggml_backend_t> module_backends = backend_manager.runtime_backends(module);
+    if (module_backends.size() > 1 && !transient_ip_kv.empty()) {
+        LOG_ERROR("PS5 transient IP K/V residency requires the verified single Vulkan backend");
+        return false;
+    }
     if (module_backends.size() > 1) {
         if constexpr (has_set_runtime_backends<T>::value) {
             if (module == SDBackendModule::DIFFUSION || module == SDBackendModule::TE) {
@@ -415,7 +448,7 @@ bool StableDiffusionGGML::register_runner_params(ModelComponent component,
                  sd_backend_module_name(module),
                  sd::layer_split_backend_device_display_name(module_backends[0]).c_str());
     }
-    return model_manager->register_param_tensors(component,
+    if (!model_manager->register_param_tensors(component,
                                                  std::move(group_tensors),
                                                  residency_mode,
                                                  backend_for(module),
@@ -423,7 +456,22 @@ bool StableDiffusionGGML::register_runner_params(ModelComponent component,
                                                  params_mem_size,
                                                  false,
                                                  false,
-                                                 &tensor_ops);
+                                                 &tensor_ops)) {
+        return false;
+    }
+    if (!transient_ip_kv.empty()) {
+        LOG_INFO("PS5 IP residency: %zu UNet K/V tensors reloadable after runner_end", transient_ip_kv.size());
+        return model_manager->register_param_tensors(component,
+                                                     std::move(transient_ip_kv),
+                                                     ModelManager::ResidencyMode::Disk,
+                                                     backend_for(module),
+                                                     params_backend_for(module),
+                                                     params_mem_size,
+                                                     false,
+                                                     false,
+                                                     &tensor_ops);
+    }
+    return true;
 }
 
 template <typename T>

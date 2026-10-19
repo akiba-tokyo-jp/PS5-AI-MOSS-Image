@@ -2161,7 +2161,85 @@
  #include "core/ggml_tensor_utils.h"
  #include "core/layer_split_partition.h"
  #include "core/probe/conv_direct.h"
-@@ -2045,6 +2049,9 @@
+@@ -380,10 +384,43 @@
+     if (model_manager == nullptr) {
+         return true;
+     }
++    // Image-prompt projection weights are used only while preparing16 owned
++    // image tokens. Retain source/dtype and Vulkan execution, but let normal
++    // runner_end release their buffers before the next CPU text/Vision phase.
++    const bool transient_ip_projection = component == ModelComponent::IPAdapter;
+     ModelManager::ResidencyMode residency_mode =
+-        backend_manager.params_backend_is_disk(module) ? ModelManager::ResidencyMode::Disk : ModelManager::ResidencyMode::ParamBackend;
++        (backend_manager.params_backend_is_disk(module) || transient_ip_projection)
++            ? ModelManager::ResidencyMode::Disk : ModelManager::ResidencyMode::ParamBackend;
++
++    // IP K/V parameters belong to the UNet runner rather than IPAdapterRunner.
++    // Register only these exact optional cross-attention weights as reloadable.
++    // Separate residency groups prevent their storage blocks from mixing with
++    // resident WAI/ControlNet/LoRA weights. The existing manager enforces pins
++    // and frees them through normal runner_end, never while a graph is active.
++    std::map<std::string, ggml_tensor*> transient_ip_kv;
++    if (component == ModelComponent::Diffusion && sd_version_is_sdxl(version)) {
++        const std::string prefix = "model.diffusion_model.";
++        const std::string key_suffix = ".attn2.to_k_ip.weight";
++        const std::string value_suffix = ".attn2.to_v_ip.weight";
++        const auto ends_with = [](const std::string& name, const std::string& suffix) {
++            return name.size() >= suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
++        };
++        for (auto it = group_tensors.begin(); it != group_tensors.end();) {
++            const auto& name = it->first;
++            if (name.rfind(prefix, 0) == 0 && (ends_with(name, key_suffix) || ends_with(name, value_suffix))) {
++                transient_ip_kv.insert(*it);
++                it = group_tensors.erase(it);
++            } else {
++                ++it;
++            }
++        }
++    }
+ 
+     std::vector<ggml_backend_t> module_backends = backend_manager.runtime_backends(module);
++    if (module_backends.size() > 1 && !transient_ip_kv.empty()) {
++        LOG_ERROR("PS5 transient IP K/V residency requires the verified single Vulkan backend");
++        return false;
++    }
+     if (module_backends.size() > 1) {
+         if constexpr (has_set_runtime_backends<T>::value) {
+             if (module == SDBackendModule::DIFFUSION || module == SDBackendModule::TE) {
+@@ -411,7 +448,7 @@
+                  sd_backend_module_name(module),
+                  sd::layer_split_backend_device_display_name(module_backends[0]).c_str());
+     }
+-    return model_manager->register_param_tensors(component,
++    if (!model_manager->register_param_tensors(component,
+                                                  std::move(group_tensors),
+                                                  residency_mode,
+                                                  backend_for(module),
+@@ -419,7 +456,22 @@
+                                                  params_mem_size,
+                                                  false,
+                                                  false,
+-                                                 &tensor_ops);
++                                                 &tensor_ops)) {
++        return false;
++    }
++    if (!transient_ip_kv.empty()) {
++        LOG_INFO("PS5 IP residency: %zu UNet K/V tensors reloadable after runner_end", transient_ip_kv.size());
++        return model_manager->register_param_tensors(component,
++                                                     std::move(transient_ip_kv),
++                                                     ModelManager::ResidencyMode::Disk,
++                                                     backend_for(module),
++                                                     params_backend_for(module),
++                                                     params_mem_size,
++                                                     false,
++                                                     false,
++                                                     &tensor_ops);
++    }
++    return true;
+ }
+ 
+ template <typename T>
+@@ -2045,6 +2097,9 @@
      if (embed.empty()) {
          return;
      }
@@ -2171,7 +2249,7 @@
      ip_adapter_tokens = ip_adapter->compute(n_threads, embed);
      if (ip_adapter_tokens.empty()) {
          LOG_ERROR("IP-Adapter conditional image projection failed");
-@@ -2361,6 +2368,23 @@
+@@ -2361,6 +2416,23 @@
      return sd::ops::concat(a, b, static_cast<size_t>(batch_dim));
  }
  
@@ -2195,7 +2273,7 @@
  void StableDiffusionGGML::compute_sample_controls(const sd::Tensor<float>& control_image,
                                                    const sd::Tensor<float>& noised_input,
                                                    const sd::Tensor<float>& timesteps_tensor,
-@@ -2368,9 +2392,9 @@
+@@ -2368,9 +2440,9 @@
                                                    std::vector<sd::Tensor<float>>* controls) {
      GGML_ASSERT(controls != nullptr);
      controls->clear();
@@ -2208,7 +2286,7 @@
  
      auto control_result = control_net->compute(n_threads,
                                                 noised_input,
-@@ -2378,10 +2402,13 @@
+@@ -2378,10 +2450,13 @@
                                                 timesteps_tensor,
                                                 condition.c_crossattn,
                                                 condition.c_vector);
@@ -2226,7 +2304,7 @@
  
      *controls = std::move(*control_result);
  }
-@@ -2432,7 +2459,9 @@
+@@ -2432,7 +2507,9 @@
      std::vector<QwenPrefixInputs> qwen_prefix_inputs;
  
      RunnerEndOnExit sample_control_runner_end{!control_image.empty() && control_net != nullptr ? control_net.get() : nullptr};
@@ -2237,7 +2315,7 @@
      const bool apply_denoise_mask = !denoise_mask.empty() &&
                                      std::any_of(denoise_mask.values().begin(), denoise_mask.values().end(),
                                                  [](float value) { return value != 1.f; });
-@@ -2582,6 +2611,7 @@
+@@ -2582,6 +2659,7 @@
              cache_runtime.spectrum.predict(&denoised);
              if (apply_denoise_mask) {
                  denoised = denoised * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
@@ -2245,7 +2323,7 @@
              }
              if (preview_needed && sd_should_preview_denoised()) {
                  preview_image(step, denoised, version, preview.mode, preview.callback, preview.data, false);
-@@ -2600,7 +2630,13 @@
+@@ -2600,7 +2678,13 @@
          sd::Tensor<float> uncond_out;
          sd::Tensor<float> img_uncond_out;
          sd_sample::SampleStepCacheDispatcher step_cache(cache_runtime, step, sigma);
@@ -2260,7 +2338,7 @@
          DiffusionParams diffusion_params;
          diffusion_params.x                = &noised_input;
          diffusion_params.timesteps        = &timesteps_tensor;
-@@ -2609,13 +2645,6 @@
+@@ -2609,13 +2693,6 @@
          step_guidance_input.step          = step;
          step_guidance_input.schedule_size = sigmas.size();
          bool is_skiplayer_step            = skip_layer_guidance.is_enabled_for_step(step_guidance_input);
@@ -2274,7 +2352,7 @@
  
          static const std::vector<sd::Tensor<float>> empty_ref_latents;
          bool uncond_without_ref_latents = !img_uncond.empty() &&
-@@ -2637,7 +2666,7 @@
+@@ -2637,7 +2714,7 @@
                  if (config_->animatediff_loaded && noised_input.dim() >= 4 && noised_input.shape()[3] > 1) {
                      nvf = static_cast<int>(noised_input.shape()[3]);
                  }
@@ -2283,7 +2361,7 @@
                  const auto& ip_tokens = use_uncond_ip ? ip_adapter_uncond_tokens : ip_adapter_tokens;
                  if (!ip_tokens.empty()) {
                      unet_extra.ip_context = &ip_tokens;
-@@ -2710,16 +2739,8 @@
+@@ -2710,16 +2787,8 @@
                  return std::move(cached_output);
              }
  
@@ -2302,7 +2380,7 @@
  
              for (const auto& extension : generation_extensions) {
                  extension->before_diffusion(diffusion_params, step);
-@@ -2765,23 +2786,55 @@
+@@ -2765,23 +2834,55 @@
                  return {};
              }
  
@@ -2373,7 +2451,7 @@
  
              DiffusionParams batched_params = diffusion_params;
              batched_params.x               = &batched_x;
-@@ -2789,11 +2842,14 @@
+@@ -2789,11 +2890,14 @@
              batched_params.c_concat        = batched_concat.empty() ? nullptr : &batched_concat;
              batched_params.y               = batched_y.empty() ? nullptr : &batched_y;
              batched_params.ref_latents     = nullptr;
@@ -2390,7 +2468,7 @@
              }
              return output;
          };
-@@ -2860,6 +2916,8 @@
+@@ -2860,6 +2964,8 @@
                  auto parts = sd::ops::chunk(batched_out, 2, 3);
                  cond_out   = std::move(parts[0]);
                  uncond_out = std::move(parts[1]);
@@ -2399,7 +2477,7 @@
              }
          }
  
-@@ -2946,6 +3004,7 @@
+@@ -2946,6 +3052,7 @@
          }
          if (apply_denoise_mask) {
              denoised = denoised * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
@@ -2407,7 +2485,7 @@
          }
          if (preview_needed && sd_should_preview_denoised()) {
              preview_image(step, denoised, version, preview.mode, preview.callback, preview.data, false);
-@@ -2964,6 +3023,7 @@
+@@ -2964,6 +3071,7 @@
          return {};
      }
  
@@ -2444,12 +2522,29 @@
              if (init_latent.empty()) {
                  LOG_ERROR("failed to encode init image");
                  return std::nullopt;
-@@ -440,7 +445,21 @@
+@@ -440,7 +445,6 @@
                                            request->pulid_params,
                                            condition_params,
                                            plan->total_steps);
+-        sd->compute_ip_adapter_tokens(sd_img_gen_params->ip_adapter_image, sd_img_gen_params->ip_adapter_strength);
+         int64_t prepare_start_ms         = ggml_time_ms();
+         condition_params.zero_out_masked = false;
+         auto cond                        = sd->get_learned_condition(condition_params);
+@@ -527,6 +531,30 @@
+ 
+         int64_t t1 = ggml_time_ms();
+         LOG_INFO("get_learned_condition completed, taking %.2fs", (t1 - prepare_start_ms) * 1.0f / 1000);
++
++        // Text and image encoders borrow the same owned Direct data pool.
++        // Complete and release CPU text weights before starting CLIP-Vision;
++        // their owned condition tensors remain valid after runner cleanup.
++        // Early failures still use the existing RAII guard above.
++        if (conditioner_runner_end.conditioner) {
++            conditioner_runner_end.conditioner->runner_end();
++            conditioner_runner_end.conditioner = nullptr;
++        }
 +        const int64_t ip_start=ggml_time_ms();
-         sd->compute_ip_adapter_tokens(sd_img_gen_params->ip_adapter_image, sd_img_gen_params->ip_adapter_strength);
++        sd->compute_ip_adapter_tokens(sd_img_gen_params->ip_adapter_image, sd_img_gen_params->ip_adapter_strength);
 +        if(sd_img_gen_params->ip_adapter_image.data){
 +            const auto valid=[](const sd::Tensor<float>& t){
 +                if(t.empty() || t.dim()<2 || t.dim()>4 || t.shape()[0]!=2048 || t.shape()[1]!=16 || t.numel()!=2048*16)return false;
@@ -2463,10 +2558,10 @@
 +            }
 +            ps5_ai_reference_phase(2,16,(ggml_time_ms()-ip_start)*0.001);
 +        }
-         int64_t prepare_start_ms         = ggml_time_ms();
-         condition_params.zero_out_masked = false;
-         auto cond                        = sd->get_learned_condition(condition_params);
-@@ -834,6 +853,7 @@
+ 
+         ImageGenerationEmbeds embeds;
+         embeds.img_uncond = std::move(img_uncond);
+@@ -834,6 +862,7 @@
              return false;
          }
          ImageGenerationLatents latents = std::move(*latents_opt);

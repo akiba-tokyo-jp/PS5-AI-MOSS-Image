@@ -18,6 +18,7 @@ Windowsやクラウドへ推論を転送する実装はありません。
 | GET `/v1/models` | モデル一覧 |
 | GET `/v1/models/wai-illustrious-sdxl-v17.0` | モデル情報 |
 | POST `/v1/images/generations` | 同期応答。base64 PNGまたは署名付きURL |
+| POST `/v1/images/edits` | multipart画像／任意マスク。対応範囲は[マスク仕様](mask-api.md) |
 | GET `/health` | 自身と同じPS5のバックエンド状態 |
 | GET `/openapi.json` | OpenAPI3.1文書 |
 | GET `/v1/images/{id}.png?expires=…&signature=…` | 返却された画像用署名URL |
@@ -40,7 +41,7 @@ Windowsやクラウドへ推論を転送する実装はありません。
 | seed | 拡張、-1または非負signed64-bit整数 |
 | sampler | 拡張、euler / euler_a（既定） / dpm++2m |
 
-任意項目のnullは既定値を使います。body上限24KiB。
+任意項目のnullは既定値を使います。generationsのJSON body上限24KiB。multipartの上限は[マスク仕様](mask-api.md)を参照してください。
 未対応パラメーター・batch・透過出力・JPEG/WebP・streamingは400などで拒否します。マスク付き編集は [仕様](mask-api.md) を参照してください。
 成功は `{"created":...,"data":[{"b64_json":"..."}]}` または`url`です。
 `x-request-id`はアダプターのID、`X-PS5-Native-Job-ID`は実際のネイティブ生成IDです。
@@ -58,6 +59,9 @@ Windowsやクラウドへ推論を転送する実装はありません。
 
 HTTPタイムアウト・切断はネイティブ生成のキャンセルを意味しません。
 IDを取得済みならジョブを確認し、不明なPOSTを自動再送しないでください。
+生成中の接続を閉じた実機試験では、POST1回のまま完了し、別経路でPNGを回収しました。[確認範囲](ip-lifecycle-20261019.md#通信切断後の結果回収)を参照してください。
+通常の同期OpenAIクライアントが受付後・ID受信前に切断した場合、未知のジョブを確実に検索できる現行APIはありません。実機の回収試験では運用者権限で既存の内部対応ログからIDを特定しました。クライアント相関ID／idempotencyの実装は今後の改善候補です。
+[切断・連続6件・通常再起動の検証範囲](operations-recovery-20261019.txt)も参照してください。
 致命的なretained状態はfailed/degraded、新規生成503、終了待ちできないshutdownは409です。
 管理用shutdownはアプリの正常な後処理と同義ではありません。[運用](deployment.md)を参照してください。
 
@@ -67,6 +71,8 @@ IDを取得済みならジョブを確認し、不明なPOSTを自動再送し�
 
 OpenAI互換`POST :8189/v1/images/generations`に`controlnet:canny|openpose`、`control_image_id`、`control_strength`（有限0.01..1.5、既定1）を渡します。入力は出力と同じ寸法の完成済みedge/pose mapです。自動OpenPose検出はありません。SDKでは`extra_body`を使います。これらはOpenAI標準ではなくWAI拡張です。
 
-`init_image_id`と`denoise_strength`はimg2img、`reference_image_id`と`ip_adapter_strength`はIP-Adapter経路です。multipart `POST /v1/images/edits`も対応しますが、これらの参照画像経路は画質・人物同一性の課題が残る実験機能です。今回のControlNet検証はその品質検証を兼ねません。マスク付きimg2img/inpaintingは実機へ反映し、白黒256と透過1024＋OpenPoseの領域保持を確認しました。指定した色や画質の合格とは分けて扱います。[マスク仕様](mask-api.md)・[実測](masked-inpainting-20261019.md)。
+`init_image_id`と`denoise_strength`はimg2img、`reference_image_id`と`ip_adapter_strength`はIP-Adapter経路です。multipart `POST /v1/images/edits`にも対応します。IP＋漫画LoRA＋OpenPose＋マスクの1024は141.356660秒で完了し、マスク外変更0画素を確認しました。これは20指定／17実行stepsの代表条件で、人物同一性や希望した編集内容の保証ではありません。[IP寿命修正と実測](ip-lifecycle-20261019.md)・[機能別の確認範囲](feature-classification-20261019.md)。
+
+白黒／透過マスク、白黒soft mask、全編集マスク、Canny併用マスクも代表条件で実機確認しました。柔らかい境界は最後のRGB合成に適用し、拡散中のlatent maskは二値です。通常のWAI checkpointを使う全画面masked img2imgで、専用inpaintingモデルやROIだけの推論ではありません。写真からのOpenPose自動検出、multipartのcontrol_imageファイル、任意の複数LoRA／複数ControlNetは現在提供していません。既存のcontrol_image_idは利用できます。[マスク仕様](mask-api.md)・[従来のマスク実測](masked-inpainting-20261019.md)。
 
 `scripts/Invoke-WaiControlNet.ps1`を使用できます。タイムアウト時に自動再送しないでください。ネイティブjobsの`controlnet_evals`、`controlnet_tensors`、`gpu_controlnet_verified`で実行結果を確認できます。詳細な全フィールドは[OpenAPI文書](openapi.json)を参照してください。

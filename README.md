@@ -1,5 +1,11 @@
 # PS5 AI WAI
 
+2026-10-19：**IP-Adapterのメモリ寿命を修正し、漫画LoRA＋IP参照＋OpenPose＋マスク付きimg2imgの1024×1024を141.357秒で完了しました。** 20指定／17実行steps、マスク外変更0画素、OpenAI互換APIとネイティブPNGが一致。Direct9422MiB・FP32・GPUドライバー設定を維持しています。[IPの修正と実測](docs/ip-lifecycle-20261019.md)・[機能別の確認範囲](docs/feature-classification-20261019.md)。参照人物の同一性、指定色、編集の仕上がりは改善対象です。通信切断後の運用者によるPNG回収と、1024／20steps・短文プロンプトの連続6件（124.176〜124.446秒）を確認しました。元の長文カタログの厳密再現、24時間や全パラメーター組合せの保証ではありません。
+
+[運用・復旧の範囲](docs/operations-recovery-20261019.txt)・[運用の実測値](docs/operations-recovery-20261019-evidence.json)。ID受信前に切断した通常OpenAIクライアントの未知ジョブ検索は未対応で、結果不明のPOSTを自動再送しないでください。
+
+白黒soft mask、全編集マスク、Canny併用マスクも代表条件の1024を実機確認しました（98.782秒／75.634秒／151.549秒）。部分マスクの領域保持は確認済みですが、赤いスカートへの意味的変更は未達でした。初期状態・機能が異なるため、この3値から高速化率は求めません。
+
 2026-10-19：**マスク付きimg2img／Inpaintingを実機へ反映しました。** 白黒256は63.217秒、透過PNG＋漫画LoRA＋OpenPoseの1024は172.897秒。マスク外のRGBは全画素が元画像と一致し、WindowsのOpenAI互換APIからPNGを取得しました。指定色の変更は未達で、画質合格とはしていません。[検証範囲と制約](docs/masked-inpainting-20261019.md)・[API仕様](docs/mask-api.md)。今後の検証動画は撮影しません。
 
 2026-10-19追加測定：**モデル未読み込みからの1024×1024生成は184.026→161.397秒、22.629秒（約12.3%）短縮しました。** 同じWAI＋漫画LoRA＋OpenPose、20stepsで、基準PNGと全バイト一致。アプリ再起動後の各1枚で、OSファイルキャッシュは消去していません。[比較条件と実測](docs/optimization-20261019.md)・[初回生成の成功動画12秒](docs/media/optimization-openpose1024-cold.mp4)。
@@ -159,7 +165,7 @@ client.close()
 ```
 
 対応範囲は **OpenAI Images APIの生成機能の一部**です。PNG・1枚・非ストリーミングに対応します。
-img2img/IP-Adapterの参照入力は実験機能です。マスク付きimages/editsは白黒256と透過1024＋OpenPoseで領域保持を検証済みですが、人物同一性・編集画質は調整が必要です。複数枚、透過出力、JPEG/WebP出力、ComfyUIやA1111のAPIは未対応です。
+img2img、IP-Adapter、マスク付きimages/edits、Canny/OpenPoseの代表条件は1024までGPU生成とPNG取得を確認しました。IP＋漫画LoRA＋OpenPose＋マスクの併用も確認済みです。参照人物の同一性、指定色、編集画質は改善対象です。柔らかいマスクは最終RGB合成に適用し、拡散中のマスクは二値です。複数枚、透過出力、JPEG/WebP出力、ComfyUIやA1111のAPIは未対応です。[機能別の範囲](docs/feature-classification-20261019.md)を参照してください。
 詳しくは [API仕様](docs/api.md) と [OpenAPI 3.1](docs/openapi.json) を参照してください。
 
 ## 実装とビルド

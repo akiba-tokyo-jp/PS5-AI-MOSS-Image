@@ -445,21 +445,6 @@ namespace sd::pipeline {
                                           request->pulid_params,
                                           condition_params,
                                           plan->total_steps);
-        const int64_t ip_start=ggml_time_ms();
-        sd->compute_ip_adapter_tokens(sd_img_gen_params->ip_adapter_image, sd_img_gen_params->ip_adapter_strength);
-        if(sd_img_gen_params->ip_adapter_image.data){
-            const auto valid=[](const sd::Tensor<float>& t){
-                if(t.empty() || t.dim()<2 || t.dim()>4 || t.shape()[0]!=2048 || t.shape()[1]!=16 || t.numel()!=2048*16)return false;
-                for(int d=2;d<t.dim();d++)if(t.shape()[d]!=1)return false;
-                for(int64_t i=0;i<t.numel();i++)if(!std::isfinite(t.data()[i]))return false;
-                return true;
-            };
-            if(!valid(sd->ip_adapter_tokens) || !valid(sd->ip_adapter_uncond_tokens)){
-                LOG_ERROR("PS5 reference rejected: missing, invalid-shape or nonfinite Plus tokens");
-                return std::nullopt;
-            }
-            ps5_ai_reference_phase(2,16,(ggml_time_ms()-ip_start)*0.001);
-        }
         int64_t prepare_start_ms         = ggml_time_ms();
         condition_params.zero_out_masked = false;
         auto cond                        = sd->get_learned_condition(condition_params);
@@ -546,6 +531,30 @@ namespace sd::pipeline {
 
         int64_t t1 = ggml_time_ms();
         LOG_INFO("get_learned_condition completed, taking %.2fs", (t1 - prepare_start_ms) * 1.0f / 1000);
+
+        // Text and image encoders borrow the same owned Direct data pool.
+        // Complete and release CPU text weights before starting CLIP-Vision;
+        // their owned condition tensors remain valid after runner cleanup.
+        // Early failures still use the existing RAII guard above.
+        if (conditioner_runner_end.conditioner) {
+            conditioner_runner_end.conditioner->runner_end();
+            conditioner_runner_end.conditioner = nullptr;
+        }
+        const int64_t ip_start=ggml_time_ms();
+        sd->compute_ip_adapter_tokens(sd_img_gen_params->ip_adapter_image, sd_img_gen_params->ip_adapter_strength);
+        if(sd_img_gen_params->ip_adapter_image.data){
+            const auto valid=[](const sd::Tensor<float>& t){
+                if(t.empty() || t.dim()<2 || t.dim()>4 || t.shape()[0]!=2048 || t.shape()[1]!=16 || t.numel()!=2048*16)return false;
+                for(int d=2;d<t.dim();d++)if(t.shape()[d]!=1)return false;
+                for(int64_t i=0;i<t.numel();i++)if(!std::isfinite(t.data()[i]))return false;
+                return true;
+            };
+            if(!valid(sd->ip_adapter_tokens) || !valid(sd->ip_adapter_uncond_tokens)){
+                LOG_ERROR("PS5 reference rejected: missing, invalid-shape or nonfinite Plus tokens");
+                return std::nullopt;
+            }
+            ps5_ai_reference_phase(2,16,(ggml_time_ms()-ip_start)*0.001);
+        }
 
         ImageGenerationEmbeds embeds;
         embeds.img_uncond = std::move(img_uncond);

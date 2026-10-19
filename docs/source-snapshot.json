@@ -1,5 +1,5 @@
 {
-  "scope": "Historical verified sources and the verified native optimization profile; portable public rebuild is a separate artifact. LF normalization and recipe changes are marked.",
+  "scope": "Historical source origins plus V18 IP lifetime overlays and sanitized current documentation. Legacy top-level SELF hash fields are retained as historical records; current V18 artifacts are explicitly versioned below. The portable public rebuild is separate from the console-tested native SELF.",
   "files": [
     {
       "file": ".gitattributes",
@@ -12,11 +12,13 @@
     },
     {
       "file": "README.md",
-      "sha256": "a5fc28e896cf59472ec69ba968b1552519b72821348dda4847413d5b4c25e49e",
-      "published_sha256": "52c8b8c1cfc61a138e7eed33a63ac7aa0472cd7b4eb9ac255fbf9dd729a8bbd0",
-      "published_bytes": 15797,
+      "sha256": "ec663425db44c42dbcbb509350b2242eaf4da866a5c8d9a5344b7d23b43d79df",
+      "published_sha256": "ec663425db44c42dbcbb509350b2242eaf4da866a5c8d9a5344b7d23b43d79df",
+      "published_bytes": 17535,
       "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input.",
+      "bytes": 17535,
+      "normalization_or_provider_update": false
     },
     {
       "file": "build-profiles/native.json",
@@ -48,6 +50,16 @@
       "validation_scope": "Portable public build/configuration wiring; runtime adoption evidence is recorded separately."
     },
     {
+      "file": "docs/api.md",
+      "sha256": "de3068f0893134849f16be8427725432aa630f81440d45800fee831502c394ac",
+      "published_sha256": "de3068f0893134849f16be8427725432aa630f81440d45800fee831502c394ac",
+      "published_bytes": 7373,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input.",
+      "bytes": 7373,
+      "normalization_or_provider_update": false
+    },
+    {
       "file": "docs/build.md",
       "sha256": "b1e29f5581730e1896261166d4e452df3f44124e15037f134a974cbb12f92a49",
       "identical_to_tested_input": false,
@@ -65,6 +77,36 @@
       "validation_scope": "Sanitized successful runtime evidence, current operational documentation, or portable checkout attributes; no new model inference."
     },
     {
+      "file": "docs/feature-classification-20261019.md",
+      "sha256": "8a3848bd3ab62e7b1f2ca1696296815c776576d552465169307a6cbc937825ad",
+      "bytes": 18950,
+      "published_sha256": "9d92be6eedc11cd1691b2c23ed684ceec878cd0f171f95e24ce36be2cf82bf6c",
+      "published_bytes": 15940,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+    },
+    {
+      "file": "docs/ip-lifecycle-20261019-evidence.json",
+      "sha256": "5460e0cfb974599c9da4664a09f495a5846ce1d49b48d9b10921a1d6a3437f1e",
+      "bytes": 9372,
+      "published_sha256": "b01cd10370b9222739a298da61242bc167cce92952b49d6f0479bd305b42fb1e",
+      "published_bytes": 11418,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+    },
+    {
+      "file": "docs/ip-lifecycle-20261019.md",
+      "sha256": "53167d79692b78791ff8cbdc2ed93bbeedabe717e3995483b840fb26af7ca212",
+      "bytes": 9708,
+      "published_sha256": "60205e50f46f66a91f6d95f408a277542e6a1a3e09fa996ef3a835cdbecc492a",
+      "published_bytes": 12532,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+    },
+    {
       "file": "docs/mask-api.md",
       "sha256": "14830d09216e3c01e65eb7b373b820b61f49f782a25d95774a9a895224ae351d",
       "bytes": 3556,
@@ -73,6 +115,22 @@
       "identical_to_tested_input": true,
       "normalization_or_provider_update": false,
       "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+    },
+    {
+      "file": "docs/masked-inpainting-20261019-evidence.json",
+      "sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
+      "published_sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
+      "published_bytes": 6635,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
+    },
+    {
+      "file": "docs/masked-inpainting-20261019.md",
+      "sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
+      "published_sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
+      "published_bytes": 3832,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
     },
     {
       "file": "docs/media/optimization-openpose1024-cold.mp4",
@@ -101,6 +159,26 @@
       "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
     },
     {
+      "file": "docs/operations-recovery-20261019-evidence.json",
+      "sha256": "4c9e5f7bd8a2622bb3b0280e642ee2fc72e0d3a1bb5fab2fd167c916dd6d24a8",
+      "bytes": 9704,
+      "published_sha256": "c1d208a6974fbf056b4af4943d65c1ddde175b9355e6d17476415dfed944cc93",
+      "published_bytes": 9456,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+    },
+    {
+      "file": "docs/operations-recovery-20261019.txt",
+      "sha256": "511e8eb2023df0abee061dbd3b1e6a9080c4d9464abdd11ba56a64a11dc3b1c5",
+      "bytes": 3619,
+      "published_sha256": "a3d108a86a8882bc8cf04d7c76c41b3ab97e4a65b7d67c073150e421cda654ae",
+      "published_bytes": 3587,
+      "identical_to_tested_input": false,
+      "normalization_or_provider_update": true,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input."
+    },
+    {
       "file": "docs/optimization-20261019-evidence.json",
       "sha256": "97a2c92dd2cc1f9b87f6360d7899669a62a9a9b3c738840591f45483ac498806",
       "published_sha256": "87f0ff8d4452c9a6570768367898ba00992b2869c763366bce16a4e45741a622",
@@ -115,6 +193,16 @@
       "published_bytes": 13047,
       "identical_to_tested_input": false,
       "validation_scope": "Sanitized successful model-cold1024 measurement and comparison; native code unchanged."
+    },
+    {
+      "file": "docs/status.md",
+      "sha256": "d411b86392506775bdcc7e62c5158fbf4d06f3e08a871aa893a4a53fcc7f2b69",
+      "published_sha256": "d411b86392506775bdcc7e62c5158fbf4d06f3e08a871aa893a4a53fcc7f2b69",
+      "published_bytes": 2818,
+      "identical_to_tested_input": false,
+      "validation_scope": "Sanitized authored V18 success/coverage documentation; actual saved PS5 results, source/build checks, portable auth examples and relative links reviewed. Documentation is not an executable inference input.",
+      "bytes": 2818,
+      "normalization_or_provider_update": false
     },
     {
       "file": "native/app/arena.h",
@@ -735,13 +823,13 @@
     },
     {
       "file": "patches/stable-diffusion/changes.patch",
-      "sha256": "44459b8b66f7886e629abecc5acb9acf117db4e7c59e6f0767f1430e74657c07",
+      "sha256": "5012f223481827cfc88c9b6429d9176673d2f3fa78b8f8be546736705f2fcabb",
       "identical_to_tested_input": true,
       "normalization_or_provider_update": false,
-      "published_sha256": "44459b8b66f7886e629abecc5acb9acf117db4e7c59e6f0767f1430e74657c07",
-      "published_bytes": 128986,
-      "bytes": 128986,
-      "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
+      "published_sha256": "5012f223481827cfc88c9b6429d9176673d2f3fa78b8f8be546736705f2fcabb",
+      "published_bytes": 134192,
+      "bytes": 134192,
+      "validation_scope": "Consolidated LF patch reconstructed against pinned upstream and compared with the full portable overlay."
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c",
@@ -946,23 +1034,23 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/src/pipeline/diffusion_engine.cpp",
-      "published_sha256": "b0bc131c18e1264584404c2f23450af676aee72611164188fbcd53d1509c263b",
-      "published_bytes": 156837,
-      "sha256": "fe48886a995f5229db542ea32dff6872671bcd3aa581b3e7c7bfbf6a8e8035e8",
+      "published_sha256": "d8b3ce20e3ba7d498fe6fd3a6714b63b38881a02f253501a9999a6ba4da07f99",
+      "published_bytes": 159573,
+      "sha256": "fba5f367a554616c698b1ed58efd6b25596916df2c4af3982f5d007756522bf4",
       "identical_to_tested_input": false,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply.",
+      "validation_scope": "Frozen V18 native source; actual GPU IP1024 and combined LoRA/IP/OpenPose/mask1024 success, owner-policy and graph-dependency host checks. Portable build is separately inspected and not console-executed.",
       "normalization_or_provider_update": true,
-      "bytes": 160235
+      "bytes": 163019
     },
     {
       "file": "patches/stable-diffusion/overlay/src/pipeline/image.cpp",
-      "sha256": "df7874ae25d82c41878ea1868eb141ec618350e13d67b2c0a7d52dec8f8b05b4",
-      "bytes": 55141,
-      "published_sha256": "4fdf0066286b39b79b79e4fe03032c9632a705b5f74d86631042a169641ee0e2",
-      "published_bytes": 54059,
+      "sha256": "15f08cb495403fa9ea2c844480828c096e7cece78b9d4f958f92b9dce816c472",
+      "bytes": 55627,
+      "published_sha256": "9afe405629662abde9d491245df77eb9ca0ee2a6ea1c9b765c703cd38a36cfa6",
+      "published_bytes": 54536,
       "identical_to_tested_input": false,
       "normalization_or_provider_update": true,
-      "validation_scope": "V17 frozen native/G3 source with portable line endings or schema host; PS5 mask success is required separately before apply."
+      "validation_scope": "Frozen V18 native source; actual GPU IP1024 and combined LoRA/IP/OpenPose/mask1024 success, owner-policy and graph-dependency host checks. Portable build is separately inspected and not console-executed."
     },
     {
       "file": "scripts/Invoke-WaiReference.ps1",
@@ -1081,38 +1169,6 @@
       "validation_scope": "Portable API/client or intentional-failure host fixture; no Windows model inference or PS5 execution."
     },
     {
-      "file": "docs/masked-inpainting-20261019.md",
-      "sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
-      "published_sha256": "3d8a3619438ea835b427f3c580f1ee1d7b1b5b41871dc6511b1a326b2a681bf4",
-      "published_bytes": 3832,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
-    },
-    {
-      "file": "docs/masked-inpainting-20261019-evidence.json",
-      "sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
-      "published_sha256": "95fec0a7bf34f44e804bf38496cf5faef322c8bb5a93124ae2a327f19d6d0eb6",
-      "published_bytes": 6635,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
-    },
-    {
-      "file": "docs/api.md",
-      "sha256": "c10a3550be00c9c45a812a9c7e933acfb61d51174ef1d1f93acadc7f822ba927",
-      "published_sha256": "c10a3550be00c9c45a812a9c7e933acfb61d51174ef1d1f93acadc7f822ba927",
-      "published_bytes": 5874,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
-    },
-    {
-      "file": "docs/status.md",
-      "sha256": "e56a7fc53f8c0326a42e61a9abaa76dbceecba12961e8fc1b39e612410e3ac6f",
-      "published_sha256": "e56a7fc53f8c0326a42e61a9abaa76dbceecba12961e8fc1b39e612410e3ac6f",
-      "published_bytes": 609,
-      "identical_to_tested_input": false,
-      "validation_scope": "Sanitized actual PS5 mask256 and mask1024 observations, including the unachieved requested color; no new inference."
-    },
-    {
       "file": "tools/check_publication.py",
       "published_sha256": "2bbf24c26b24494e0670ac84ae7d53c1fb7041f684ff1f8c8a160d5a57966371",
       "published_bytes": 3116,
@@ -1124,5 +1180,14 @@
   "actual_console_gateway_elf_sha256": "d9976a1e8885bd455c80f46c7b2872341001a057c059ec6ad7764e2b3e2d16e2",
   "optimization_native_SELF_sha256": "8c018da85427c927d95d9f33e585b1bb73d64c26ba92a3ab13609ff4f61ef921",
   "public_rebuild_SELF_sha256": "74660e4b0ad92785fdca326908d265f308469ba3cab00eeee891c1625934bda7",
-  "public_rebuild_SELF_PS5_executed": false
+  "public_rebuild_SELF_PS5_executed": false,
+  "ip_lifecycle_v18": {
+    "native_SELF_sha256": "512c3d9e04b2d520d2847c89c61e228a05948bfb8893cc097aad2b49338f6c5b",
+    "portable_SELF_sha256": "20256bca2cb607bef806e36f5b9e22b0052fbd8963cae7be5bb078ba2f72c98a",
+    "portable_SELF_PS5_executed": false,
+    "critical_runtime_evidence": "docs/ip-lifecycle-20261019-evidence.json",
+    "compiled_source_changes_after_portable_build": false,
+    "operational_evidence": "docs/operations-recovery-20261019-evidence.json",
+    "operations_gate": "Operator-assisted disconnect recovery and6 representative continuous1024 jobs locally verified. Not original catalogue recurrence,full Cartesian,24-hour or GPU-fault/power-loss recovery."
+  }
 }
