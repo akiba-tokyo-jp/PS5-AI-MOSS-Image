@@ -1,16 +1,20 @@
-# Animaの配置・切替
+# MOSS Imageの配置計画（未実施）
 
-新タイトルの実機登録は未実施です。既存WAIの登録を上書きする更新ではありません。[WAIの旧配置資料](wai-base-deployment.md)は履歴として保持しています。
+現在はWindows/Dドライブ上の準備だけです。PS5はAnimaの停止・再起動と既存サービスの回復確認が先です。既存WAI/Anima、FW、システム領域へ変更を加えません。
+
+候補rootは`/data/ai/native-moss-image-sft/PPSA99190`です。native8192、gateway8193（root `/data/ai/moss-openai-gateway`）を使い、WAI8188/8189・Anima8190/8191から分離します。GPUアプリは同時起動しません。
 
 ```text
-/data/ai/native-anima-turbo-v11/PPSA99189/
+PPSA99190/
   eboot.bin
   sce_sys/param.json
   sce_sys/icon0.png
   sce_module/libc.prx
-  models/anima-turbo-v1.1-f16.safetensors
-  models/qwen_3_06b_base.safetensors
-  models/qwen_image_vae-f16.safetensors
+  models/
+    MOSS-Image-SFT-Q4_K.gguf
+    Qwen3.5-9B-Q4_K_M.gguf
+    flux2-vae_small.safetensors
+    tokenizer_qwen3.5.json
   licenses/
   ai-runtime/config.json
   ai-runtime/config/api-token
@@ -19,14 +23,10 @@
   ai-runtime/output/
 ```
 
-native APIは8190、別CPUプロセスのOpenAI gatewayは8191です。gatewayのrootは`/data/ai/anima-openai-gateway`。WAIの8188/8189と別ですが、GPUアプリは同時起動しません。
+DownloaderはD側の`diffusion/`、`text_encoders/`、`vae/`、`tokenizers/`へ保存します。将来のstage工程で、[lock](../config/models.lock.json)の4個の`relative_install_path`を上記`models/`へbasenameを変えずにコピーし、転送前後のsize/SHAを照合します。今はstage/転送していません。VAEのF32変換やモデルの暗黙置換は行いません。
 
-nativeのbind IPv4は`native/app/server.c`に固定されています。自分のprivate LANアドレスに合わせてビルドしてください。`0.0.0.0`やインターネットへ公開しません。
+新タイトルのホーム登録はファイル転送と別です。既存のmount/登録条件と空いているTitle IDを実機で確認し、システム領域を変更せず扱える経路を確認する必要があります。今回の準備に自動登録・再起動・jailbreak改変は含めません。
 
-設定は[Anima設定例](../config/anima-native.json.example)を使用します。WAIの設定や一度限りtokenを流用しません。runtime/configはアプリUIDの0700、tokenは0600です。新規登録された本人のPID・起動時刻・TitleID・bootを確認してから設定を渡し、native bootstrapを進めます。tokenは読込後削除されます。
+実機再開時はまず読み取りで利用可能Direct総量・空き区間・CPU側余裕を測定します。12GiB+1GiB reserveを満たせない条件では容量チェックを維持して停止します。モデルなしの段階的割当/解放とCompute読み戻し、Qwen3.5 CPU数値比較、MOSS DiT/VAE数値・PNGの順で証拠を残します。実機未検証の通常アプリはcompile-time admission0で止めます。
 
-ホーム画面への新規登録には、専用メタデータとmount準備が必要です。FTPでebootを置くだけでは登録できません。システム領域への操作を含む初期登録は、対象と復旧境界を確認した別の管理工程です。一般向けの自動登録installerは本リポジトリに含めていません。
-
-切替は、元のnative/gatewayのrunning_jobsとqueued_jobsが0であること、正しいownerであることを確認し、通常のOS終了を使います。元アプリのPID消失とBigApp状態を確認してから次を起動します。強制終了やGPU reset、共有Directの手動解放で切り替えません。
-
-Anima起動後はAGC/RADVの初期化、64MiB Compute読み戻し、health、512×512の実生成、PNG取得の順に確認します。初期Computeだけではモデル推論のGPU成功と扱いません。DiT/VAEの実計算完了・有限値証拠と出力PNGを別に確認します。
+nativeとgatewayには別の認証tokenを生成し、ソースへ直書きしません。runtime/configはアプリownerだけに許可し、tokenは0600、LAN bindとBearer認証を維持します。API生成POSTは1回だけです。タイムアウト時はhealth/job照会で結果を追跡し、自動再送しません。

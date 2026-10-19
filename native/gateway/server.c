@@ -85,9 +85,9 @@ typedef struct {
     char native_job_id[33];
 } job;
 
-static char root_path[MAX_PATH_SIZE] = "/data/ai/anima-openai-gateway";
+static char root_path[MAX_PATH_SIZE] = "/data/ai/moss-openai-gateway";
 static char bind_ip[64] = "192.168.68.67";
-static int listen_port = 8191;
+static int listen_port = 8193;
 static char api_token[257];
 static size_t token_len;
 static FILE *log_file;
@@ -306,7 +306,7 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
     if (!obj) { snprintf(error, cap, "Out of memory parsing request"); return 0; }
     int ok = 0; int64_t v;
     memset(r, 0, sizeof(*r));
-    r->width = r->height = 1024; r->steps = 8; r->cfg_scale = 1; r->seed = -1;
+    r->width = r->height = 1024; r->steps = 50; r->cfg_scale = 3; r->flow_shift = 5; r->seed = -1;
     r->manga_strength = 0;
     strcpy(r->sampler, "euler");
     if (!parse_object(body, obj)) { snprintf(error, cap, "Malformed, duplicate, nested, or oversized JSON field"); goto done; }
@@ -315,26 +315,30 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
            !strcmp(f->key,"denoise_strength") || !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
            !strcmp(f->key,"control_image_id") || !strcmp(f->key,"control_strength")){
-            snprintf(error,cap,"Anima Turbo v1.1 currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
+            snprintf(error,cap,"MOSS Image SFT currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
         }
         if (!strcmp(f->key,"model")) {
-            if(f->type!=1 || strcmp(f->value,"anima-turbo-v1.1")){snprintf(error,cap,"Only model anima-turbo-v1.1 is available");goto done;}
+            if(f->type!=1 || strcmp(f->value,"moss-image-sft")){snprintf(error,cap,"Only model moss-image-sft is available");goto done;}
             continue;
         }
         if (!strcmp(f->key, "prompt") || !strcmp(f->key, "negative_prompt")) {
             if (f->type != 1 || strlen(f->value) > 4096) { snprintf(error, cap, "Prompts must be strings up to 4096 UTF-8 bytes"); goto done; }
             strcpy(!strcmp(f->key, "prompt") ? r->prompt : r->negative_prompt, f->value);
         } else if (!strcmp(f->key, "width") || !strcmp(f->key, "height")) {
-            if (!get_int(f, 64, 1024, &v) || v % 64) { snprintf(error, cap, "Dimensions must be integers 64..1024 divisible by 64"); goto done; }
+            if (!get_int(f, 64, 1024, &v) || v % 16) { snprintf(error, cap, "Dimensions must be integers 64..1024 divisible by 16"); goto done; }
             if (!strcmp(f->key, "width")) r->width = (int)v; else r->height = (int)v;
         } else if (!strcmp(f->key, "steps")) {
             if (!get_int(f, 1, 100, &v)) { snprintf(error, cap, "steps must be an integer 1..100"); goto done; } r->steps = (int)v;
         } else if (!strcmp(f->key, "cfg_scale")) {
             if (!get_double(f, 0, 30, &r->cfg_scale)) { snprintf(error, cap, "cfg_scale must be finite and 0..30"); goto done; }
+        } else if (!strcmp(f->key, "flow_shift")) {
+            if (!get_double(f, 0, FLT_MAX, &r->flow_shift) || (float)r->flow_shift <= 0) {
+                snprintf(error, cap, "flow_shift must remain a positive finite float"); goto done;
+            }
         } else if (!strcmp(f->key, "manga_strength")) {
-            if (!get_double(f, 0, 0, &r->manga_strength)) { snprintf(error, cap, "The SDXL manga LoRA is incompatible with Anima; manga_strength must be 0"); goto done; }
+            if (!get_double(f, 0, 0, &r->manga_strength)) { snprintf(error, cap, "The SDXL manga LoRA is incompatible with MOSS Image; manga_strength must be 0"); goto done; }
         } else if (!strcmp(f->key, "manga_monochrome")) {
-            if (f->type != 4) { snprintf(error, cap, "The SDXL manga LoRA is incompatible with Anima; manga_monochrome must be false"); goto done; }
+            if (f->type != 4) { snprintf(error, cap, "The SDXL manga LoRA is incompatible with MOSS Image; manga_monochrome must be false"); goto done; }
         } else if (!strcmp(f->key, "init_image_id") || !strcmp(f->key, "reference_image_id") || !strcmp(f->key,"mask_image_id")) {
             if(f->type != 1 || !valid_id(f->value)){snprintf(error,cap,"Image IDs must be32 lowercase hexadecimal characters");goto done;}
             strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:!strcmp(f->key,"reference_image_id")?r->reference_image_id:r->mask_image_id,f->value);
@@ -389,9 +393,9 @@ static int serialize_job(const job *j, char *out, size_t cap) {
         "{\"job_id\":\"%s\",\"status\":\"%s\",\"progress\":%.4f,\"error\":%s,"
         "\"image_url\":%s,\"created_at\":%" PRId64 ",\"updated_at\":%" PRId64 ","
         "\"gpu_used\":%s,\"generation_seconds\":%.6f,\"peak_cpu_bytes\":%s,"
-        "\"peak_gpu_bytes\":%s}", j->id, j->status, j->progress,
+        "\"peak_gpu_bytes\":%s,\"flow_shift\":%.17g}", j->id, j->status, j->progress,
         error, url, j->created, j->updated, j->stats.gpu_used ? "true" : "false",
-        j->stats.generation_seconds, cpu, gpu);
+        j->stats.generation_seconds, cpu, gpu, j->request.flow_shift);
     return n >= 0 && (size_t)n < cap;
 }
 static int atomic_write(const char *folder, const char *name, const char *data, size_t len) {
@@ -666,7 +670,7 @@ static void health(socket_t fd) {
     }
     unlock_state();
     snprintf(body, sizeof(body),
-        "{\"status\":\"%s\",\"server\":\"ps5-ai-anima-openai-gateway\",\"model_id\":\"anima-turbo-v1.1\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false},\"backend\":%s,\"engine_available\":%s,"
+        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-openai-gateway\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false},\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
         "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 "}",
@@ -1038,7 +1042,7 @@ int main(int argc, char **argv) {
     if (inet_pton(AF_INET, bind_ip, &bind_address) != 1 || !private_address(ntohl(bind_address.s_addr))) {
         fprintf(stderr, "Bind address must be a specific RFC1918 or loopback IPv4 address\n"); return 1;
     }
-    if(listen_port==8188 || listen_port==8189 || listen_port==8190){fprintf(stderr,"Ports8188/8189 are reserved for WAI;8190 belongs to the Anima native GPU engine\n");return 1;}
+    if(listen_port==8188 || listen_port==8189 || listen_port==8190 || listen_port==8191 || listen_port==8192){fprintf(stderr,"Ports8188/8189 are reserved for WAI;8190/8191 for Anima;8192 is the MOSS Image native engine\n");return 1;}
     if (!setup_paths()) return 1;
     /* Windows uses EXCLUSIVEADDRUSE because its REUSEADDR can admit a second
      * live listener. POSIX REUSEADDR does not enable duplicate listeners. */

@@ -1,52 +1,44 @@
-# PS5 AI Anima
+# PS5 AI MOSS Image
 
-<img src="assets/sce_sys/icon0.png" alt="Project character icon" width="128">
+MOSS-Image-SFTをPS5本体で推論するためのネイティブアプリと、LAN用のOpenAI Images互換APIを準備しています。
 
-Anima Turbo v1.1をPlayStation 5本体のGPUで実行するネイティブアプリと、LAN用の画像生成APIです。
-
-**開発中です。AnimaのPS5実機生成はまだ確認していません。** PS5 AI WAIの実機成功結果をAnimaの成功結果として扱いません。
-
-## 構成
+**Private開発版です。MOSSのPS5実機推論・12GiB確保・PNG生成は未確認です。実機復帰まで転送・登録・実行を行いません。** 準備版は未検証のモデル初期化へ進む前に明示エラーで止まります。
 
 ```mermaid
 flowchart LR
-    PC[Windows API client] -->|LAN / Bearer / 8191| GW[PS5 OpenAI Images gateway]
-    GW -->|one job / 8190| API[PS5 native engine]
-    API --> TE[Qwen3 0.6B / PS5 CPU]
-    TE --> DIT[Anima Turbo v1.1 DiT / PS5 Vulkan]
-    DIT --> VAE[Qwen Image VAE / PS5]
-    VAE --> PNG[PNG on PS5]
-    PNG --> PC
+  PC[Windows API client] -->|LAN / Bearer / 8193| GW[PS5 MOSS gateway]
+  GW -->|one job / 8192| API[PS5 native engine]
+  API --> TE[Qwen3.5-9B / PS5 CPU]
+  TE --> DIT[MOSS-Image-SFT DiT / Vulkan]
+  DIT --> VAE[FLUX.2 small VAE / Vulkan]
+  VAE --> PNG[PS5 PNG output]
+  PNG --> PC
 ```
 
-Windowsはビルド・転送・API操作に使用し、モデル推論をWindowsやクラウドへ転送しません。WAIとAnimaは同時起動せず、待機と通常終了を確認して切り替えます。
+Windowsは開発・APIクライアントに使います。モデル推論をPCやクラウドへ移しません。WAI・Anima・MOSSは同時起動しません。
 
-| 項目 | Anima側の構成 |
+| 項目 | 準備した構成 |
 |---|---|
-| アプリ名 | PS5 AI Anima |
-| Title ID候補 | PPSA99189（新規登録・実機確認待ち） |
-| 配置先 | `/data/ai/native-anima-turbo-v11/PPSA99189` |
-| native API | 8190 |
-| OpenAI Images互換部分 | 8191、model `anima-turbo-v1.1` |
-| 初回検証 | 512×512、8steps、CFG1、Euler |
-| GPU基盤 | WAI由来のnative RADV / owned Direct memory |
+| アプリ / 新Title ID候補 | PS5 AI MOSS Image / PPSA99190（未登録） |
+| 配置候補 | `/data/ai/native-moss-image-sft/PPSA99190` |
+| Native / OpenAI gateway | 8192 / 8193、model `moss-image-sft` |
+| モデル | SFT Q4_K + Qwen3.5-9B Q4_K_M + FLUX.2 small VAE + 外部tokenizer |
+| Direct予約目標 | **12GiB（12,884,901,888 bytes）**、1GiB regions |
+| 推論予算の設定例 | 11.5GiB、pool外のworking reserve 1GiB |
+| 基準設定 | Euler、50steps、CFG3、flow shift5、画像辺は16の倍数 |
 
-SDXL用の漫画LoRA、IP-Adapter、ControlNetをAnima用として流用しません。まずAnima本体のtext-to-imageを接続し、未対応の拡張要求は明確に拒否します。
+12GiBはGPU専用の独立VRAMではなく、CPU/GPU共有のDirect領域の目標です。過去のGPU稼働時のDirect総量約11.44GiBと、別のAGC前診断の12GiBは、どちらもpool12GiB + reserve1GiBの容量判定を通りません。仮想アドレスの区切り変更では物理メモリ枠は増えません。実機の割当条件・工程別ピーク・GPU読み戻しを確認するまで、確保可能とは扱いません。
 
-## モデル
+Qwenのembeddingは実GGUFヘッダーで545.625MiBと確認しました。旧512MiB単体割当上限を超えるため、MOSS側のregionを1GiBへ拡張しています。実モデルのロード・数値整合・GPU演算の検証は別工程です。SDXL用LoRA、ControlNet、IP-Adapter、img2img/inpaintingはMOSSへ流用せず、APIで拒否します。
 
-正規配布元は[CircleStone Labs / Anima](https://huggingface.co/circlestone-labs/Anima)です。Turbo v1.1のDiT、Qwen3-0.6B-Base、Qwen-Image VAEの3部品を使います。T5の重みは不要で、SD.cppの内蔵tokenizerを利用します。
+- [現在の検証範囲](docs/status.md)
+- [固定モデル・ハッシュ・メモリ・ライセンス](docs/moss-models.md)
+- [APIとOpenAPI](docs/api.md)
+- [設定例](config/moss-native.json.example)
+- [ビルド](docs/build.md) / [配置計画](docs/deployment.md)
 
-モデル重み・認証トークン・個人用ログはこのリポジトリに含めません。[モデルの取得revisionとハッシュ](docs/anima-models.md)、[実機検証状況](docs/status.md)を確認してください。元モデルと変換した重みを区別します。
+[OpenMOSS公式](https://github.com/OpenMOSS/MOSS-Image)と[SD.cppのMOSS対応](https://github.com/leejet/stable-diffusion.cpp/blob/b13a48219d5cdf408edcb93da6cd69b612ed03d3/docs/moss_image.md)を参照しています。実装は既存PS5向けSD.cppへMOSS対応commitを範囲限定で移植し、core全75オブジェクトを再構築します。最新upstream全体への置換ではありません。
 
-モデルには[CircleStone Labsの利用条件](https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md)が適用されます。アプリのコードとモデル重みは別の配布物です。
+このリポジトリは[PS5 AI WAI](https://github.com/akiba-tokyo-jp/PS5-AI-WAI)とPS5 AI Animaの履歴を継承します。`docs/`に残るWAI/Animaの成功画像・ベンチマーク・検証結果はMOSSの結果ではありません。[Anima元README](ANIMA-BASE-README.md)、[WAI元README](WAI-BASE-README.md)、著作権・[第三者通知](THIRD_PARTY_NOTICES.md)を保持します。ホームアイコンは継承した仮アセットです。
 
-APIの接続先と例は[Anima API](docs/api.md)、設定例は[config/anima-native.json.example](config/anima-native.json.example)です。
-
-## 開発基盤と履歴
-
-[PS5 AI WAI](https://github.com/akiba-tokyo-jp/PS5-AI-WAI)のcommit `86393645bb1f663c78f2cd2ac08ad67fa84e3812`を出発点に、別アプリ・別API・別データ領域として構築しています。既存WAIのバイナリ・設定・登録を上書きしません。
-
-`docs/`のWAI固有の過去ベンチマーク・画像・検証資料は基盤の履歴です。Animaでの実測結果を示すものではありません。[元のREADME](WAI-BASE-README.md)も保存しています。元プロジェクトの著作権・第三者ライセンスは保持します。[第三者ライセンス](THIRD_PARTY_NOTICES.md)。
-
-ビルド基盤は[既存のビルド手順](docs/build.md)を継承しますが、同文書のWAI固有のタイトル・モデル・実機結果はAnimaに適用しません。新規タイトル登録にはホーム画面のメタデータとmountの準備が必要で、通常のファイル転送だけでは完了しません。FWや既存WAIを保護し、必要な変更範囲を確認してから実機反映します。
+重み・token・個人ログ・ビルド済みバイナリはGitへ含めません。アプリのGPL等と各モデルのApache-2.0条件は別に扱います。実機の正常動作確認まではprivateを維持します。

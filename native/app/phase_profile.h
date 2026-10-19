@@ -31,6 +31,6 @@ struct PS5AIProfileScope {
     PS5AIProfileScope(const PS5AIProfileScope&)=delete;
 };
 template<class F> auto ps5_ai_profile_call(unsigned id,uint64_t bytes,F&& f){PS5AIProfileScope scope(id,bytes);return f();}
-static inline unsigned ps5_ai_profile_group(const char* name){return (!std::strncmp(name,"unet",4)||!std::strncmp(name,"anima",5))?0:!std::strncmp(name,"control_net",11)?1:2;}
+static inline unsigned ps5_ai_profile_group(const char* name){return (!std::strncmp(name,"unet",4)||!std::strncmp(name,"anima",5)||!std::strncmp(name,"moss",4))?0:!std::strncmp(name,"control_net",11)?1:2;}
 #endif
 #endif

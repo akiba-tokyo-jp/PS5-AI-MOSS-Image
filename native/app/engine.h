@@ -16,9 +16,10 @@ typedef struct ps5_ai_request {
     char negative_prompt[4097];
     int width, height, steps;
     double cfg_scale;
+    double flow_shift; /* MOSS flow-matching shift; positive finite float, default5. */
     int64_t seed;
     char sampler[32];
-    double manga_strength; /* Default 1, native/OpenAI extension 0..1.5. */
+    double manga_strength; /* MOSS: fixed0; inherited SDXL LoRA is unsupported. */
     int manga_monochrome; /* Default false; opt in to automatic prompt prefix. */
     char init_image_id[33], reference_image_id[33];
     double denoise_strength, ip_adapter_strength;

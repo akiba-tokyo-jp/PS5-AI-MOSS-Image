@@ -1,0 +1,26 @@
+{
+  "engine": {
+    "model": "/app0/models/MOSS-Image-SFT-Q4_K.gguf",
+    "llm": "/app0/models/Qwen3.5-9B-Q4_K_M.gguf",
+    "vae": "/app0/models/flux2-vae_small.safetensors",
+    "backend": "cpu,unet=Vulkan0,vae=Vulkan0",
+    "params_backend": "cpu,unet=Vulkan0,te=disk,vae=Vulkan0",
+    "max_vram_gib": "Vulkan0=11.5",
+    "gpu_pool_bytes": 12884901888,
+    "working_reserve_bytes": 1073741824,
+    "cpu_threads": 3,
+    "flash_attn_mode": "auto,unet=on",
+    "batched_cfg": false,
+    "conditioning_cache_size": 2,
+    "vae_tiling": true,
+    "vae_tile_size": 256,
+    "vae_tile_overlap": 0.5,
+    "mmap": false,
+    "disable_prefetch": true,
+    "eager_load": false,
+    "auto_fit": true,
+    "tae_preview_only": false,
+    "log": "/app0/ai-runtime/logs/engine.jsonl",
+    "tokenizer": "/app0/models/tokenizer_qwen3.5.json"
+  }
+}

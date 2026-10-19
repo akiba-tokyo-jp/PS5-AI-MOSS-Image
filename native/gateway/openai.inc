@@ -4,7 +4,7 @@
  */
 #include "sha256.h"
 #include "openapi_schema.inc"
-#define OPENAI_MODEL "anima-turbo-v1.1"
+#define OPENAI_MODEL "moss-image-sft"
 #define IMAGE_URL_TTL 3600
 #define OPENAI_WAIT_MS UINT64_C(1800000)
 
@@ -49,18 +49,18 @@ static size_t base64_block(const unsigned char *in,size_t n,char *out) {
 }
 static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,char *err,size_t cap,char param[64]) {
     object *o=malloc(sizeof(*o));if(!o){snprintf(err,cap,"Unable to parse request");return 0;}
-    memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=8;r->cfg_scale=1;r->seed=-1;strcpy(r->sampler,"euler");r->manga_strength=0;*url_format=0;param[0]=0;int ok=0;int64_t v;
+    memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=50;r->cfg_scale=3;r->flow_shift=5;r->seed=-1;strcpy(r->sampler,"euler");r->manga_strength=0;*url_format=0;param[0]=0;int ok=0;int64_t v;
     r->control_strength=1;
     if(!parse_object(body,o)){snprintf(err,cap,"Malformed, duplicate, nested, or oversized JSON field");goto done;}
     for(size_t i=0;i<o->count;i++){
         field *f=&o->values[i];snprintf(param,64,"%s",f->key);
-        const char *keys[]={"prompt","negative_prompt","model","n","size","response_format","quality","background","output_format","stream","user","safety_identifier","steps","cfg_scale","seed","sampler","manga_strength","manga_monochrome","init_image_id","reference_image_id","mask_image_id","denoise_strength","ip_adapter_strength","controlnet","control_image_id","control_strength"};
+        const char *keys[]={"prompt","negative_prompt","model","n","size","response_format","quality","background","output_format","stream","user","safety_identifier","steps","cfg_scale","flow_shift","seed","sampler","manga_strength","manga_monochrome","init_image_id","reference_image_id","mask_image_id","denoise_strength","ip_adapter_strength","controlnet","control_image_id","control_strength"};
         int known=0;for(size_t k=0;k<sizeof(keys)/sizeof(keys[0]);k++)known|=!strcmp(f->key,keys[k]);
         if(!known){snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
         if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
            !strcmp(f->key,"denoise_strength") || !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
            !strcmp(f->key,"control_image_id") || !strcmp(f->key,"control_strength")){
-            snprintf(err,cap,"Anima Turbo v1.1 currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
+            snprintf(err,cap,"MOSS Image SFT currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
         }
         if(f->type==5 && strcmp(f->key,"prompt")) continue;
         if(!strcmp(f->key,"prompt") || !strcmp(f->key,"negative_prompt")){
@@ -74,12 +74,12 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
             if(f->type!=1){snprintf(err,cap,"size must be a string");goto done;}
             if(!strcmp(f->value,"auto"))continue;
             int w,h;char extra;char canonical[32];
-            if(strlen(f->value)>9 || sscanf(f->value,"%dx%d%c",&w,&h,&extra)!=2 || w<64 || h<64 || w>1024 || h>1024 || w%64 || h%64){snprintf(err,cap,"size requires dimensions64..1024, multiples of64");goto done;}
+            if(strlen(f->value)>9 || sscanf(f->value,"%dx%d%c",&w,&h,&extra)!=2 || w<64 || h<64 || w>1024 || h>1024 || w%16 || h%16){snprintf(err,cap,"size requires dimensions64..1024, multiples of16");goto done;}
             snprintf(canonical,sizeof(canonical),"%dx%d",w,h);if(strcmp(canonical,f->value)){snprintf(err,cap,"Invalid size syntax");goto done;}r->width=w;r->height=h;
         }else if(!strcmp(f->key,"response_format")){
             if(f->type!=1 || (strcmp(f->value,"b64_json") && strcmp(f->value,"url"))){snprintf(err,cap,"response_format must be b64_json or url");goto done;}*url_format=!strcmp(f->value,"url");
         }else if(!strcmp(f->key,"quality")){
-            if(f->type!=1 || (strcmp(f->value,"auto") && strcmp(f->value,"standard"))){snprintf(err,cap,"Only quality auto/standard are supported; use steps extension for Anima tuning");goto done;}
+            if(f->type!=1 || (strcmp(f->value,"auto") && strcmp(f->value,"standard"))){snprintf(err,cap,"Only quality auto/standard are supported; use steps extension for MOSS Image tuning");goto done;}
         }else if(!strcmp(f->key,"background")){
             if(f->type!=1 || (strcmp(f->value,"auto") && strcmp(f->value,"opaque"))){snprintf(err,cap,"Transparent output is not supported");goto done;}
         }else if(!strcmp(f->key,"output_format")){
@@ -93,10 +93,12 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
             if(!get_int(f,1,100,&v)){snprintf(err,cap,"steps must be1..100");goto done;}r->steps=(int)v;
         }else if(!strcmp(f->key,"cfg_scale")){
             if(!get_double(f,0,30,&r->cfg_scale)){snprintf(err,cap,"cfg_scale must be finite0..30");goto done;}
+        }else if(!strcmp(f->key,"flow_shift")){
+            if(!get_double(f,0,FLT_MAX,&r->flow_shift) || (float)r->flow_shift<=0){snprintf(err,cap,"flow_shift must remain a positive finite float");goto done;}
         }else if(!strcmp(f->key,"manga_strength")){
-            if(!get_double(f,0,0,&r->manga_strength)){snprintf(err,cap,"The SDXL manga LoRA is incompatible with Anima; manga_strength must be 0");goto done;}
+            if(!get_double(f,0,0,&r->manga_strength)){snprintf(err,cap,"The SDXL manga LoRA is incompatible with MOSS Image; manga_strength must be 0");goto done;}
         }else if(!strcmp(f->key,"manga_monochrome")){
-            if(f->type!=4){snprintf(err,cap,"The SDXL manga LoRA is incompatible with Anima; manga_monochrome must be false");goto done;}
+            if(f->type!=4){snprintf(err,cap,"The SDXL manga LoRA is incompatible with MOSS Image; manga_monochrome must be false");goto done;}
         }else if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id")){
             if(f->type!=1 || !valid_id(f->value)){snprintf(err,cap,"Invalid input image ID");goto done;}
             strcpy(!strcmp(f->key,"init_image_id")?r->init_image_id:!strcmp(f->key,"reference_image_id")?r->reference_image_id:r->mask_image_id,f->value);

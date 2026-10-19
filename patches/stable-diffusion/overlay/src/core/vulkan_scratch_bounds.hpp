@@ -64,10 +64,39 @@ static uint32_t matmul_split(uint32_t m,uint32_t n,uint32_t k,uint32_t cores,uin
     }
     return split;
 }
+/* MOSS Q4_K_M weights use Q4_K/Q6_K plus F16/F32 tensors. The frozen
+ * scalar Vulkan matrix branch can dequantize X to F16 (6218-6222), and
+ * quantize/pad Y to Q8_1 (6214-6223). Four bytes per logical element is an
+ * upper bound for those branches. Quantized X must be exactly contiguous;
+ * this excludes the vector handler's unusual non-contiguous X staging rule.
+ * No BF16/IQ/MoE/kernel addition is admitted here. */
+static bool moss_quantized_weight(const ggml_tensor * t, uint64_t & elements) {
+    if (!t) return false;
+    uint64_t block=0, storage=0;
+    switch (t->type) {
+    case GGML_TYPE_Q4_0: block=32; storage=18; break;
+    case GGML_TYPE_Q4_1: block=32; storage=20; break;
+    case GGML_TYPE_Q4_K: block=256; storage=144; break;
+    case GGML_TYPE_Q5_K: block=256; storage=176; break;
+    case GGML_TYPE_Q6_K: block=256; storage=210; break;
+    case GGML_TYPE_Q8_0: block=32; storage=34; break;
+    default: return false;
+    }
+    elements=1;
+    for (unsigned i=0;i<4;++i)
+        if(t->ne[i]<=0 || uint64_t(t->ne[i])>UINT32_MAX || !mul(elements,uint64_t(t->ne[i]),elements))return false;
+    if(elements>UINT32_MAX || uint64_t(t->ne[0])%block || t->nb[0]!=storage)return false;
+    uint64_t stride=0;
+    if(!mul(uint64_t(t->ne[0])/block,storage,stride))return false;
+    for(unsigned i=1;i<4;++i) {
+        if(t->nb[i]!=stride || !mul(stride,uint64_t(t->ne[i]),stride) || stride>UINT32_MAX)return false;
+    }
+    return true;
+}
 static bool matmul(const ggml_tensor * dst,const Profile & profile,Bounds & out) {
     const auto * a=dst->src[0]; const auto * b=dst->src[1];
     uint64_t ae=0,be=0,de=0;
-    if (!float_tensor(a,ae)||!float_tensor(b,be)||!float_tensor(dst,de)||dst->type!=GGML_TYPE_F32 ||
+    if (!(float_tensor(a,ae)||moss_quantized_weight(a,ae))||!float_tensor(b,be)||!float_tensor(dst,de)||dst->type!=GGML_TYPE_F32 ||
         a->ne[0]!=b->ne[0] || dst->ne[0]!=a->ne[1] || dst->ne[1]!=b->ne[1] ||
         dst->ne[2]!=b->ne[2] || dst->ne[3]!=b->ne[3] || de>UINT32_MAX) return false;
     /* Staging covers matrix/vector/swap branches and F32 or F16 conversion.

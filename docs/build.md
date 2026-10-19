@@ -1,36 +1,29 @@
-# Animaビルド
+# MOSS Imageのローカルビルド
 
-Anima実機推論は未検証です。以下はローカルのcross compile手順です。[WAI由来の詳細な依存構築資料](wai-base-build.md)を保持していますが、その実機結果はAnimaの実測ではありません。
+Windowsでのcross compileです。PS5への接続・転送・登録・推論は行いません。依存の詳細は[WAI由来のビルド資料](wai-base-build.md)を保持していますが、過去の実機結果はMOSSの結果ではありません。
 
-## 入力
+## 入力と完全core再構築
 
-- Windows用LLVM/MinGW、PS5 public native SDKとpayload SDK。
-- [dependencies.lock.json](../dependencies.lock.json)に固定したSD.cpp・GGML・RADV・PS5 platformのソース。
-- [build-profiles/native.json](../build-profiles/native.json)にサイズ・SHAを固定した、レビュー済み依存アーカイブと生成shader header。
-- ローカルパスは[config/build.json.example](../config/build.json.example)から自分の環境用設定へ複製します。SDK・重み・秘密情報はGitへ含めません。
+[dependencies.lock.json](../dependencies.lock.json)はPS5向けSD.cppの基準revision、GGML、MOSS追加commitとRADV等を固定します。[native profile](../build-profiles/native.json)は既存レビュー済み依存アーカイブ・shader headerを固定します。[設定例](../config/build.json.example)をDドライブ上の自分用設定へ複製してください。Cドライブの既存SDK/ツールを読み取り利用できますが、新しいbuild/vendor/tempはDへ置きます。
 
-`tools/build.py`はアプリ、platform、変更したcore/GGML providerを再コンパイルし、依存アーカイブの指定memberだけを更新します。既存レビュー済みライブラリが必要で、クリーンなPCで依存すべてを自動取得するワンコマンドビルドではありません。元の依存構築方法は上記WAI資料を参照してください。
+MOSSの型定義は広く参照されるため、旧75-member coreのうち7memberだけを差し替える経路は使用しません。`tools/build_moss_core.py`は固定baseへ範囲限定MOSS backportとPS5 overlayを適用し、C/C++の全75memberを新規コンパイルします。source/header hashの前後一致、archive member集合とSHAを記録します。`tools/build.py`はそのmanifestを必須にし、古いcore・変更後のヘッダー・不一致archiveを拒否します。
 
 ```powershell
-python -B tools/build.py --config D:/ps5-dev/anima-build.json --out D:/ps5-dev/build/anima-native --precision fp32
-python -B tools/build_gateway.py --config D:/ps5-dev/anima-build.json --out D:/ps5-dev/build/anima-gateway --native
+python -B tools/build_moss_core.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-core --source-freeze D:/ps5-dev/moss-source-freeze.json --jobs 2
+python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core/manifest.private.json --out D:/ps5-dev/build/moss-native --precision fp32
+python -B tools/build_gateway.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-gateway --native
 ```
 
-native出力は`title/PPSA99189/eboot.bin`、gatewayは`ps5-ai-openai-gateway.elf`です。SELF署名・整合性検査とソースhashはbuild manifestへ記録します。ビルド処理はPS5へ接続しません。
+[source-freeze例](../config/moss-source-freeze.json.example)をD側の個人用JSONへコピーし、`repository_root`と`private_vendor_root`の2パスを実際のcloneへ合わせます。固定した21ファイルのsize/SHAが一致しなければビルドを拒否します。ソース改修後はレビュー・host確認・新しいfreezeを行います。core builderの引数は同toolの`--help`を参照してください。SDK・shader生成物・レビュー済み依存アーカイブが別途必要で、クリーンPCからのワンコマンド依存構築ではありません。
 
-`--precision fp32`は演算精度の指定です。Anima/VAEのF16保存重みを使うこととは別です。Qwen3は公式BF16のままCPUで扱います。Qwenの311,164,928-byte embeddingは、実際のowned Direct region上限を確認して借用し、通常の512MiB regionへ収めます。固定256MiBだったWAI版からAnima側だけ変更しています。
+nativeは`title/PPSA99190/eboot.bin`、gatewayは`ps5-ai-moss-openai-gateway.elf`を出力します。SELF整合性・loaded bytes・動的依存・ソースhashを検証します。`fp32`は演算設定であり、GGUFのQ4保存形式とは別です。
 
-## モデル準備
+## 実機未確認のまま起動しないための境界
 
-```powershell
-python -B tools/download_anima.py --output D:/ps5-dev/anima-models/official
-python -B tools/models/convert_anima_bf16_f16.py --official-dir D:/ps5-dev/anima-models/official --derived-dir D:/ps5-dev/anima-models/derived --diagnostics-dir D:/ps5-dev/anima-models/conversion
-```
+`native/app/moss_runtime_admission.h`の`PS5_AI_MOSS_RUNTIME_ADMITTED`は既定0です。JSONで解除できません。12GiBの実容量、Qwenのtensor residency/数値、同一context GPU読み戻しを確認する前に、通常アプリから新しいAGC/data pool初期化へ進めません。コンパイル成功はこの解除の根拠になりません。
 
-公式revision/ハッシュは[モデル資料](anima-models.md)にあります。変換器にはNumPyが必要です。DiTとVAEのF16変換は重みデータの変換のみで、Windowsで画像推論を実行するものではありません。変換したファイルのhashは公式BF16のhashと別に記録します。全BF16符号化の丸め照合・全値の有限性と範囲・書込後の全内容読み戻しを検証します。中断したpartは期待値と照合できたバイトだけ再利用します。
+1GiB region、12GiB data VAと244GiB driver VAはアドレス範囲の準備です。物理quotaの拡大を実装したものではありません。既存の実容量・working reserve・所有権・ログ・GPU完了確認は維持します。
 
-## 検証の範囲
+## モデルとホスト試験
 
-現行用のホスト検証は`tests/anima_engine_config.py`、`tests/anima_api_protocol.py`です。失敗fixtureやHTTP mockはprotocol専用であり、実モデルによる生成結果ではありません。旧WAI向けtestsは履歴として保持し、Animaの機能合格判定へ混在させません。
-
-アプリ登録・モデル転送・実機実行はビルドとは別工程です。[配置](deployment.md)、[現在の検証結果](anima-verification.json)を確認してください。
+モデルは[固定lock](../config/models.lock.json)と[専用ダウンローダー](../tools/download_moss.py)でDへ配置します。取得だけではPS5へ反映しません。MOSSの現行host試験は`tests/moss_*`です。HTTP fixture、pool mock、source guard試験はPS5推論成功として扱いません。継承したWAI/Anima試験は別モデルの履歴です。

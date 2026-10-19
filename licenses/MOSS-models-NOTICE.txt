@@ -1,0 +1,40 @@
+PS5 AI MOSS Image: model origins and license evidence
+
+This file records provenance; it does not replace upstream license text or
+relicense the SDK, Vulkan driver, CRT, or other native dependencies.
+
+MOSS-Image-Base / MOSS-Image-SFT and original pipeline/tokenizer
+  OpenMOSS / OpenMOSS-Team
+  Apache License, Version2.0
+  Original SFT revision c32bea2a87bc0d491d0412d7fad34e3a5b2ab3c4
+  https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/blob/c32bea2a87bc0d491d0412d7fad34e3a5b2ab3c4/LICENSE
+  Full text: MOSS-models-OpenMOSS-Apache-2.0.txt
+
+MOSS GGUF conversion/quantization
+  leejet, using stable-diffusion.cpp; quantization card retains Apache-2.0.
+  Selected conversion revision238daf423f0de65316207453591f275407aac9a7
+  https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/blob/238daf423f0de65316207453591f275407aac9a7/README.md
+  These are converted/quantized files, not unmodified original MOSS weights.
+
+Qwen3.5-9B / GGUF conversion
+  Qwen and Unsloth
+  Original license Apache-2.0; Unsloth card links that same original license.
+  https://huggingface.co/Qwen/Qwen3.5-9B/blob/c202236235762e1c871ad0ccb60c8ee5ba337b9a/LICENSE
+  https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/blob/3885219b6810b007914f3a7950a8d1b469d598a5/README.md
+  Full text: MOSS-models-Qwen3.5-Apache-2.0.txt
+
+FLUX.2 VAE and small-decoder repack
+  Black Forest Labs autoencoder; OpenMOSS small-decoder variant; Comfy-Org repack
+  Official Black Forest Labs README explicitly states that the autoencoder is
+  Apache-2.0. This is separate from the non-commercial FLUX.2-dev DiT license.
+  https://github.com/black-forest-labs/flux2/blob/50fe5162777813d869182b139e83b10743caef15/README.md#flux2-autoencoder
+  Official MOSS SFT card identifies the bundled FLUX.2 small decoder and its
+  own Apache-2.0 model license. Comfy-Org repack card also declares Apache-2.0.
+  https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/blob/c32bea2a87bc0d491d0412d7fad34e3a5b2ab3c4/README.md
+  https://huggingface.co/Comfy-Org/MOSS-Image/blob/3284a1dbb351e3396d70f39f2a71cbf6ed2ef1bb/README.md
+  Full retained Apache text: MOSS-models-FLUX2-Apache-2.0.txt
+
+All exact selected filenames/revisions/expected hashes are in config/models.lock.json.
+Full weights have not yet been downloaded, modified or redistributed by this
+project. Expected hashes are remote LFS metadata, not local full-byte proof.
+Keep applicable upstream NOTICE files and identify later source/model changes.

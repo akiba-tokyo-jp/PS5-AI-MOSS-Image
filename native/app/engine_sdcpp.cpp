@@ -1,6 +1,6 @@
 #include "phase_profile.h"
 #if defined(GGML_MAX_NAME) && GGML_MAX_NAME != 160
-#error Native Direct Anima must use the exact linked SD/GGML tensor ABI
+#error Native Direct MOSS-Image must use the exact linked SD/GGML tensor ABI
 #endif
 #ifndef GGML_MAX_NAME
 #define GGML_MAX_NAME 160
@@ -16,6 +16,7 @@
 #include "stable-diffusion.h"
 #include "json.hpp"
 #include "engine_config.h"
+#include "moss_runtime_admission.h"
 #include "v3_shutdown.h"
 #include "pool.h"
 #include "cpu_clip_pool_buffer.hpp"
@@ -80,18 +81,18 @@ static void set_error(char* error, size_t size, const char* message) {
 
 static nlohmann::json bounded_config(const char* path) {
     ps5_ai_native_config_mark(2,"config_FD_open_before");
-    if (!path) throw std::runtime_error("Native Direct Anima config path is missing");
+    if (!path) throw std::runtime_error("Native Direct MOSS-Image config path is missing");
     const size_t length = strnlen(path, 4097);
-    if (!length || length > 4096) throw std::runtime_error("Native Direct Anima config path is too long");
+    if (!length || length > 4096) throw std::runtime_error("Native Direct MOSS-Image config path is too long");
     const int descriptor = open(path, O_RDONLY | O_NOFOLLOW);
-    if (descriptor < 0) throw std::runtime_error("Native Direct Anima config could not be opened read-only");
+    if (descriptor < 0) throw std::runtime_error("Native Direct MOSS-Image config could not be opened read-only");
     ps5_ai_native_config_mark(3,"config_FD_open_returned");
     struct Close { int fd; ~Close() { close(fd); } } owned = {descriptor};
     struct stat before = {}, after = {};
     ps5_ai_native_config_mark(4,"config_FD_fstat_before");
     if (fstat(descriptor, &before) || !S_ISREG(before.st_mode) || before.st_size <= 0 ||
         static_cast<uint64_t>(before.st_size) > PS5_AI_MEMORY_PLAN_MAX_CONFIG_BYTES)
-        throw std::runtime_error("Native Direct Anima config must be a regular file of1..65536 bytes");
+        throw std::runtime_error("Native Direct MOSS-Image config must be a regular file of1..65536 bytes");
     ps5_ai_ggml_report("NATIVE_CONFIG FD_metadata regular=1 bytes=%llu reported_UID_not_ownership_proof=1",static_cast<unsigned long long>(before.st_size));
     ps5_ai_native_config_mark(5,"config_FD_fstat_returned");
     std::string bytes(static_cast<size_t>(before.st_size), '\0');
@@ -100,7 +101,7 @@ static nlohmann::json bounded_config(const char* path) {
     while (done < bytes.size()) {
         const ssize_t count = read(descriptor, bytes.data() + done, bytes.size() - done);
         if (count < 0 && errno == EINTR) continue;
-        if (count <= 0) throw std::runtime_error("Native Direct Anima config read was incomplete");
+        if (count <= 0) throw std::runtime_error("Native Direct MOSS-Image config read was incomplete");
         done += static_cast<size_t>(count);
     }
     ps5_ai_native_config_mark(7,"config_FD_read_complete");
@@ -110,7 +111,7 @@ static nlohmann::json bounded_config(const char* path) {
     if (eof != 0 || fstat(descriptor, &after) || before.st_dev != after.st_dev ||
         before.st_ino != after.st_ino || before.st_size != after.st_size ||
         before.st_mtime != after.st_mtime || before.st_ctime != after.st_ctime)
-        throw std::runtime_error("Native Direct Anima config changed while being read");
+        throw std::runtime_error("Native Direct MOSS-Image config changed while being read");
     ps5_ai_native_config_mark(8,"config_FD_stability_complete");
     ps5_ai_native_config_mark(9,"public_localeconv_before_JSON");
     const auto* conventions=std::localeconv();
@@ -129,15 +130,27 @@ static nlohmann::json bounded_config(const char* path) {
     ps5_ai_native_config_mark(11,"JSON_parse_before");
     auto config = nlohmann::json::parse(bytes);
     ps5_ai_native_config_mark(12,"JSON_parse_returned");
-    if (!config.is_object()) throw std::runtime_error("Native Direct Anima config must be a JSON object");
+    if (!config.is_object()) throw std::runtime_error("Native Direct MOSS-Image config must be a JSON object");
     return config;
 }
 
 extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan* out,
                                           char* error, size_t error_size) noexcept {
     if (out) *out = {};
+#if !PS5_AI_MOSS_RUNTIME_ADMITTED
+    (void)path;
+    {
+        std::lock_guard<std::mutex> lock(status_mutex);
+        current_status.available = 0;
+        current_status.gpu_available = 0;
+        std::snprintf(current_status.backend, sizeof(current_status.backend), "%s", "SD.cpp MOSS preparation; native admission pending");
+        std::snprintf(current_status.reason, sizeof(current_status.reason), "%s", PS5_AI_MOSS_UNADMITTED_REASON);
+    }
+    set_error(error, error_size, PS5_AI_MOSS_UNADMITTED_REASON);
+    return -1;
+#endif
     try {
-        if (!out) throw std::runtime_error("Native Direct Anima memory-plan output is missing");
+        if (!out) throw std::runtime_error("Native Direct MOSS-Image memory-plan output is missing");
         const auto config = bounded_config(path);
         if(!ps5_ai_native_journal_configure_debug(ps5_ai_log_policy_debug(config)))
             throw std::runtime_error("Native journal policy must be fixed once before AGC initialization");
@@ -151,7 +164,7 @@ extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan*
         set_error(error, error_size, exception.what());
     } catch (...) {
         ps5_ai_native_config_mark(15,"memory_plan_unknown_exception_caught");
-        set_error(error, error_size, "Native Direct Anima memory-plan config failed");
+        set_error(error, error_size, "Native Direct MOSS-Image memory-plan config failed");
     }
     return -1;
 }
@@ -272,8 +285,8 @@ extern "C" int ps5_ai_precision_check_output(const float *data,unsigned long lon
     if(!data && count) invalid=count;
     else for(unsigned long long i=0;i<count;++i)invalid+=!std::isfinite(data[i]);
     precision_outputs.fetch_add(1);precision_values.fetch_add(count);precision_nonfinite.fetch_add(invalid);
-    if(stage && std::strcmp(stage,"anima")==0)precision_dit_outputs.fetch_add(1);
-    if(stage && std::strcmp(stage,"wan_vae")==0)precision_vae_outputs.fetch_add(1);
+    if(stage && std::strcmp(stage,"MOSS-Image")==0)precision_dit_outputs.fetch_add(1);
+    if(stage && std::strcmp(stage,"vae")==0)precision_vae_outputs.fetch_add(1);
     return invalid==0;
 }
 static void verify_native_hardware() {
@@ -391,7 +404,7 @@ static const char* dit_weight_name(const ggml_tensor* tensor) {
     const ggml_tensor* weight = tensor->src[0];
     for (unsigned depth = 0; weight && depth < 8; ++depth) {
         const char* name = ggml_get_name(weight);
-        constexpr char prefix[] = "model.diffusion_model.net.";
+        constexpr char prefix[] = "model.diffusion_model.layers.";
         if (name && std::strncmp(name, prefix, sizeof(prefix)-1) == 0) return name;
         weight = weight->view_src;
     }
@@ -518,19 +531,22 @@ static void verify_flash_attention_support() {
     ggml_context* context = ggml_init({8 * ggml_tensor_overhead(), nullptr, true});
     if (!context) throw std::runtime_error("Flash-attention capability metadata allocation failed");
     struct Cleanup { ggml_context* value; ~Cleanup() { ggml_free(value); } } cleanup{context};
-    auto* q = ggml_new_tensor_3d(context, GGML_TYPE_F32, 128, 1024, 16);
-    auto* k = ggml_new_tensor_3d(context, GGML_TYPE_F16, 128, 1024, 16);
-    auto* v = ggml_new_tensor_3d(context, GGML_TYPE_F16, 128, 1024, 16);
+    auto* q = ggml_new_tensor_3d(context, GGML_TYPE_F32, 128, 1024, 24);
+    auto* k = ggml_new_tensor_3d(context, GGML_TYPE_F16, 128, 1024, 24);
+    auto* v = ggml_new_tensor_3d(context, GGML_TYPE_F16, 128, 1024, 24);
     auto* attention = ggml_flash_attn_ext(context, q, k, v, nullptr, 1.f/std::sqrt(128.f), 0.f, 0.f);
     ggml_prec_set_acc(attention, GGML_PREC_F32);
     const bool supported = ggml_backend_dev_supports_op(gpu_device, attention);
     write_event({{"event", "native_flash_attention_capability"}, {"supported", supported},
-        {"model", "Anima"}, {"head_size", 128}, {"heads", 16}, {"q_type", "F32"}, {"kv_type", "F16"},
+        {"model", "MOSS-Image"}, {"head_size", 128}, {"heads", 24}, {"q_type", "F32"}, {"kv_type", "F16"},
         {"scope", "metadata capability only; completed generation witness still required"}});
-    if (!supported) throw std::runtime_error("Native Vulkan Anima DiT flash attention is unsupported; fallback is disabled");
+    if (!supported && engine_config.requires_dit_flash_attention()) throw std::runtime_error("Native Vulkan MOSS-Image DiT flash attention is unsupported; fallback is disabled");
 }
 
 static int engine_init_impl(const char* config_path, char* error, size_t error_size) {
+#if !PS5_AI_MOSS_RUNTIME_ADMITTED
+    return ps5_ai_v12_read_memory_plan(config_path, nullptr, error, error_size);
+#endif
     try {
         current_status = {};
         hardware_verified = false;
@@ -555,7 +571,7 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         if (prepared.phase != PS5_AI_FLEX_GPU_READY || prepared.ownership_uncertain ||
             prepared.requested_bytes != engine_config.gpu_pool_bytes ||
             prepared.working_reserve_bytes != engine_config.working_reserve_bytes)
-            throw std::runtime_error("Native Direct Anima configured memory plan differs from actual prepared pool admission");
+            throw std::runtime_error("Native Direct MOSS-Image configured memory plan differs from actual prepared pool admission");
         verify_native_hardware();
         // Backend registration is explicit; no remote/RPC fallback is compiled.
         ggml_log_get(&precision_previous_log,&precision_previous_log_data);
@@ -581,23 +597,23 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         verify_flash_attention_support();
         partial_taesd_gpu_decode = engine_config.partial_taesd_gpu_decode(gpu_name);
         std::snprintf(current_status.backend, sizeof(current_status.backend), "%s",
-            "SD.cpp CPU Qwen3; Vulkan Anima DiT/Qwen VAE");
+            "SD.cpp CPU Qwen3.5; Vulkan MOSS DiT/FLUX2 VAE");
         current_status.gpu_available = 1;
         current_status.available = 1;
         write_event({{"event", "engine_configured"}, {"model", engine_config.model},
-                     {"architecture", "Anima"}, {"llm_path", engine_config.llm}, {"vae_path", engine_config.vae},
+                     {"architecture", "MOSS-Image"}, {"llm_path", engine_config.llm}, {"vae_path", engine_config.vae}, {"tokenizer_path", engine_config.tokenizer},
                      {"backend", engine_config.backend}, {"params_backend", engine_config.params_backend},
-                     {"latent_channels",16}, {"taesd_enabled",false},
+                     {"packed_latent_channels",128}, {"taesd_enabled",false},
                      {"vae_tile_image_pixels", engine_config.vae_tile_size},
                      {"vae_tile_overlap", engine_config.vae_tile_overlap},
                      {"eager_load", engine_config.eager_load},
                       {"configured_LoRA_inputs", 0}, {"mode", "text2img"},
-                      {"model_mmap_policy", "read-only; existing public mmap provider; no whole-file prefault"},
+                      {"model_mmap_policy", "disabled; explicit file I/O; no whole-file prefault"},
                      {"flash_attn_mode", engine_config.flash_attn_mode}, {"batched_cfg", engine_config.batched_cfg},
                      {"conditioning_cache_size", engine_config.conditioning_cache_size},
-                     {"gpu_observation", "first DiT, Qwen VAE decoder and FLASH_ATTN completed witnesses; not total operation counts"},
+                     {"gpu_observation", "first MOSS DiT and FLUX2 VAE decoder completed witnesses; FLASH_ATTN when selected; not total operation counts"},
                      {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
-                     {"gpu_stage", "Anima DiT denoising and 16-channel Qwen-Image VAE decode on Vulkan; Qwen3 text encoding CPU"},
+                     {"gpu_stage", "MOSS DiT denoising and FLUX2 VAE decode on Vulkan; Qwen3.5 text encoding CPU"},
                      {"owned_direct_data_reserved_bytes", pool.reserved_bytes},
                      {"owned_direct_data_free_bytes", pool.free_bytes},
                      {"working_reserve_bytes", engine_config.working_reserve_bytes},
@@ -778,11 +794,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     int result = -1;
     try {
         if (!std::isfinite(request->manga_strength) || request->manga_strength != 0 || request->manga_monochrome)
-            throw std::runtime_error("Anima Turbo text2img does not support the WAI-specific manga LoRA or monochrome option");
+            throw std::runtime_error("MOSS-Image-SFT text2img does not support the WAI-specific manga LoRA or monochrome option");
         if (request->init_image_id[0] || request->reference_image_id[0] || request->mask_image_id[0] ||
             request->controlnet[0] || request->control_image_id[0])
-            throw std::runtime_error("Anima Turbo currently supports text2img only; SDXL IP-Adapter/ControlNet, img2img and inpainting were not run");
-        ps5_ai_native_capacity_snapshot("before_anima_generation");
+            throw std::runtime_error("MOSS-Image-SFT currently supports text2img only; SDXL IP-Adapter/ControlNet, img2img and inpainting were not run");
+        ps5_ai_native_capacity_snapshot("before_moss_generation");
         if (!model_context) {
             sd_ctx_params_t context_params;
             sd_ctx_params_init(&context_params);
@@ -793,14 +809,14 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             context_params.conv_direct_mode="on";
             write_event({{"event","native_conv_policy"},{"mode","on"},{"basis","direct GPU convolution passed independent CPU oracle"}});
             ps5_ai_native_ui_phase(PS5_AI_STATUS_LOADING);
-            ps5_ai_native_ui_log("Loading Anima Turbo v1.1 + Qwen3 + Qwen-Image VAE");
+            ps5_ai_native_ui_log("Loading MOSS-Image-SFT + Qwen3.5 + FLUX2 VAE");
             model_context = new_sd_ctx(&context_params);
             if (!model_context) {
-                throw std::runtime_error("Anima split model load failed; see engine.jsonl");
+                throw std::runtime_error("MOSS-Image split model load failed; see engine.jsonl");
             }
-            if (std::strcmp(sd_get_model_version_name(model_context), "Anima") != 0) {
+            if (std::strcmp(sd_get_model_version_name(model_context), "MOSS-Image") != 0) {
                 free_sd_ctx(model_context);model_context=nullptr;
-                throw std::runtime_error("Loaded diffusion architecture is not Anima; no WAI/SDXL fallback was run");
+                throw std::runtime_error("Loaded diffusion architecture is not MOSS-Image; no WAI/SDXL fallback was run");
             }
             {
                 std::lock_guard<std::mutex> lock(status_mutex);
@@ -808,11 +824,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             }
             write_event({{"event", "model_loaded"}, {"path", engine_config.model},
                          {"architecture", sd_get_model_version_name(model_context)}});
-            ps5_ai_native_capacity_snapshot("after_Anima_model_load");
+            ps5_ai_native_capacity_snapshot("after_MOSS-Image_model_load");
         }
         sd_img_gen_params_t params;
         sd_img_gen_params_init(&params);
-        // Anima has its own Qwen conditioning; do not apply SDXL clip_skip=2
+        // MOSS has its own Qwen3.5 conditioning; do not apply SDXL clip_skip=2
         // or the WAI-specific adapter/prompt rewriting path.
         params.prompt = request->prompt;
         params.negative_prompt = request->negative_prompt;
@@ -826,7 +842,15 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if (params.sample_params.sample_method == SAMPLE_METHOD_COUNT) {
             throw std::runtime_error("Unsupported sampler");
         }
-        params.sample_params.scheduler = sd_get_default_scheduler(model_context, params.sample_params.sample_method);
+        if (!std::isfinite(request->flow_shift) || !std::isfinite(static_cast<float>(request->flow_shift)) ||
+            static_cast<float>(request->flow_shift) <= 0.f)
+            throw std::runtime_error("MOSS flow_shift must be finite, positive and representable as float");
+        if (request->width <= 0 || request->height <= 0 || request->width % 16 || request->height % 16)
+            throw std::runtime_error("MOSS image dimensions must be positive multiples of 16");
+        params.sample_params.scheduler = DISCRETE_SCHEDULER;
+        params.sample_params.flow_shift = static_cast<float>(request->flow_shift);
+        // The real upstream MOSS branch applies zero-based layer22 skipping
+        // only to the negative CFG evaluation; positive conditioning is intact.
         engine_config.apply_image(params);
         sd_set_backend_eval_callback(observe_graph, &observation);
         sd_set_progress_callback(observe_progress, &observation);
@@ -835,10 +859,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         }
         ps5_ai_native_ui_phase(PS5_AI_STATUS_GENERATING);
         if (!generate_image(model_context, &params, &images, &image_count) || image_count != 1 || !images || !images[0].data) {
-            throw std::runtime_error("Anima image generation failed; see engine.jsonl");
+            throw std::runtime_error("MOSS-Image image generation failed; see engine.jsonl");
         }
         stats->gpu_used = observation.gpu_dit_math_nodes > 0 ? 1 : 0;
-        if (!stats->gpu_used || !observation.gpu_flash_attention_nodes) {
+        if (!stats->gpu_used || (engine_config.requires_dit_flash_attention() && !observation.gpu_flash_attention_nodes)) {
             throw std::runtime_error("Image rejected: required completed native DiT/flash-attention witness is missing");
         }
         if(!stats->actual_steps || observation.last_sampler_step!=stats->actual_steps)
@@ -888,10 +912,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     stats->gpu_used = observation.gpu_dit_math_nodes > 0 ? 1 : 0;
     stats->generation_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     stats->peak_cpu_bytes = std::max(stats->peak_cpu_bytes, cpu_peak_bytes());
-    ps5_ai_native_capacity_snapshot("after_anima_generation");
+    ps5_ai_native_capacity_snapshot("after_moss_generation");
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
-    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "Anima"}, {"mode", "text2img"},
+    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", "text2img"},
+                 {"flow_shift",request->flow_shift},{"scheduler","discrete"},{"negative_cfg_skip_layers",{22}},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
                  {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},
                  {"mask_preserved_pixels",stats->mask_preserved_pixels},{"mask_changed_pixels",stats->mask_changed_pixels},

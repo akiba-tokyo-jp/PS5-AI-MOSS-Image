@@ -1,0 +1,96 @@
+{
+  "schema": "ps5-ai-moss-engine-source-freeze-v1",
+  "frozen": true,
+  "runtime_admitted": false,
+  "upstream_base_revision": "8cd731e7b4667eb8f40a153315b9a7125d09a58d",
+  "ggml_revision": "d25b121ce1d6ae0c7e62ad080460d9fc1e46dd93",
+  "scoped_support_commit": "68285df319457e2d79310b48513e4ba1bf8ebe9a",
+  "sources": {
+    "native/app/engine_config.h": {
+      "bytes": 13392,
+      "sha256": "ef183771e7cab7ae0fa3c67c5ec03e8112de25b97536437f997349bfc1ef3bd6"
+    },
+    "native/app/engine_sdcpp.cpp": {
+      "bytes": 59841,
+      "sha256": "5aba6f837202bde1332af068632c494f1070e20a713012ece713a48d9c39bdb4"
+    },
+    "native/app/moss_runtime_admission.h": {
+      "bytes": 705,
+      "sha256": "5848b6fd39655776c130b581f6592c524ea3a1b65c53afa9fce28bbb044386f9"
+    },
+    "native/app/startup.c": {
+      "bytes": 59944,
+      "sha256": "f28fbc248fca71c73df990a1ca338b63510d5475050958b5589a582965c18872"
+    },
+    "native/app/pool.c": {
+      "bytes": 30647,
+      "sha256": "184e1e3866480113ee75f7362432516b2d34e68ab0db33e6d5102aed4850a4c1"
+    },
+    "native/app/placement.h": {
+      "bytes": 1232,
+      "sha256": "2b0dbebd7d2bf8896dd38200fd66478a811b46ea41294811fa1ba7d203484e79"
+    },
+    "native/app/cpu_clip_pool_buffer.hpp": {
+      "bytes": 2604,
+      "sha256": "867451f45563cfc67d2d8c391fa3cdc98b27fb54ac7e504f44e34803804a1306"
+    },
+    "tests/moss_engine_config.cpp": {
+      "bytes": 5601,
+      "sha256": "56da60ac2dc6eea8f5ac163fee3c70bd9d2af18a8fe4fa34872a2437cdf0549e"
+    },
+    "tests/moss_cpu_text_pool.cpp": {
+      "bytes": 5307,
+      "sha256": "31a0a72391450a15645d52727b18da18623ff3679baef74f2c95714328a5d52c"
+    },
+    "tests/moss_direct_pool.c": {
+      "bytes": 14261,
+      "sha256": "17e60ca03eed85da2c7f62188bf8e149ce09404f213ef59a71eae8b0872a9aa8"
+    },
+    "tests/moss_operator_bounds.cpp": {
+      "bytes": 3551,
+      "sha256": "d6ff5967b64914a7a853566c0bda9559a3d41f004511d4d612f519844f9f856d"
+    },
+    "tests/moss_engine_checks.py": {
+      "bytes": 5050,
+      "sha256": "f994b5c7b2d5f237fff36a8be1f5f8f2c2fa88eeb4c13c9cea8fe81b6d885a6f"
+    },
+    "patches/stable-diffusion/overlay/src/core/vulkan_scratch_bounds.hpp": {
+      "bytes": 17048,
+      "sha256": "95fae94bf8035e175dbad4011a843d1fd4c049179a081a87a751c91db9b4ae73"
+    },
+    "patches/stable-diffusion/overlay/src/conditioning/conditioner.hpp": {
+      "bytes": 188894,
+      "sha256": "0ae529d95106ccff78f7a44fb7abc7d468350b37c0541b4ee0c54fa751d8872b"
+    },
+    "patches/stable-diffusion/overlay/src/model.h": {
+      "bytes": 10582,
+      "sha256": "53a41d7249c92f0d8c06d42e1662d6c9e16f026243d2a26aeb2dda64388673bc"
+    },
+    "patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp": {
+      "bytes": 14798,
+      "sha256": "791ac3c654c8dcb0e606251e3814d58d17e38086e76c5bc49adff3d5413e5d67"
+    },
+    "patches/stable-diffusion/overlay/src/model/te/llm.hpp": {
+      "bytes": 174549,
+      "sha256": "05869a762d03d61faf311fef77c8e325e54eb2b3ff79745cc5b6ffa91f8af18d"
+    },
+    "patches/stable-diffusion/overlay/src/model_loader.cpp": {
+      "bytes": 67912,
+      "sha256": "e9171774ff329dc676d13e542c6445a0a4e540c3f30b6bd84283aacf009e171d"
+    },
+    "patches/stable-diffusion/overlay/src/name_conversion.cpp": {
+      "bytes": 83372,
+      "sha256": "93fd2d62830819adc4cd437bb67928d0618a9f287db3637b8daa96fc7f07bf77"
+    },
+    "patches/stable-diffusion/overlay/src/pipeline/diffusion_engine.cpp": {
+      "bytes": 159896,
+      "sha256": "c241677cd396b68360d3571f7407283ce70764715226361d9ea6219e21ad3447"
+    },
+    "patches/stable-diffusion/overlay/src/pipeline/model_builders.cpp": {
+      "bytes": 50784,
+      "sha256": "84c8c771d0fd5ee711c8219a257cc1fa941ed9bf10a5b30e32f77a0a711366c0"
+    }
+  },
+  "repository_root": "D:/ps5-dev/PS5-AI-MOSS-Image",
+  "private_vendor_root": "D:/ps5-dev/sources/stable-diffusion.cpp"
+}

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT
  * CPU-only text encoder weights borrow owned Direct data claims. The symbol
- * names retain the ancestral CLIP ABI; Anima uses this for Qwen3 too.
+ * names retain the ancestral CLIP ABI; MOSS uses this for Qwen3.5 too.
  * No Vulkan import,
  * physical allocation, driver modification or transfer of pool ownership.
  */
@@ -22,7 +22,8 @@ static void ps5_ai_cpu_clip_pool_buffer_free(ggml_backend_buffer_t buffer) {
 }
 
 static ggml_backend_buffer_t ps5_ai_cpu_clip_pool_buffer(size_t size) {
-    // Qwen3's BF16 [151936,1024] embedding alone needs 311,164,928 bytes.
+    // Qwen3.5's measured Q4_K [4096,248320] embedding needs 572,129,280 bytes.
+    // MOSS requests 1 GiB owned regions; capacity/readback admission is separate.
     // The manager's 256 MiB chunk preference permits an oversized tensor on
     // its own. Bound that claim by a real owned region, not the old preference.
     // This metadata snapshot grants no ownership: the pool still checks free

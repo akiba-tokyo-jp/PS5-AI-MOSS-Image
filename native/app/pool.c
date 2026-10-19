@@ -124,7 +124,7 @@ static int open_journal(void) {
 #ifdef PS5_AI_DIRECT_POOL_HOST_TEST
     return host_open_journal();
 #else
-    const char *paths[] = { "/data/ai/anima-native-logs/native-direct-data-pool-v1.log",
+    const char *paths[] = { "/data/ai/moss-native-logs/native-direct-data-pool-v1.log",
                             "/download0/ai-native-bounded-logs-v2/native-pool.log" };
     for (unsigned i = 0; i < 2; ++i) {
         int fd = open(paths[i], O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0600);

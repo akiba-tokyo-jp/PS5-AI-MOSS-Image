@@ -43,5 +43,13 @@
   "native_sdk_release": {
     "url": "https://github.com/ps5-payload-dev/sdk/releases/download/v0.42/ps5-payload-sdk.zip",
     "sha256": "8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da"
+  },
+  "moss_backport": {
+    "upstream_revision": "68285df319457e2d79310b48513e4ba1bf8ebe9a",
+    "upstream_parent": "af0fc72c966b08e728422bc3657259cfb4359991",
+    "base_revision": "8cd731e7b4667eb8f40a153315b9a7125d09a58d",
+    "ggml_revision": "d25b121ce1d6ae0c7e62ad080460d9fc1e46dd93",
+    "scope": "MOSS/Qwen3.5 source backport; retain reviewed PS5/GGML ABI; full75 core recompile required",
+    "console_verified": false
   }
 }

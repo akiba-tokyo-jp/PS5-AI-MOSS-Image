@@ -1,0 +1,252 @@
+{
+  "schema": "ps5-ai-moss-image-model-lock-v1",
+  "state": "HOST_ONLY_DOWNLOAD_PLAN_PS5_UNVERIFIED",
+  "selected_variant": "MOSS-Image-SFT",
+  "selection_basis": "Curated-data fine-tune and official same-pipeline SFT example; project preference for ordinary generation, not a universal official SFT recommendation",
+  "upstream": {
+    "code": {
+      "repository": "OpenMOSS/MOSS-Image",
+      "revision": "608158b568fa2e769d918ceccaaf2461f52b3e38"
+    },
+    "engine": {
+      "repository": "leejet/stable-diffusion.cpp",
+      "revision": "b13a48219d5cdf408edcb93da6cd69b612ed03d3"
+    },
+    "official_model": {
+      "repository": "OpenMOSS-Team/MOSS-Image-SFT",
+      "revision": "c32bea2a87bc0d491d0412d7fad34e3a5b2ab3c4"
+    }
+  },
+  "files": [
+    {
+      "role": "diffusion",
+      "repository": "leejet/MOSS-Image-SFT-GGUF",
+      "revision": "238daf423f0de65316207453591f275407aac9a7",
+      "remote_path": "MOSS-Image-SFT-Q4_K.gguf",
+      "relative_install_path": "diffusion/MOSS-Image-SFT-Q4_K.gguf",
+      "url": "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/238daf423f0de65316207453591f275407aac9a7/MOSS-Image-SFT-Q4_K.gguf",
+      "expected_bytes": 3327400800,
+      "expected_sha256": "902dbb0364d8b313cd91792b3cfe7c87b987386f0c5414986f3f1027b82b2225",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "text_encoder",
+      "repository": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "remote_path": "Qwen3.5-9B-Q4_K_M.gguf",
+      "relative_install_path": "text_encoders/Qwen3.5-9B-Q4_K_M.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+      "expected_bytes": 5680522464,
+      "expected_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "vae",
+      "repository": "Comfy-Org/MOSS-Image",
+      "revision": "3284a1dbb351e3396d70f39f2a71cbf6ed2ef1bb",
+      "remote_path": "vae/flux2-vae_small.safetensors",
+      "relative_install_path": "vae/flux2-vae_small.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/3284a1dbb351e3396d70f39f2a71cbf6ed2ef1bb/vae/flux2-vae_small.safetensors",
+      "expected_bytes": 249521340,
+      "expected_sha256": "d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "tokenizer",
+      "repository": "OpenMOSS-Team/MOSS-Image-Base",
+      "revision": "5a52857ead25c0d69082820131daf24e124ad622",
+      "remote_path": "tokenizer/tokenizer.json",
+      "relative_install_path": "tokenizers/tokenizer_qwen3.5.json",
+      "url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/5a52857ead25c0d69082820131daf24e124ad622/tokenizer/tokenizer.json",
+      "expected_bytes": 19989325,
+      "expected_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    }
+  ],
+  "alternatives": [
+    {
+      "role": "diffusion_fallback",
+      "repository": "leejet/MOSS-Image-SFT-GGUF",
+      "revision": "238daf423f0de65316207453591f275407aac9a7",
+      "remote_path": "MOSS-Image-SFT-Q4_0.gguf",
+      "relative_install_path": "diffusion/MOSS-Image-SFT-Q4_0.gguf",
+      "url": "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/238daf423f0de65316207453591f275407aac9a7/MOSS-Image-SFT-Q4_0.gguf",
+      "expected_bytes": 3327400800,
+      "expected_sha256": "b59d2461fa431d670471f74ab54fd90a0bfb36799fd3ffbec1cf103568a883b8",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "diffusion_higher_precision",
+      "repository": "leejet/MOSS-Image-SFT-GGUF",
+      "revision": "238daf423f0de65316207453591f275407aac9a7",
+      "remote_path": "MOSS-Image-SFT-Q5_K.gguf",
+      "relative_install_path": "diffusion/MOSS-Image-SFT-Q5_K.gguf",
+      "url": "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/238daf423f0de65316207453591f275407aac9a7/MOSS-Image-SFT-Q5_K.gguf",
+      "expected_bytes": 3921943392,
+      "expected_sha256": "0f4400bafdf52f08d4ad7d2554564fd41a07964f4e4e98ff13045cd1d212720a",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "base_ab_comparison_only",
+      "repository": "leejet/MOSS-Image-Base-GGUF",
+      "revision": "3a2df431a5bc8460783c4fcdf4912b57e865e9bb",
+      "remote_path": "MOSS-Image-Base-Q4_K.gguf",
+      "relative_install_path": "diffusion/MOSS-Image-Base-Q4_K.gguf",
+      "url": "https://huggingface.co/leejet/MOSS-Image-Base-GGUF/resolve/3a2df431a5bc8460783c4fcdf4912b57e865e9bb/MOSS-Image-Base-Q4_K.gguf",
+      "expected_bytes": 3327400800,
+      "expected_sha256": "bf696d92122756ddcc6518d8ef9ffd648fa1de0931571432e0c43837d7f1371b",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "vae_full_fallback",
+      "repository": "Comfy-Org/MOSS-Image",
+      "revision": "3284a1dbb351e3396d70f39f2a71cbf6ed2ef1bb",
+      "remote_path": "vae/flux2-vae.safetensors",
+      "relative_install_path": "vae/flux2-vae.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/3284a1dbb351e3396d70f39f2a71cbf6ed2ef1bb/vae/flux2-vae.safetensors",
+      "expected_bytes": 336211292,
+      "expected_sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "official_small_vae_conversion_reference",
+      "repository": "OpenMOSS-Team/MOSS-Image-SFT",
+      "revision": "c32bea2a87bc0d491d0412d7fad34e3a5b2ab3c4",
+      "remote_path": "vae/diffusion_pytorch_model.safetensors",
+      "relative_install_path": "reference-only/official-small-vae.safetensors",
+      "url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/resolve/c32bea2a87bc0d491d0412d7fad34e3a5b2ab3c4/vae/diffusion_pytorch_model.safetensors",
+      "expected_bytes": 249521372,
+      "expected_sha256": "c3bdf94dc67ec69b30ea9fe1fa8340085679cae64d019f7c7e4a9921f1a7f17a",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    },
+    {
+      "role": "text_encoder_smaller_Q4_variant",
+      "repository": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "remote_path": "Qwen3.5-9B-Q4_K_S.gguf",
+      "relative_install_path": "text_encoders/Qwen3.5-9B-Q4_K_S.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_S.gguf",
+      "expected_bytes": 5394097376,
+      "expected_sha256": "023713a5240bf58a84d2890a30deb2e0485abb5b9b9c33ba67596e9248b35f80",
+      "sha256_source": "HF Git-LFS metadata; complete local weight bytes NOT downloaded or verified",
+      "license": "Apache-2.0",
+      "downloaded": false,
+      "local_weight_verified": false
+    }
+  ],
+  "default_settings_candidate": {
+    "width_alignment": 16,
+    "height_alignment": 16,
+    "sampler": "euler",
+    "scheduler": "discrete",
+    "steps": 50,
+    "cfg_scale": 3.0,
+    "flow_shift": 5.0,
+    "negative_prompt": "",
+    "negative_branch_skip_layers": [
+      22
+    ],
+    "skip_layer_indexing": "zero_based",
+    "prompt_enhancement": false,
+    "text_encoder_backend": "CPU candidate, hybrid GDN numerical oracle required",
+    "diffusion_backend": "Vulkan candidate, PS5 execution unverified",
+    "vae_backend": "Vulkan candidate; evaluate F32 and tiling independently"
+  },
+  "required_components_not_selected": [
+    "No SDXL CLIP/VAE/TAESD, SDXL LoRA, ControlNet or IP-Adapter component reused",
+    "No vision mmproj GGUF for text-to-image",
+    "No skill installer or runtime prompt-enhancer dependency"
+  ],
+  "memory_accounting": {
+    "kind": "disk-byte arithmetic, NOT measured resident memory or successful allocation",
+    "selected_file_bytes": 9277433929,
+    "selected_file_GiB": 8.640283652581275,
+    "direct_target_MiB": 12288,
+    "direct_target_bytes": 12884901888,
+    "direct_target_GiB": 12,
+    "target_actual_allocation_verified": false,
+    "previous_baseline_MiB": 9422,
+    "previous_baseline_bytes": 9879683072,
+    "previous_baseline_GiB": 9.201171875,
+    "arithmetic_remainder_if_all_files_resident_bytes": 3607467959,
+    "arithmetic_remainder_GiB": 3.3597163474187255,
+    "previous_baseline_arithmetic_remainder_GiB": 0.5608882224187255,
+    "excludes": [
+      "tensor alignment",
+      "loaded tensor conversion/duplication",
+      "CPU/GPU graph buffers",
+      "GDN recurrent/attention state",
+      "activations",
+      "tokenizer in-memory representation",
+      "VAE upcast buffers",
+      "driver arena",
+      "native app/UI",
+      "OS/services",
+      "file cache and mapped file pressure"
+    ],
+    "strategy": "Component-serial lifetime and CPU text encoder are design candidates. No simultaneous all-file residency or shared-memory fit guarantee."
+  },
+  "verification": {
+    "PS5_operations": 0,
+    "full_weight_downloads": 0,
+    "inference_runs": 0,
+    "weight_hashes_locally_verified": false,
+    "public_metadata_only": true,
+    "bounded_GGUF_header_prefix_inspected": true,
+    "source_lock_sha256": "03908d1eae0e74d7d0dc048ae922b651fc807132ff0093184346d35696f56ba1"
+  },
+  "compatibility": {
+    "source_supported": true,
+    "PS5_crossbuild_verified": false,
+    "PS5_execution_verified": false,
+    "Direct_target_actual_allocation_verified": false,
+    "legacy_single_allocation_limit_MiB": 512,
+    "prepared_single_allocation_limit_MiB": 1024,
+    "prepared_limit_PS5_verified": false,
+    "text_embedding": {
+      "name": "token_embd.weight",
+      "shape": [
+        4096,
+        248320
+      ],
+      "type_id": 12,
+      "type_name": "Q4_K",
+      "elements": 1017118720,
+      "storage_bytes": 572129280,
+      "offset": 834371584
+    },
+    "tensor_header_sha256": "c42552a2dbb733cbd415b6036eabd8ac755b14110e008f46c902694ddebc89d3",
+    "tensor_header_revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+    "embedding_fits_legacy_single_allocation_limit": false,
+    "implementation_required": "Bounded CPU embedding gathering or proven chunked storage/allocation-policy change before full text-encoder load. Raising the total pool does not remove a single-allocation limit.",
+    "qwen_hybrid_upstream_implemented": true,
+    "qwen_hybrid_PS5_verified": false
+  }
+}

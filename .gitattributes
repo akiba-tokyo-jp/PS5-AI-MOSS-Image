@@ -59,3 +59,6 @@ assets/sce_sys/param.json -text
 
 # Preserve inherited PowerShell CRLF checkouts with normalized Git blobs.
 scripts/Invoke-WaiReference.ps1 text eol=crlf
+
+# Preserve the byte-hashed MOSS host fixture used by the source freeze.
+tests/moss_operator_bounds.cpp -text

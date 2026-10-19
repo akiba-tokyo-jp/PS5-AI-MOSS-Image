@@ -883,5 +883,9 @@
       "path": "${SPIRV_HEADERS}/include/spirv/unified1/spirv.hpp",
       "sha256": "c173fe7353f817bc7c50729a47f9961ab661d1223614850a91b176b59237c729"
     }
-  ]
+  ],
+  "model_family": "moss-image-sft",
+  "full_core_manifest_required": true,
+  "runtime_admitted": false,
+  "requested_direct_bytes": 12884901888
 }

@@ -10,9 +10,9 @@
 #include <cstdint>
 
 struct PS5AIEngineConfig {
-    // Anima is a split DiT + Qwen text encoder + Qwen-Image VAE model.
+    // MOSS uses a split DiT, Qwen3.5 text encoder, external tokenizer and FLUX.2 VAE.
     // The DiT must never be passed as an SDXL combined checkpoint.
-    std::string model, llm, vae, taesd, backend, params_backend, max_vram;
+    std::string model, llm, vae, tokenizer, taesd, backend, params_backend, max_vram;
     std::string manga_lora_path;
     std::string clip_vision_path, ip_adapter_path, reference_params_backend;
     std::string controlnet_canny_path, controlnet_openpose_path;
@@ -23,10 +23,10 @@ struct PS5AIEngineConfig {
     int cpu_threads = 3;
     int vae_tile_size = 256; // Image pixels; SD1/2 divides this by 8.
     float vae_tile_overlap = 0.5f;
-    bool vae_tiling = true, mmap = true, disable_prefetch = true;
+    bool vae_tiling = true, mmap = false, disable_prefetch = true;
     bool eager_load = false, auto_fit = true, tae_preview_only = false;
-    uint64_t gpu_pool_bytes = PS5_AI_MEMORY_PLAN_DEFAULT_POOL_BYTES;
-    uint64_t working_reserve_bytes = PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES;
+    uint64_t gpu_pool_bytes = UINT64_C(12) << 30;
+    uint64_t working_reserve_bytes = UINT64_C(1) << 30;
 
     static uint64_t memory_integer(const nlohmann::json& object, const char* key, uint64_t fallback) {
         if (!object.contains(key)) return fallback;
@@ -43,8 +43,8 @@ struct PS5AIEngineConfig {
     static ps5_ai_memory_plan memory_plan(const nlohmann::json& object) {
         if (!object.is_object()) throw std::runtime_error("engine must be a JSON object");
         ps5_ai_memory_plan result = {
-            memory_integer(object, "gpu_pool_bytes", PS5_AI_MEMORY_PLAN_DEFAULT_POOL_BYTES),
-            memory_integer(object, "working_reserve_bytes", PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES)};
+            memory_integer(object, "gpu_pool_bytes", UINT64_C(12) << 30),
+            memory_integer(object, "working_reserve_bytes", UINT64_C(1) << 30)};
         // These bounds match the actual pool's page-index/address arithmetic,
         // not an arbitrary application memory ceiling. Runtime quota/backing
         // admission is performed by the pool, after this configuration read.
@@ -54,7 +54,7 @@ struct PS5AIEngineConfig {
             result.working_reserve_bytes < PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES ||
             result.working_reserve_bytes % PS5_AI_MEMORY_PLAN_PAGE_BYTES ||
             result.gpu_pool_bytes > UINT64_MAX - result.working_reserve_bytes)
-            throw std::runtime_error("Native Direct Anima memory bytes must fit pool address/page arithmetic; reserve is aligned and at least64MiB outside the pool");
+            throw std::runtime_error("Native Direct MOSS memory bytes must fit pool address/page arithmetic; reserve is aligned and at least64MiB outside the pool");
         return result;
     }
 
@@ -82,12 +82,13 @@ struct PS5AIEngineConfig {
         const auto plan = memory_plan(object);
         result.gpu_pool_bytes = plan.gpu_pool_bytes;
         result.working_reserve_bytes = plan.working_reserve_bytes;
-        result.model = object.value("model", "/app0/models/anima-turbo-v1.1-f16.safetensors");
-        result.llm = object.value("llm", "/app0/models/qwen_3_06b_base.safetensors");
+        result.model = object.value("model", "/app0/models/MOSS-Image-SFT-Q4_K.gguf");
+        result.llm = object.value("llm", "/app0/models/Qwen3.5-9B-Q4_K_M.gguf");
         result.manga_lora_path = object.value("manga_lora_path", "");
         result.clip_vision_path=object.value("clip_vision_path", "");
         result.ip_adapter_path=object.value("ip_adapter_path", "");
-        result.vae = object.value("vae", "/app0/models/qwen_image_vae-f16.safetensors");
+        result.vae = object.value("vae", "/app0/models/flux2-vae_small.safetensors");
+        result.tokenizer = object.value("tokenizer", "/app0/models/tokenizer_qwen3.5.json");
         result.taesd = object.value("taesd_path", "");
         result.backend = object.value("backend", "");
         result.params_backend = object.value("params_backend", "");
@@ -96,25 +97,27 @@ struct PS5AIEngineConfig {
         if (!result.manga_lora_path.empty() || !result.clip_vision_path.empty() ||
             !result.ip_adapter_path.empty() || !result.controlnet_canny_path.empty() ||
             !result.controlnet_openpose_path.empty() || !result.taesd.empty())
-            throw std::runtime_error("Anima text2img does not accept WAI/SDXL LoRA, IP-Adapter, ControlNet or four-channel TAESD weights");
+            throw std::runtime_error("MOSS text2img does not accept WAI/SDXL LoRA, IP-Adapter, ControlNet or four-channel TAESD weights");
         result.max_vram = object.value("max_vram_gib", "");
         result.flash_attn_mode = object.value("flash_attn_mode", result.flash_attn_mode);
         result.batched_cfg = object.value("batched_cfg", result.batched_cfg);
         result.conditioning_cache_size = bounded_integer(object, "conditioning_cache_size", result.conditioning_cache_size, 0, 2);
-        if (result.flash_attn_mode != "auto,unet=on")
-            throw std::runtime_error("Anima DiT requires flash attention: auto,unet=on (SD.cpp diffusion-module selector)");
+        if (result.flash_attn_mode != "auto,unet=on" && result.flash_attn_mode != "off,unet=on" &&
+            result.flash_attn_mode != "auto" && result.flash_attn_mode != "on" && result.flash_attn_mode != "off")
+            throw std::runtime_error("Unsupported MOSS flash-attention policy");
         result.log = object.value("log", result.log);
         result.cpu_threads = bounded_integer(object, "cpu_threads", result.cpu_threads, 1, 4);
         result.vae_tile_size = bounded_integer(object, "vae_tile_size", result.vae_tile_size, 32, 1024);
         result.vae_tile_overlap = object.value("vae_tile_overlap", result.vae_tile_overlap);
         result.vae_tiling = object.value("vae_tiling", result.vae_tiling);
         result.mmap = object.value("mmap", result.mmap);
+        if (result.mmap) throw std::runtime_error("MOSS preparation requires mmap=false; console mmap admission is unverified");
         result.disable_prefetch = object.value("disable_prefetch", result.disable_prefetch);
         result.eager_load = object.value("eager_load", result.eager_load);
         result.auto_fit = object.value("auto_fit", result.auto_fit);
         result.tae_preview_only = object.value("tae_preview_only", result.tae_preview_only);
-        if (!model_path_ok(result.model) || !model_path_ok(result.llm) || !model_path_ok(result.vae))
-            throw std::runtime_error("engine model/llm/vae must name split model files inside /app0/models/");
+        if (!model_path_ok(result.model) || !model_path_ok(result.llm) || !model_path_ok(result.vae) || !model_path_ok(result.tokenizer))
+            throw std::runtime_error("engine model/llm/vae/tokenizer must name split model files inside /app0/models/");
         if (result.cpu_threads < 1 || result.cpu_threads > 4)
             throw std::runtime_error("engine.cpu_threads must be between 1 and 4");
         if (result.vae_tile_size < 32 || result.vae_tile_size > 1024 || result.vae_tile_size % 8 != 0)
@@ -155,21 +158,25 @@ struct PS5AIEngineConfig {
             params_backend != "cpu,unet=disk" && params_backend != "cpu,unet=" + gpu_name &&
             params_backend != "cpu,unet=" + gpu_name + ",te=disk" &&
             params_backend != "cpu,unet=" + gpu_name + ",te=disk,vae=" + gpu_name))
-            throw std::runtime_error("Native Direct Anima requires CPU Qwen text encoding, native Vulkan DiT/VAE compute, and local parameter storage");
+            throw std::runtime_error("Native Direct MOSS requires CPU Qwen3.5 text encoding, native Vulkan DiT/VAE compute, and local parameter storage");
     }
 
     void validate_actual_pool(const std::string& gpu_name, uint64_t actual_bytes) const {
         if (actual_bytes != gpu_pool_bytes)
-            throw std::runtime_error("Native Direct Anima configured GPU pool does not match the actual prepared owned pool");
+            throw std::runtime_error("Native Direct MOSS configured GPU pool does not match the actual prepared owned pool");
         const std::string prefix = gpu_name + "=";
         if (max_vram.rfind(prefix, 0) != 0 || max_vram.find(',', prefix.size()) != std::string::npos)
-            throw std::runtime_error("Native Direct Anima max_vram_gib must explicitly name only the native Vulkan device");
+            throw std::runtime_error("Native Direct MOSS max_vram_gib must explicitly name only the native Vulkan device");
         const std::string number = max_vram.substr(prefix.size());
         size_t consumed = 0;
         const double gib = std::stod(number, &consumed);
         if (number.empty() || consumed != number.size() || !std::isfinite(gib) || gib <= 0.0 ||
             static_cast<long double>(gib) * (UINT64_C(1) << 30) > static_cast<long double>(actual_bytes))
-            throw std::runtime_error("Native Direct Anima max_vram_gib must be positive and no larger than the real owned pool");
+            throw std::runtime_error("Native Direct MOSS max_vram_gib must be positive and no larger than the real owned pool");
+    }
+
+    bool requires_dit_flash_attention() const {
+        return flash_attn_mode == "on" || flash_attn_mode == "auto,unet=on" || flash_attn_mode == "off,unet=on";
     }
 
     bool partial_taesd_gpu_decode(const std::string& gpu_name) const {
@@ -180,6 +187,7 @@ struct PS5AIEngineConfig {
         params.model_path = nullptr;
         params.diffusion_model_path = model.c_str();
         params.llm_path = llm.c_str();
+        params.tokenizer = tokenizer.c_str();
         params.vae_path = vae.c_str();
         params.taesd_path = nullptr;
         params.backend = backend.c_str();

@@ -277,7 +277,7 @@ static void *native_ui_publish_loop(void *unused) {
         uint64_t revision=atomic_load(&ui_state_revision);
         int phase_coherent=!atomic_load(&ui_state_writers);
         view.valid=PS5_AI_STATUS_MODEL|PS5_AI_STATUS_PHASE;
-        memcpy(view.model,"Anima Turbo v1.1",sizeof("Anima Turbo v1.1"));
+        memcpy(view.model,"MOSS-Image-SFT",sizeof("MOSS-Image-SFT"));
         view.phase=atomic_load(&ui_phase);
         if(view.phase==PS5_AI_STATUS_GENERATING&&atomic_load(&ui_progress_known)) {
             view.progress_basis_points=atomic_load(&ui_progress);view.valid|=PS5_AI_STATUS_PROGRESS;
@@ -735,18 +735,19 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     }
     probe_pid=getpid();
     size_t linked=__init_array_start&&__init_array_end?(size_t)(__init_array_end-__init_array_start):0;
-    ps5_ai_ggml_report("BEGIN pid=%d unix_time=%lld code=ps5-ai-native-anima-api-v1 native_CRT=1 payload_CRT=0 private_FW_or_credential_queries=0 manual_constructor_replay=0 config=%s",(int)probe_pid,(long long)time(NULL),config_path);
+    ps5_ai_ggml_report("BEGIN pid=%d unix_time=%lld code=ps5-ai-native-moss-api-v1 native_CRT=1 payload_CRT=0 private_FW_or_credential_queries=0 manual_constructor_replay=0 config=%s",(int)probe_pid,(long long)time(NULL),config_path);
     ps5_ai_ggml_report("constructors linked_initializer_slots=%zu own_witness_executed=%u SCE_constructor_effects=unknown",linked,constructor_witness_count);
     if(probe_pid<=0||linked!=PS5_AI_NATIVE_EXPECTED_INITIALIZER_SLOTS||constructor_witness_count!=1||!log_healthy||!radv_ps5_platform_runs_gpu())
         return init_error(error,error_size,"Native constructor/hardware/log guard failed");
     if(native_capture_stderr())return init_error(error,error_size,"Native own stderr capture unavailable");
     struct ps5_ai_memory_plan plan = {0};
     ps5_ai_native_config_mark(1,"memory_plan_before");
-    if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size) ||
-        plan.gpu_pool_bytes != PS5_AI_DATA_VA_BYTES || plan.working_reserve_bytes != UINT64_C(1073741824))
-        return init_error(error,error_size,"Candidate native Direct9422MiB/initial working reserve1GiB configuration required");
+    /* Preserve the pre-AGC admission reason; do not overwrite it with a pool error. */
+    if (ps5_ai_v12_read_memory_plan(config_path,&plan,error,error_size)) return -1;
+    if (plan.gpu_pool_bytes != PS5_AI_DATA_VA_BYTES || plan.working_reserve_bytes != UINT64_C(1073741824))
+        return init_error(error,error_size,"MOSS requested Direct12GiB/working reserve1GiB configuration required");
     ps5_ai_native_config_mark(16,"memory_plan_returned");
-    ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=536870912 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
+    ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=1073741824 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
         (unsigned long long)plan.gpu_pool_bytes,(unsigned long long)plan.working_reserve_bytes);
     if (!log_healthy || ps5_ai_native_arena_open_log(1))
         return init_error(error,error_size,"Native arena persistent journal unavailable");
@@ -772,16 +773,16 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         arena.gpu_fault_retained || arena.global_capacity_measured || !log_healthy)
         return init_error(error,error_size,"Native per-BO empty-owner guard failed");
     native_data_prepare_entered=true;
-    if (ps5_ai_direct_pool_configure(plan.gpu_pool_bytes,UINT64_C(536870912),plan.working_reserve_bytes) ||
+    if (ps5_ai_direct_pool_configure(plan.gpu_pool_bytes,PS5_AI_DATA_REGION_BYTES,plan.working_reserve_bytes) ||
         ps5_ai_flex_prepare()) return init_error(error,error_size,"Native actual Direct data admission failed");
     struct ps5_ai_direct_pool_stats direct={0}; ps5_ai_direct_pool_snapshot(&direct);
     struct ps5_ai_flex_stats pool=report_direct("native_prepared");
     if (!direct.ready || direct.ownership_uncertain || direct.physical_owned_bytes!=plan.gpu_pool_bytes ||
-        direct.mapped_bytes!=plan.gpu_pool_bytes || direct.largest_region_bytes!=UINT64_C(536870912) ||
-        direct.region_count!=plan.gpu_pool_bytes/UINT64_C(536870912)+(plan.gpu_pool_bytes%UINT64_C(536870912)!=0) || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
+        direct.mapped_bytes!=plan.gpu_pool_bytes || direct.largest_region_bytes!=PS5_AI_DATA_REGION_BYTES ||
+        direct.region_count!=plan.gpu_pool_bytes/PS5_AI_DATA_REGION_BYTES+(plan.gpu_pool_bytes%PS5_AI_DATA_REGION_BYTES!=0) || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
         !pool.gpu_access_granted || pool.fault_retained || !pool.log_healthy || !log_healthy)
         return init_error(error,error_size,"Native owned region accounting incomplete");
-    ps5_ai_native_capacity_snapshot("candidate_9422MiB_pool_prepared");
+    ps5_ai_native_capacity_snapshot("candidate_12GiB_pool_prepared");
     int rc=__real_ps5_ai_engine_init(config_path,error,error_size);
     if (rc) return init_error(error,error_size,"Native real engine initialization failed");
     ps5_ai_ggml_graph_phase(1);
@@ -800,7 +801,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
     if (gate) return init_error(error,error_size,"Native same-context Direct GPU gate failed");
     engine_started=true;
     native_ui_start_after_real_gate();
-    ps5_ai_native_capacity_snapshot("native_9422MiB_ready_after_GPU_gate");
+    ps5_ai_native_capacity_snapshot("native_12GiB_ready_after_GPU_gate");
     ps5_ai_ggml_report("NATIVE_ENGINE_READY pid=%d Direct_data_reserved=%llu single_SCALE_tensor_verified_bytes=67108864 whole_pool_GPU_verified=0 model_loaded=0 GPU_UNet_image_verified=0 engine_ready=1",
         (int)probe_pid,(unsigned long long)pool.reserved_bytes);
     if (!log_healthy) ps5_ai_ggml_retain("native_ready_receipt_failed");
@@ -957,7 +958,7 @@ int main(int argc, char **argv) {
     (void)argc; (void)argv;
     /* Native LaunchApp argv semantics are not assumed. Own fixed defaults are
      * compiled in; this does not accept or reinterpret arbitrary OS args. */
-    char program[]="native-anima-turbo-v11"; char *fixed_argv[]={program,NULL};
+    char program[]="native-moss-image-sft"; char *fixed_argv[]={program,NULL};
     int rc = ps5_ai_server_main(1, fixed_argv);
     ps5_ai_native_ui_phase(PS5_AI_STATUS_STOPPING);
     ps5_ai_native_ui_log("API stopped; cooperative exit requires checked shutdown");

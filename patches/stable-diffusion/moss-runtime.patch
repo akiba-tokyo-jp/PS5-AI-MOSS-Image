@@ -1,0 +1,1156 @@
+--- a/src/conditioning/conditioner.hpp
++++ b/src/conditioning/conditioner.hpp
+@@ -163,6 +163,7 @@
+ // Ref: https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/cad87bf4e3e0b0a759afa94e933527c3123d59bc/modules/sd_hijack_clip.py#L283
+ struct FrozenCLIPEmbedderWithCustomWords : public Conditioner {
+     SDVersion version = VERSION_SD1;
++    bool stream_cpu_clip = false; /*9GiB profile: outputs own their data before runner_end.*/
+     std::shared_ptr<Tokenizer> tokenizer;
+     std::shared_ptr<CLIPTextModelRunner> text_model;
+     std::shared_ptr<CLIPTextModelRunner> text_model2;
+@@ -180,6 +181,7 @@
+                                       std::shared_ptr<RunnerWeightManager> weight_manager = nullptr,
+                                       const TokenizerConfig& tokenizers                   = {})
+         : version(version) {
++        stream_cpu_clip = sd_version_is_sdxl(version) && sd_backend_is_cpu(backend);
+         const int pad_id = sd_version_is_sd2(version) ? 0 : 49407;
+         tokenizer        = tokenizers.create(TokenizerConfig::MAIN, 49408, pad_id, false, true);
+         if (!tokenizer) {
+@@ -453,6 +455,7 @@
+                                              int height,
+                                              bool zero_out_masked = false) {
+         int64_t t0 = ggml_time_ms();
++        if (stream_cpu_clip) LOG_INFO("CPU CLIP stream: release L/G workspace and disk-backed params after each graph; first G chunk shares hidden/pooled encoder");
+         sd::Tensor<float> hidden_states;  // [n_token, hidden_size] or [n_token, hidden_size + hidden_size2]
+         sd::Tensor<float> pooled;
+ 
+@@ -495,21 +498,37 @@
+                                                                max_token_idx,
+                                                                false,
+                                                                clip_skip,
+-                                                               false);
+-                GGML_ASSERT(!chunk_hidden_states.empty());
++                                                               stream_cpu_clip);
++                if(chunk_hidden_states.empty()) throw std::runtime_error("CLIP-L compute/weight preparation failed");
+                 if (sd_version_is_sdxl(version)) {
+-                    auto chunk_hidden_states2 = text_model2->compute(n_threads,
++                    sd::Tensor<float> chunk_hidden_states2;
++                    if (stream_cpu_clip && chunk_idx == 0) {
++                        auto outputs = text_model2->compute_hidden_pooled(n_threads,
++                                                                         input_ids2,
++                                                                         num_custom_embeddings,
++                                                                         token_embed_custom2.data(),
++                                                                         max_token_idx,
++                                                                         clip_skip,
++                                                                         true);
++                        chunk_hidden_states2 = std::move(outputs.first);
++                        pooled = std::move(outputs.second);
++                        if (chunk_hidden_states2.empty() || pooled.empty()) {
++                            throw std::runtime_error("CLIP-G shared hidden/pooled compute/weight preparation failed");
++                        }
++                    } else {
++                        chunk_hidden_states2 = text_model2->compute(n_threads,
+                                                                      input_ids2,
+                                                                      num_custom_embeddings,
+                                                                      token_embed_custom2.data(),
+                                                                      max_token_idx,
+                                                                      false,
+                                                                      clip_skip,
+-                                                                     false);
+-                    GGML_ASSERT(!chunk_hidden_states2.empty());
++                                                                     stream_cpu_clip);
++                    }
++                    if(chunk_hidden_states2.empty()) throw std::runtime_error("CLIP-G hidden compute/weight preparation failed");
+                     chunk_hidden_states = sd::ops::concat(chunk_hidden_states, chunk_hidden_states2, 0);
+ 
+-                    if (chunk_idx == 0) {
++                    if (chunk_idx == 0 && !stream_cpu_clip) {
+                         pooled = text_model2->compute(n_threads,
+                                                       input_ids2,
+                                                       num_custom_embeddings,
+@@ -517,8 +536,8 @@
+                                                       max_token_idx,
+                                                       true,
+                                                       clip_skip,
+-                                                      false);
+-                        GGML_ASSERT(!pooled.empty());
++                                                      stream_cpu_clip);
++                        if(pooled.empty()) throw std::runtime_error("CLIP-G pooled compute/weight preparation failed");
+                     }
+                 }
+                 int64_t t1 = ggml_time_ms();
+@@ -1994,6 +2013,9 @@
+             }
+             if (sd_version_is_pid(version)) {
+                 throw std::runtime_error("PiD requires an external Gemma 2 tokenizer.json; pass --tokenizer FILE or set sd_ctx_params_t::tokenizer");
++            }
++            if (version == VERSION_MOSS_IMAGE) {
++                throw std::runtime_error("MOSS-Image requires the official Qwen3.5 tokenizer.json; pass --tokenizer FILE or set sd_ctx_params_t::tokenizer");
+             }
+         }
+         LLM::LLMArch arch = LLM::LLMArch::QWEN2_5_VL;
+@@ -2018,6 +2040,8 @@
+             arch = LLM::LLMArch::QWEN3_VL;
+         } else if (sd_version_is_z_image(version) || sd_version_is_z_image_l2p(version) || version == VERSION_OVIS_IMAGE || version == VERSION_FLUX2_KLEIN) {
+             arch = LLM::LLMArch::QWEN3;
++        } else if (version == VERSION_MOSS_IMAGE) {
++            arch = LLM::LLMArch::QWEN3_5;
+         }
+         llm        = std::make_shared<LLM::LLMRunner>(arch,
+                                                backend,
+@@ -2032,6 +2056,8 @@
+             pad_id = 199999;
+         } else if (arch == LLM::LLMArch::GEMMA2_2B) {
+             pad_id = 0;
++        } else if (arch == LLM::LLMArch::QWEN3_5) {
++            pad_id = 248044;
+         }
+         tokenizer = tokenizers.create(TokenizerConfig::MAIN, llm->config.vocab_size, pad_id);
+         if (!tokenizer) {
+@@ -3039,6 +3065,11 @@
+ 
+                 prompt += "<|im_end|>\n<|im_start|>assistant\n";
+             }
++        } else if (version == VERSION_MOSS_IMAGE) {
++            prompt_template_encode_start_idx = 0;
++            max_length                       = 4096;
++            prompt                           = "<|im_start|>user\n" + conditioner_params.text + "<|im_end|>\n<|im_start|>assistant\n<think>\n";
++            prompt_attn_range                = {0, 0};
+         } else if (sd_version_is_flux3(version)) {
+             prompt_template_encode_start_idx = 0;
+             max_length                       = 4096;
+--- a/src/model.h
++++ b/src/model.h
+@@ -67,6 +67,7 @@
+     VERSION_Z_IMAGE_L2P,
+     VERSION_IRIS,
+     VERSION_FLUX3,
++    VERSION_MOSS_IMAGE,
+     VERSION_COUNT,
+ };
+ 
+@@ -291,7 +292,8 @@
+         sd_version_is_lens(version) ||
+         sd_version_is_ideogram4(version) ||
+         sd_version_is_sefi_image(version) ||
+-        sd_version_is_llada_image(version)) {
++        sd_version_is_llada_image(version) ||
++        version == VERSION_MOSS_IMAGE) {
+         return true;
+     }
+     return false;
+@@ -348,7 +350,8 @@
+         sd_version_is_mage_flow(version) ||
+         sd_version_is_sensenova_u1(version) ||
+         sd_version_is_pixart(version) ||
+-        version == VERSION_IRIS) {
++        version == VERSION_IRIS ||
++        version == VERSION_MOSS_IMAGE) {
+         return true;
+     }
+     return false;
+--- /dev/null
++++ b/src/model/diffusion/moss_image.hpp
+@@ -0,0 +1,262 @@
++#ifndef __SD_MODEL_DIFFUSION_MOSS_IMAGE_HPP__
++#define __SD_MODEL_DIFFUSION_MOSS_IMAGE_HPP__
++
++#include <algorithm>
++#include <cinttypes>
++
++#include "model/common/ggml_block.hpp"
++#include "model/common/rope.hpp"
++#include "model/diffusion/dit.hpp"
++#include "model/diffusion/model.hpp"
++#include "model_loader.h"
++
++namespace MOSSImage {
++    struct MOSSImageConfig {
++        int64_t dim      = 3072;
++        int64_t ffn_dim  = 8192;
++        int64_t text_dim = 4096;
++        int64_t channels = 128;
++        int64_t head_dim = 128;
++        int64_t depth    = 42;
++        int64_t freq_dim = 256;
++
++        static MOSSImageConfig detect_from_weights(const String2TensorStorage& weights, const std::string& prefix) {
++            MOSSImageConfig config;
++            int64_t depth = 0;
++            for (const auto& [name, tensor] : weights) {
++                if (!starts_with(name, prefix + ".")) {
++                    continue;
++                }
++                auto key = name.substr(prefix.size() + 1);
++                if (key == "video_embedder.weight") {
++                    config.channels = tensor.ne[0];
++                    config.dim      = tensor.ne[1];
++                } else if (key == "text_embedder.proj.weight") {
++                    config.text_dim = tensor.ne[0];
++                } else if (key == "layers.0.proj.ffn_down.weight") {
++                    config.ffn_dim = tensor.ne[0];
++                } else if (key == "layers.0.q_norm.weight") {
++                    config.head_dim = tensor.ne[0];
++                } else if (key == "time_embedding.0.weight") {
++                    config.freq_dim = tensor.ne[0];
++                }
++                if (starts_with(key, "layers.")) {
++                    depth = std::max<int64_t>(depth, std::stoi(key.substr(7)) + 1);
++                }
++            }
++            if (depth) {
++                config.depth = depth;
++                LOG_VERBOSE("moss_image: dim = %" PRId64 ", ffn_dim = %" PRId64 ", depth = %" PRId64 ", head_dim = %" PRId64,
++                            config.dim, config.ffn_dim, config.depth, config.head_dim);
++            }
++            return config;
++        }
++    };
++
++    inline ggml_tensor* situ(ggml_context* c, ggml_tensor* hidden, ggml_tensor* gate) {
++        auto a = ggml_scale(c, ggml_tanh(c, ggml_scale(c, gate, 0.25f)), 4.f);
++        a      = ggml_mul(c, a, ggml_sigmoid(c, gate));
++        auto b = ggml_scale(c, ggml_tanh(c, ggml_scale(c, hidden, 1.f / 25.f)), 25.f);
++        return ggml_mul(c, a, b);
++    }
++
++    struct TextBlock : public GGMLBlock {
++        MOSSImageConfig config;
++
++        TextBlock(const MOSSImageConfig& config)
++            : config(config) {
++            blocks["norm1"]    = std::make_shared<RMSNorm>(config.dim, 1e-6f);
++            blocks["norm2"]    = std::make_shared<RMSNorm>(config.dim, 1e-6f);
++            blocks["q_norm"]   = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
++            blocks["k_norm"]   = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
++            blocks["qkv"]      = std::make_shared<Linear>(config.dim, config.dim * 3, true);
++            blocks["proj"]     = std::make_shared<Linear>(config.dim, config.dim, true);
++            blocks["ffn_up"]   = std::make_shared<Linear>(config.dim, config.ffn_dim, true);
++            blocks["ffn_gate"] = std::make_shared<Linear>(config.dim, config.ffn_dim, true);
++            blocks["ffn_down"] = std::make_shared<Linear>(config.ffn_dim, config.dim, true);
++        }
++
++        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x, ggml_tensor* pe) {
++            auto c      = ctx->ggml_ctx;
++            auto linear = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<Linear>(blocks[name])->forward(ctx, h); };
++            auto norm   = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<RMSNorm>(blocks[name])->forward(ctx, h); };
++            auto y      = norm("norm1", x);
++            auto qkv    = linear("qkv", y);
++            auto split  = [&](int i) {
++                return ggml_reshape_4d(c, ggml_ext_slice(c, qkv, 0, i * config.dim, (i + 1) * config.dim), config.head_dim, config.dim / config.head_dim, x->ne[1], x->ne[2]);
++            };
++            auto q = norm("q_norm", split(0));
++            auto k = norm("k_norm", split(1));
++            auto v = split(2);
++            y      = Rope::attention(ctx, q, k, v, pe, nullptr, 1.f, false);
++            y      = linear("proj", y);
++            x      = ggml_add(c, x, y);
++            y      = norm("norm2", x);
++            y      = situ(c, linear("ffn_up", y), linear("ffn_gate", y));
++            y      = linear("ffn_down", y);
++            return ggml_add(c, x, y);
++        }
++    };
++
++    struct Block : public GGMLBlock {
++        MOSSImageConfig config;
++
++        Block(const MOSSImageConfig& config)
++            : config(config) {
++            blocks["norm1"]            = std::make_shared<RMSNorm>(config.dim, 1e-6f);
++            blocks["norm2"]            = std::make_shared<RMSNorm>(config.dim, 1e-6f);
++            blocks["q_norm"]           = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
++            blocks["k_norm"]           = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
++            blocks["proj.qkv"]         = std::make_shared<Linear>(config.dim, config.dim * 3, false);
++            blocks["proj.o"]           = std::make_shared<Linear>(config.dim, config.dim, false);
++            blocks["proj.ffn_up_gate"] = std::make_shared<Linear>(config.dim, config.ffn_dim * 2, false);
++            blocks["proj.ffn_down"]    = std::make_shared<Linear>(config.ffn_dim, config.dim, false);
++        }
++
++        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x, ggml_tensor* pe, ggml_tensor* mod) {
++            auto c      = ctx->ggml_ctx;
++            auto linear = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<Linear>(blocks[name])->forward(ctx, h); };
++            auto norm   = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<RMSNorm>(blocks[name])->forward(ctx, h); };
++            auto part   = [&](int i) { return ggml_ext_slice(c, mod, 0, i * config.dim, (i + 1) * config.dim); };
++            auto y      = norm("norm1", x);
++            y           = ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(1))), part(0));
++            auto qkv    = linear("proj.qkv", y);
++            auto split  = [&](int i) {
++                return ggml_reshape_4d(c, ggml_ext_slice(c, qkv, 0, i * config.dim, (i + 1) * config.dim), config.head_dim, config.dim / config.head_dim, x->ne[1], x->ne[2]);
++            };
++            auto q       = norm("q_norm", split(0));
++            auto k       = norm("k_norm", split(1));
++            auto v       = split(2);
++            y            = Rope::attention(ctx, q, k, v, pe, nullptr, 1.f, false);
++            y            = linear("proj.o", y);
++            y            = ggml_mul(c, y, part(2));
++            x            = ggml_add(c, x, y);
++            y            = norm("norm2", x);
++            y            = ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(4))), part(3));
++            auto up_gate = linear("proj.ffn_up_gate", y);
++            y            = situ(c, ggml_ext_slice(c, up_gate, 0, 0, config.ffn_dim), ggml_ext_slice(c, up_gate, 0, config.ffn_dim, 2 * config.ffn_dim));
++            y            = linear("proj.ffn_down", y);
++            y            = ggml_mul(c, y, part(5));
++            return ggml_add(c, x, y);
++        }
++    };
++
++    struct Model : public GGMLBlock {
++        MOSSImageConfig config;
++
++        Model(const MOSSImageConfig& config)
++            : config(config) {
++            blocks["video_embedder"]     = std::make_shared<Linear>(config.channels, config.dim, true);
++            blocks["text_embedder.proj"] = std::make_shared<Linear>(config.text_dim, config.dim, true);
++            for (int i = 0; i < 2; ++i) {
++                blocks["text_embedder.blocks." + std::to_string(i)] = std::make_shared<TextBlock>(config);
++            }
++            blocks["time_embedding.0"]        = std::make_shared<Linear>(config.freq_dim, config.dim, true);
++            blocks["time_embedding.2"]        = std::make_shared<Linear>(config.dim, config.dim, true);
++            blocks["shared_block_modulation"] = std::make_shared<Linear>(config.dim, 6 * config.dim, true);
++            blocks["video_head_modulation"]   = std::make_shared<Linear>(config.dim, 2 * config.dim, true);
++            for (int64_t i = 0; i < config.depth; ++i) {
++                blocks["layers." + std::to_string(i)] = std::make_shared<Block>(config);
++            }
++            blocks["final_norm_video"]   = std::make_shared<RMSNorm>(config.dim, 1e-6f);
++            blocks["final_linear_video"] = std::make_shared<Linear>(config.dim, config.channels, false);
++        }
++
++        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* image, ggml_tensor* time, ggml_tensor* text, ggml_tensor* pe, const std::vector<int>& skip) {
++            auto c            = ctx->ggml_ctx;
++            auto linear       = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<Linear>(blocks[name])->forward(ctx, h); };
++            int64_t image_len = image->ne[0] * image->ne[1];
++            auto x            = linear("video_embedder", DiT::patchify(c, image, 1, 1));
++            text              = linear("text_embedder.proj", text);
++            auto text_pe      = ggml_ext_slice(c, pe, 3, image_len, image_len + text->ne[1]);
++            for (int i = 0; i < 2; ++i) {
++                text = std::dynamic_pointer_cast<TextBlock>(blocks["text_embedder.blocks." + std::to_string(i)])->forward(ctx, text, text_pe);
++            }
++            time      = linear("time_embedding.2", ggml_silu(c, linear("time_embedding.0", time)));
++            auto mod  = linear("shared_block_modulation", time);
++            auto head = linear("video_head_modulation", time);
++            x         = ggml_concat(c, x, text, 1);
++            for (int64_t i = 0; i < config.depth; ++i) {
++                if (std::find(skip.begin(), skip.end(), i) == skip.end()) {
++                    x = std::dynamic_pointer_cast<Block>(blocks["layers." + std::to_string(i)])->forward(ctx, x, pe, mod);
++                    sd::ggml_graph_cut::mark_graph_cut(x, "moss_image.layers." + std::to_string(i), "x");
++                }
++            }
++            x          = ggml_ext_slice(c, x, 1, 0, image_len);
++            x          = std::dynamic_pointer_cast<RMSNorm>(blocks["final_norm_video"])->forward(ctx, x);
++            auto shift = ggml_ext_slice(c, head, 0, 0, config.dim);
++            auto scale = ggml_ext_slice(c, head, 0, config.dim, 2 * config.dim);
++            x          = ggml_add(c, ggml_add(c, x, ggml_mul(c, x, scale)), shift);
++            x          = linear("final_linear_video", x);
++            return DiT::unpatchify(c, x, image->ne[1], image->ne[0], 1, 1);
++        }
++    };
++
++    struct MOSSImageRunner : public DiffusionModelRunner {
++        MOSSImageConfig config;
++        Model model;
++        std::vector<float> pe_data, time_data;
++
++        MOSSImageRunner(ggml_backend_t backend, const String2TensorStorage& weights, const std::string& prefix, std::shared_ptr<RunnerWeightManager> weight_manager = nullptr)
++            : DiffusionModelRunner(backend, prefix, weight_manager), config(MOSSImageConfig::detect_from_weights(weights, prefix)), model(config) {
++            model.init(params_ctx, weights, prefix);
++        }
++
++        std::string get_desc() override { return "MOSS-Image"; }
++        void get_param_tensors(std::map<std::string, ggml_tensor*>& tensors, const std::string& prefix) override {
++            model.get_param_tensors(tensors, prefix);
++        }
++
++        sd::Tensor<float> compute(int n_threads, const DiffusionParams& inputs) override {
++            if (!inputs.x || !inputs.context || !inputs.timesteps || inputs.context->empty()) {
++                LOG_ERROR("MOSS-Image requires latents, timesteps and text features");
++                return {};
++            }
++            std::vector<int> skip;
++            if (auto extra = std::get_if<SkipLayerDiffusionExtra>(&inputs.extra)) {
++                if (extra->skip_layers) {
++                    skip = *extra->skip_layers;
++                }
++            }
++            auto graph = [&]() {
++                auto gf   = new_graph_custom(65536);
++                auto x    = make_input(*inputs.x);
++                auto text = make_input(*inputs.context);
++                GGML_ASSERT(x->ne[3] == 1 && x->ne[2] == config.channels && text->ne[0] == config.text_dim);
++                int64_t h = x->ne[1], w = x->ne[0], nt = text->ne[1];
++                Rope::Embedding embedding;
++                embedding.positions.append_image(static_cast<int>(h), static_cast<int>(w));
++                embedding.positions.images.back().height_axis = 2;
++                embedding.positions.images.back().width_axis  = 3;
++                embedding.positions.append_tokens(nt);
++                for (int64_t token = 0; token < h * w + nt; ++token) {
++                    float pos[4] = {0.f, float(token - h * w), 0.f, 0.f};
++                    if (token < h * w) {
++                        pos[1] = float(nt);
++                        pos[2] = float(token / w) - float(h - 1) / 2.f;
++                        pos[3] = float(token % w) - float(w - 1) / 2.f;
++                    }
++                    embedding.ids.push_back({pos[0], pos[1], pos[2], pos[3]});
++                }
++                embedding.values = Rope::embed_nd(embedding.ids, 1, 10000.f, std::vector<int>(4, static_cast<int>(config.head_dim / 4)), embedding.layout, &embedding.frequencies);
++                pe_data          = finish_rope_pe(std::move(embedding));
++                time_data.resize(config.freq_dim);
++                for (int64_t i = 0; i < config.freq_dim / 2; ++i) {
++                    double angle                       = inputs.timesteps->values()[0] * std::pow(10000.0, -double(i) / double(config.freq_dim / 2));
++                    time_data[i]                       = float(std::cos(angle));
++                    time_data[i + config.freq_dim / 2] = float(std::sin(angle));
++                }
++                auto pe   = ggml_new_tensor_4d(compute_ctx, GGML_TYPE_F32, 2, 2, config.head_dim / 2, h * w + nt);
++                auto time = ggml_new_tensor_3d(compute_ctx, GGML_TYPE_F32, config.freq_dim, 1, 1);
++                set_backend_tensor_data(pe, pe_data.data());
++                set_backend_tensor_data(time, time_data.data());
++                auto ctx = get_context();
++                ggml_build_forward_expand(gf, model.forward(&ctx, x, time, text, pe, skip));
++                return gf;
++            };
++            return restore_trailing_singleton_dims(GGMLRunner::compute(graph, n_threads, false), inputs.x->dim());
++        }
++    };
++}  // namespace MOSSImage
++
++#endif  // __SD_MODEL_DIFFUSION_MOSS_IMAGE_HPP__
+--- a/src/model/te/llm.hpp
++++ b/src/model/te/llm.hpp
+@@ -43,6 +43,7 @@
+         QWEN2_5_VL,
+         QWEN3,
+         QWEN3_VL,
++        QWEN3_5,
+         MISTRAL_SMALL_3_2,
+         MINISTRAL_3_3B,
+         GEMMA3_12B,
+@@ -59,6 +60,7 @@
+         "qwen2.5vl",
+         "qwen3",
+         "qwen3vl",
++        "qwen3.5",
+         "mistral_small3.2",
+         "ministral3.3b",
+         "gemma3_12b",
+@@ -121,6 +123,7 @@
+         bool qk_norm                    = false;
+         bool final_norm                 = true;
+         bool rms_norm_add               = false;
++        bool qwen35_gguf                = false;
+         bool normalize_input            = false;
+         int64_t vocab_size              = 152064;
+         int64_t max_position_embeddings = 128000;
+@@ -134,6 +137,11 @@
+         bool qkv_fused              = false;
+         bool bidirectional          = false;
+         float partial_rotary        = 1.f;
++        int linear_head_dim         = 128;
++        int linear_key_heads        = 16;
++        int linear_value_heads      = 32;
++        int linear_conv_kernel      = 4;
++        std::set<int> linear_attention_layers;
+ 
+         // DeepSeek-V3-style grouped-sigmoid MoE routing (LLaDA2)
+         int64_t moe_intermediate_size = 0;
+@@ -167,6 +175,19 @@
+                 config.num_kv_heads = 8;
+                 config.qkv_bias     = false;
+                 config.rms_norm_eps = 1e-5f;
++            } else if (arch == LLMArch::QWEN3_5) {
++                config.hidden_size             = 4096;
++                config.intermediate_size       = 12288;
++                config.head_dim                = 256;
++                config.num_heads               = 16;
++                config.num_kv_heads            = 4;
++                config.qkv_bias                = false;
++                config.qk_norm                 = true;
++                config.rms_norm_add            = true;
++                config.partial_rotary          = 0.25f;
++                config.rope_thetas             = {10000000.f};
++                config.max_position_embeddings = 262144;
++                config.vocab_size              = 248320;
+             } else if (arch == LLMArch::QWEN3 || arch == LLMArch::QWEN3_VL) {
+                 config.head_dim     = 128;
+                 config.num_heads    = 32;
+@@ -365,6 +386,41 @@
+             if ((arch == LLMArch::QWEN3 || arch == LLMArch::QWEN3_VL) && config.num_layers == 28) {
+                 config.num_heads = 16;
+             }
++            if (arch == LLMArch::QWEN3_5) {
++                config.qwen35_gguf  = tensor_storage_map.count(prefix + ".model.layers.0.linear_attn.A") > 0;
++                config.rms_norm_add = !config.qwen35_gguf;
++                for (const auto& [name, tensor] : tensor_storage_map) {
++                    if (!starts_with(name, prefix + ".")) {
++                        continue;
++                    }
++                    if (ends_with(name, "self_attn.q_norm.weight")) {
++                        config.head_dim = static_cast<int>(tensor.ne[0]);
++                    } else if (ends_with(name, "linear_attn.norm.weight")) {
++                        config.linear_head_dim = static_cast<int>(tensor.ne[0]);
++                    } else if (ends_with(name, "linear_attn.conv1d.weight")) {
++                        config.linear_conv_kernel = static_cast<int>(tensor.ne[0]);
++                        const auto pos            = name.find("layers.");
++                        config.linear_attention_layers.insert(std::stoi(name.substr(pos + 7)));
++                    }
++                }
++                for (const auto& [name, tensor] : tensor_storage_map) {
++                    if (!starts_with(name, prefix + ".")) {
++                        continue;
++                    }
++                    if (ends_with(name, "self_attn.q_proj.weight")) {
++                        config.num_heads = static_cast<int>(tensor.ne[1] / (2 * config.head_dim));
++                    } else if (ends_with(name, "self_attn.k_proj.weight")) {
++                        config.num_kv_heads = static_cast<int>(tensor.ne[1] / config.head_dim);
++                    } else if (ends_with(name, "linear_attn.in_proj_z.weight")) {
++                        config.linear_value_heads = static_cast<int>(tensor.ne[1] / config.linear_head_dim);
++                    }
++                }
++                for (const auto& [name, tensor] : tensor_storage_map) {
++                    if (starts_with(name, prefix + ".") && ends_with(name, "linear_attn.in_proj_qkv.weight")) {
++                        config.linear_key_heads = static_cast<int>((tensor.ne[1] / config.linear_head_dim - config.linear_value_heads) / 2);
++                    }
++                }
++            }
+             if (arch == LLMArch::QWEN3_VL &&
+                 (config.num_layers == 50 || config.num_layers == 64) &&
+                 config.hidden_size == 5120) {
+@@ -1390,6 +1446,81 @@
+         }
+     };
+ 
++    struct Qwen35DeltaNet : public UnaryBlock {
++        int head_dim;
++        int key_heads;
++        int value_heads;
++        int conv_dim;
++        int kernel;
++        bool gguf_layout;
++
++        Qwen35DeltaNet(const LLMConfig& config)
++            : head_dim(config.linear_head_dim), key_heads(config.linear_key_heads), value_heads(config.linear_value_heads), conv_dim(head_dim * (key_heads * 2 + value_heads)), kernel(config.linear_conv_kernel), gguf_layout(config.qwen35_gguf) {
++            auto hidden_size      = config.hidden_size;
++            blocks["in_proj_qkv"] = std::make_shared<Linear>(hidden_size, conv_dim, false);
++            blocks["in_proj_z"]   = std::make_shared<Linear>(hidden_size, head_dim * value_heads, false);
++            blocks["in_proj_a"]   = std::make_shared<Linear>(hidden_size, value_heads, false);
++            blocks["in_proj_b"]   = std::make_shared<Linear>(hidden_size, value_heads, false);
++            blocks["out_proj"]    = std::make_shared<Linear>(head_dim * value_heads, hidden_size, false);
++            blocks["norm"]        = std::make_shared<LLMRMSNorm>(head_dim, 1e-6f);
++        }
++
++        void init_params(ggml_context* ctx, const String2TensorStorage& = {}, std::string = "") override {
++            params["conv1d.weight"]             = gguf_layout ? ggml_new_tensor_2d(ctx, GGML_TYPE_F32, kernel, conv_dim) : ggml_new_tensor_3d(ctx, GGML_TYPE_F32, kernel, 1, conv_dim);
++            params[gguf_layout ? "A" : "A_log"] = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, value_heads);
++            params["dt_bias"]                   = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, value_heads);
++        }
++
++        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
++            auto c          = ctx->ggml_ctx;
++            const int64_t n = x->ne[1];
++            GGML_ASSERT(x->ne[2] == 1);
++            auto linear        = [&](const char* name) { return std::dynamic_pointer_cast<Linear>(blocks[name])->forward(ctx, x); };
++            auto qkv           = linear("in_proj_qkv");
++            auto padded        = ggml_pad_ext(c, qkv, 0, 0, kernel - 1, 0, 0, 0, 0, 0);
++            ggml_tensor* mixed = nullptr;
++            // Causal depthwise convolution, with zero state for every independent prompt.
++            for (int i = 0; i < kernel; ++i) {
++                auto w    = ggml_cont(c, ggml_view_2d(c, params["conv1d.weight"], 1, conv_dim, kernel * sizeof(float), i * sizeof(float)));
++                w         = ggml_reshape_1d(c, w, conv_dim);
++                auto part = ggml_mul(c, ggml_ext_slice(c, padded, 1, i, i + n), w);
++                mixed     = mixed ? ggml_add(c, mixed, part) : part;
++            }
++            mixed      = ggml_silu(c, mixed);
++            auto heads = [&](int start, int count) {
++                auto h = ggml_ext_slice(c, mixed, 0, start, start + head_dim * count);
++                return ggml_reshape_4d(c, h, head_dim, count, n, 1);
++            };
++            auto repeat_keys = [&](ggml_tensor* h) {
++                h = ggml_scale(c, ggml_rms_norm(c, h, 1e-6f / head_dim), 1.f / std::sqrt(float(head_dim)));
++                // llama.cpp reorders V heads and stores negative exp(A_log) and offset norms.
++                if (gguf_layout) {
++                    return h;
++                }
++                // ggml GDN broadcasts heads cyclically; Qwen uses adjacent repeated heads.
++                h          = ggml_reshape_4d(c, h, head_dim, 1, key_heads, n);
++                auto shape = ggml_new_tensor_4d(c, GGML_TYPE_F32, head_dim, value_heads / key_heads, key_heads, n);
++                return ggml_reshape_4d(c, ggml_repeat(c, h, shape), head_dim, value_heads, n, 1);
++            };
++            auto q     = repeat_keys(heads(0, key_heads));
++            auto k     = repeat_keys(heads(head_dim * key_heads, key_heads));
++            auto v     = heads(2 * head_dim * key_heads, value_heads);
++            auto beta  = ggml_reshape_4d(c, ggml_sigmoid(c, linear("in_proj_b")), 1, value_heads, n, 1);
++            auto decay = ggml_softplus(c, ggml_add(c, linear("in_proj_a"), params["dt_bias"]));
++            auto a     = gguf_layout ? params["A"] : ggml_neg(c, ggml_exp(c, params["A_log"]));
++            decay      = ggml_mul(c, decay, a);
++            decay      = ggml_reshape_4d(c, decay, 1, value_heads, n, 1);
++            auto state = ggml_ext_zeros(c, head_dim, head_dim, value_heads, 1);
++            auto out   = ggml_gated_delta_net(c, q, k, v, decay, beta, state, 1);
++            out        = ggml_view_3d(c, out, head_dim, value_heads, n, head_dim * sizeof(float), head_dim * value_heads * sizeof(float), 0);
++            out        = std::dynamic_pointer_cast<LLMRMSNorm>(blocks["norm"])->forward(ctx, out);
++            auto z     = ggml_reshape_3d(c, linear("in_proj_z"), head_dim, value_heads, n);
++            out        = ggml_mul(c, out, ggml_silu(c, z));
++            out        = ggml_reshape_3d(c, out, head_dim * value_heads, n, 1);
++            return std::dynamic_pointer_cast<Linear>(blocks["out_proj"])->forward(ctx, out);
++        }
++    };
++
+     struct Attention : public GGMLBlock {
+     protected:
+         LLMArch arch;
+@@ -1439,7 +1570,7 @@
+                 GGML_ASSERT(!k_eq_v);
+                 blocks["query_key_value"] = std::make_shared<Linear>(config.hidden_size, (num_heads + num_kv_heads * 2) * head_dim, config.qkv_bias);
+             } else {
+-                blocks["q_proj"] = std::make_shared<Linear>(config.hidden_size, num_heads * head_dim, config.qkv_bias);
++                blocks["q_proj"] = std::make_shared<Linear>(config.hidden_size, num_heads * head_dim * (arch == LLMArch::QWEN3_5 ? 2 : 1), config.qkv_bias);
+                 blocks["k_proj"] = std::make_shared<Linear>(config.hidden_size, num_kv_heads * head_dim, config.qkv_bias);
+                 if (!k_eq_v) {
+                     blocks["v_proj"] = std::make_shared<Linear>(config.hidden_size, num_kv_heads * head_dim, config.qkv_bias);
+@@ -1502,6 +1633,13 @@
+                 v = k_eq_v ? k : v_proj->forward(ctx, x);  // [N, n_token, num_kv_heads*head_dim]
+             }
+ 
++            ggml_tensor* output_gate = nullptr;
++            if (arch == LLMArch::QWEN3_5) {
++                q           = ggml_reshape_4d(ctx->ggml_ctx, q, head_dim * 2, num_heads, n_token, N);
++                output_gate = ggml_ext_slice(ctx->ggml_ctx, q, 0, head_dim, head_dim * 2);
++                output_gate = ggml_reshape_3d(ctx->ggml_ctx, output_gate, head_dim * num_heads, n_token, N);
++                q           = ggml_ext_slice(ctx->ggml_ctx, q, 0, 0, head_dim);
++            }
+             q = ggml_reshape_4d(ctx->ggml_ctx, q, head_dim, num_heads, n_token, N);     // [N, n_token, num_heads, head_dim]
+             k = ggml_reshape_4d(ctx->ggml_ctx, k, head_dim, num_kv_heads, n_token, N);  // [N, n_token, num_kv_heads, head_dim]
+             v = ggml_reshape_4d(ctx->ggml_ctx, v, head_dim, num_kv_heads, n_token, N);  // [N, n_token, num_kv_heads, head_dim]
+@@ -1658,7 +1796,7 @@
+                                   1.f,
+                                   32.f,
+                                   1.f);
+-            } else if (arch == LLMArch::LLADA2_MOE) {
++            } else if (arch == LLMArch::LLADA2_MOE || arch == LLMArch::QWEN3_5) {
+                 // LLaDA2 slices the head (query[..., :rotary_dim]) instead of zero-padding
+                 // inv_freq like gemma does, so rotate_half pairs i with i + rotary_dim/2 and the
+                 // frequencies use rotary_dim as the exponent denominator. Passing n_dims =
+@@ -1734,6 +1872,9 @@
+                 x = ggml_ext_attention_ext(ctx, q, k, v, num_heads, attention_mask, true, ctx->flash_attn_enabled);  // [N, n_token, hidden_size]
+             }
+ 
++            if (output_gate) {
++                x = ggml_mul(ctx->ggml_ctx, x, ggml_sigmoid(ctx->ggml_ctx, output_gate));
++            }
+             x = out_proj->forward(ctx, x);  // [N, n_token, hidden_size]
+             return x;
+         }
+@@ -1783,7 +1924,11 @@
+             if (!config.sliding_attention.empty()) {
+                 sliding_attention = config.sliding_attention[layer_index % config.sliding_attention.size()];
+             }
+-            blocks["self_attn"] = std::make_shared<Attention>(config, sliding_attention == 0);
++            if (config.arch == LLMArch::QWEN3_5 && config.linear_attention_layers.count(layer_index)) {
++                blocks["linear_attn"] = std::make_shared<Qwen35DeltaNet>(config);
++            } else {
++                blocks["self_attn"] = std::make_shared<Attention>(config, sliding_attention == 0);
++            }
+             if (config.arch == LLMArch::GPT_OSS_20B) {
+                 blocks["mlp"] = std::make_shared<GPTOSSMLP>(config);
+             } else if ((config.arch == LLMArch::LLADA2_MOE || config.arch == LLMArch::BAILING_MOE) && layer_index >= config.first_k_dense_replace) {
+@@ -1813,7 +1958,7 @@
+                              ggml_tensor* rope_cos               = nullptr,
+                              ggml_tensor* rope_sin               = nullptr) {
+             // x: [N, n_token, hidden_size]
+-            auto self_attn                                  = std::dynamic_pointer_cast<Attention>(blocks["self_attn"]);
++            auto self_attn                                  = blocks.count("self_attn") ? std::dynamic_pointer_cast<Attention>(blocks["self_attn"]) : nullptr;
+             auto input_layernorm                            = std::dynamic_pointer_cast<LLMRMSNorm>(blocks["input_layernorm"]);
+             auto pre_ffw_norm                               = std::dynamic_pointer_cast<LLMRMSNorm>(blocks[pre_ffw_norm_name]);
+             std::shared_ptr<LLMRMSNorm> post_attention_norm = nullptr;
+@@ -1833,7 +1978,11 @@
+ 
+             auto residual = x;
+             x             = input_layernorm->forward(ctx, x);
+-            x             = self_attn->forward(ctx, x, input_pos, block_attention_mask, rope_index, rope_cos, rope_sin);
++            if (blocks.count("linear_attn")) {
++                x = std::dynamic_pointer_cast<Qwen35DeltaNet>(blocks["linear_attn"])->forward(ctx, x);
++            } else {
++                x = self_attn->forward(ctx, x, input_pos, block_attention_mask, rope_index, rope_cos, rope_sin);
++            }
+             if (post_attention_norm != nullptr) {
+                 x = post_attention_norm->forward(ctx, x);
+             }
+@@ -2360,6 +2509,7 @@
+             if (config.arch == LLMArch::MISTRAL_SMALL_3_2 ||
+                 config.arch == LLMArch::MINISTRAL_3_3B ||
+                 config.arch == LLMArch::QWEN3 ||
++                config.arch == LLMArch::QWEN3_5 ||
+                 config.arch == LLMArch::GEMMA3_12B ||
+                 config.arch == LLMArch::GEMMA4_12B ||
+                 config.arch == LLMArch::GEMMA2_2B ||
+--- a/src/model_loader.cpp
++++ b/src/model_loader.cpp
+@@ -441,6 +441,11 @@
+     if (tensor_storage_map.find("model.diffusion_model.emb_in.image.weight") != tensor_storage_map.end() &&
+         tensor_storage_map.find("model.diffusion_model.txt_mode_blocks.0.q_proj.weight") != tensor_storage_map.end()) {
+         return VERSION_FLUX3;
++    }
++
++    if (tensor_storage_map.count("model.diffusion_model.video_embedder.weight") &&
++        tensor_storage_map.count("model.diffusion_model.shared_block_modulation.weight")) {
++        return VERSION_MOSS_IMAGE;
+     }
+ 
+     bool has_multiple_encoders = false;
+@@ -1362,7 +1367,7 @@
+                                       bytes_processed.load(),
+                                       elapsed_seconds);
+             }
+-            std::this_thread::sleep_for(std::chrono::milliseconds(total_tensors_to_process <= 4 ? 10 : 200));
++            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
+ 
+         for (auto& w : workers) {
+--- a/src/name_conversion.cpp
++++ b/src/name_conversion.cpp
+@@ -1663,6 +1663,26 @@
+ 
+     replace_with_prefix_map(name, prefix_map);
+ 
++    if (version == VERSION_MOSS_IMAGE) {
++        const std::string te_prefix = "text_encoders.llm.";
++        if (starts_with(name, te_prefix + "blk.")) {
++            static const std::vector<std::pair<std::string, std::string>> qwen35_name_map = {
++                {"attn_post_norm.", "post_attention_layernorm."},
++                {"post_attention_norm.", "post_attention_layernorm."},
++                {"attn_qkv.", "linear_attn.in_proj_qkv."},
++                {"attn_gate.", "linear_attn.in_proj_z."},
++                {"ssm_conv1d.", "linear_attn.conv1d."},
++                {"ssm_dt.bias", "linear_attn.dt_bias"},
++                {"ssm_norm.", "linear_attn.norm."},
++                {"ssm_out.", "linear_attn.out_proj."},
++                {"ssm_alpha.", "linear_attn.in_proj_a."},
++                {"ssm_beta.", "linear_attn.in_proj_b."},
++                {"ssm_a", "linear_attn.A"},
++            };
++            replace_with_name_map(name, qwen35_name_map);
++        }
++    }
++
+     if (version == VERSION_QWEN_IMAGE_2_1 || sd_version_is_boogu_image(version) || sd_version_is_krea2(version) || sd_version_is_mage_flow(version) || sd_version_is_minimax_h3(version)) {
+         const std::string hf_vision_prefix = "text_encoders.llm.model.visual.";
+         if (starts_with(name, hf_vision_prefix)) {
+--- a/src/pipeline/diffusion_engine.cpp
++++ b/src/pipeline/diffusion_engine.cpp
+@@ -1,4 +1,5 @@
+ #include "diffusion_engine.h"
++extern "C" void ps5_ai_reference_phase(int, int, double);
+ 
+ #include <algorithm>
+ #include <cinttypes>
+@@ -7,6 +8,7 @@
+ #include <list>
+ #include <mutex>
+ #include <set>
++#include <stdexcept>
+ #include <tuple>
+ #include <type_traits>
+ #include <unordered_set>
+@@ -16,6 +18,8 @@
+ #include "core/ggml_extend_backend.h"
+ #include "core/ggml_graph_cut.h"
+ #include "core/ggml_runner.h"
++#include "core/controlnet_cfg.hpp"
++#include "pool.h"
+ #include "core/ggml_tensor_utils.h"
+ #include "core/layer_split_partition.h"
+ #include "core/probe/conv_direct.h"
+@@ -112,6 +116,7 @@
+     "Z-Image L2P",
+     "Iris-3B",
+     "Flux.3 Image Klein",
++    "MOSS-Image",
+ };
+ 
+ static_assert(VERSION_COUNT == sizeof(model_version_to_str) / sizeof(model_version_to_str[0]),
+@@ -380,10 +385,43 @@
+     if (model_manager == nullptr) {
+         return true;
+     }
++    // Image-prompt projection weights are used only while preparing16 owned
++    // image tokens. Retain source/dtype and Vulkan execution, but let normal
++    // runner_end release their buffers before the next CPU text/Vision phase.
++    const bool transient_ip_projection = component == ModelComponent::IPAdapter;
+     ModelManager::ResidencyMode residency_mode =
+-        backend_manager.params_backend_is_disk(module) ? ModelManager::ResidencyMode::Disk : ModelManager::ResidencyMode::ParamBackend;
++        (backend_manager.params_backend_is_disk(module) || transient_ip_projection)
++            ? ModelManager::ResidencyMode::Disk : ModelManager::ResidencyMode::ParamBackend;
++
++    // IP K/V parameters belong to the UNet runner rather than IPAdapterRunner.
++    // Register only these exact optional cross-attention weights as reloadable.
++    // Separate residency groups prevent their storage blocks from mixing with
++    // resident WAI/ControlNet/LoRA weights. The existing manager enforces pins
++    // and frees them through normal runner_end, never while a graph is active.
++    std::map<std::string, ggml_tensor*> transient_ip_kv;
++    if (component == ModelComponent::Diffusion && sd_version_is_sdxl(version)) {
++        const std::string prefix = "model.diffusion_model.";
++        const std::string key_suffix = ".attn2.to_k_ip.weight";
++        const std::string value_suffix = ".attn2.to_v_ip.weight";
++        const auto ends_with = [](const std::string& name, const std::string& suffix) {
++            return name.size() >= suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
++        };
++        for (auto it = group_tensors.begin(); it != group_tensors.end();) {
++            const auto& name = it->first;
++            if (name.rfind(prefix, 0) == 0 && (ends_with(name, key_suffix) || ends_with(name, value_suffix))) {
++                transient_ip_kv.insert(*it);
++                it = group_tensors.erase(it);
++            } else {
++                ++it;
++            }
++        }
++    }
+ 
+     std::vector<ggml_backend_t> module_backends = backend_manager.runtime_backends(module);
++    if (module_backends.size() > 1 && !transient_ip_kv.empty()) {
++        LOG_ERROR("PS5 transient IP K/V residency requires the verified single Vulkan backend");
++        return false;
++    }
+     if (module_backends.size() > 1) {
+         if constexpr (has_set_runtime_backends<T>::value) {
+             if (module == SDBackendModule::DIFFUSION || module == SDBackendModule::TE) {
+@@ -411,7 +449,7 @@
+                  sd_backend_module_name(module),
+                  sd::layer_split_backend_device_display_name(module_backends[0]).c_str());
+     }
+-    return model_manager->register_param_tensors(component,
++    if (!model_manager->register_param_tensors(component,
+                                                  std::move(group_tensors),
+                                                  residency_mode,
+                                                  backend_for(module),
+@@ -419,7 +457,22 @@
+                                                  params_mem_size,
+                                                  false,
+                                                  false,
+-                                                 &tensor_ops);
++                                                 &tensor_ops)) {
++        return false;
++    }
++    if (!transient_ip_kv.empty()) {
++        LOG_INFO("PS5 IP residency: %zu UNet K/V tensors reloadable after runner_end", transient_ip_kv.size());
++        return model_manager->register_param_tensors(component,
++                                                     std::move(transient_ip_kv),
++                                                     ModelManager::ResidencyMode::Disk,
++                                                     backend_for(module),
++                                                     params_backend_for(module),
++                                                     params_mem_size,
++                                                     false,
++                                                     false,
++                                                     &tensor_ops);
++    }
++    return true;
+ }
+ 
+ template <typename T>
+@@ -1490,9 +1543,10 @@
+                    sd_version_is_boogu_image(version) ||
+                    sd_version_is_pid(version) ||
+                    sd_version_is_ideogram4(version) ||
+-                   version == VERSION_IRIS) {
++                   version == VERSION_IRIS ||
++                   version == VERSION_MOSS_IMAGE) {
+             pred_type = FLOW_PRED;
+-            if (sd_version_is_wan(version)) {
++            if (sd_version_is_wan(version) || version == VERSION_MOSS_IMAGE) {
+                 default_flow_shift = 5.f;
+             } else if (sd_version_is_hunyuan_video(version)) {
+                 default_flow_shift = 7.f;
+@@ -2045,6 +2099,9 @@
+     if (embed.empty()) {
+         return;
+     }
++    for(int64_t i=0;i<embed.numel();i++)if(!std::isfinite(embed.data()[i])){
++        LOG_ERROR("PS5 CLIP-Vision produced nonfinite embeddings");return;
++    }
+     ip_adapter_tokens = ip_adapter->compute(n_threads, embed);
+     if (ip_adapter_tokens.empty()) {
+         LOG_ERROR("IP-Adapter conditional image projection failed");
+@@ -2361,6 +2418,23 @@
+     return sd::ops::concat(a, b, static_cast<size_t>(batch_dim));
+ }
+ 
++extern "C" void ps5_ai_controlnet_phase(int, uint64_t, double);
++extern "C" int ps5_ai_ggml_wait_backend(const char*, int);
++extern "C" int ps5_ai_ggml_log_healthy(void);
++extern "C" __attribute__((noreturn)) void ps5_ai_ggml_retain(const char*);
++#ifndef PS5_AI_CONTROLNET_BATCH_PAIR
++#define PS5_AI_CONTROLNET_BATCH_PAIR 0
++#endif
++
++static void require_cfg_allocation_fallback_safe(const char* phase) {
++    ps5_ai_flex_stats pool{};
++    if (!ps5_ai_ggml_wait_backend(phase, 0))
++        ps5_ai_ggml_retain("ControlNet_CFG_pair_fallback_GPU_quiescence_unproven");
++    ps5_ai_flex_snapshot(&pool);
++    if (!pool.mapping_owned || !pool.gpu_access_granted || pool.fault_retained ||
++        !pool.log_healthy || !ps5_ai_ggml_log_healthy())
++        ps5_ai_ggml_retain("ControlNet_CFG_pair_fallback_pool_state_unproven");
++}
+ void StableDiffusionGGML::compute_sample_controls(const sd::Tensor<float>& control_image,
+                                                   const sd::Tensor<float>& noised_input,
+                                                   const sd::Tensor<float>& timesteps_tensor,
+@@ -2368,9 +2442,9 @@
+                                                   std::vector<sd::Tensor<float>>* controls) {
+     GGML_ASSERT(controls != nullptr);
+     controls->clear();
+-    if (control_image.empty() || control_net == nullptr) {
+-        return;
+-    }
++    if (control_image.empty()) return;
++    if (control_net == nullptr) throw std::runtime_error("Requested ControlNet runner is missing");
++    const int64_t control_start=ggml_time_us();
+ 
+     auto control_result = control_net->compute(n_threads,
+                                                noised_input,
+@@ -2378,10 +2452,13 @@
+                                                timesteps_tensor,
+                                                condition.c_crossattn,
+                                                condition.c_vector);
+-    if (!control_result.has_value()) {
+-        LOG_ERROR("controlnet compute failed");
+-        return;
+-    }
++    if (!control_result.has_value() || control_result->empty())
++        throw std::runtime_error("ControlNet compute failed; refusing uncontrolled image");
++    const int64_t batch = noised_input.dim() >= 4 ? noised_input.shape()[3] : 1;
++    const uint64_t checked_values = ps5_ai_controlnet::validate_residuals(
++        *control_result, batch, sd_version_is_sdxl(version));
++    ps5_ai_controlnet_phase(static_cast<int>(control_result->size()),checked_values,
++                           (ggml_time_us()-control_start)/1000000.0);
+ 
+     *controls = std::move(*control_result);
+ }
+@@ -2432,7 +2509,9 @@
+     std::vector<QwenPrefixInputs> qwen_prefix_inputs;
+ 
+     RunnerEndOnExit sample_control_runner_end{!control_image.empty() && control_net != nullptr ? control_net.get() : nullptr};
+-
++    bool controlnet_pair_enabled = PS5_AI_CONTROLNET_BATCH_PAIR != 0;
++
++    int mask_denoise_evaluations=0;
+     const bool apply_denoise_mask = !denoise_mask.empty() &&
+                                     std::any_of(denoise_mask.values().begin(), denoise_mask.values().end(),
+                                                 [](float value) { return value != 1.f; });
+@@ -2582,6 +2661,7 @@
+             cache_runtime.spectrum.predict(&denoised);
+             if (apply_denoise_mask) {
+                 denoised = denoised * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
++                ++mask_denoise_evaluations;
+             }
+             if (preview_needed && sd_should_preview_denoised()) {
+                 preview_image(step, denoised, version, preview.mode, preview.callback, preview.data, false);
+@@ -2600,7 +2680,13 @@
+         sd::Tensor<float> uncond_out;
+         sd::Tensor<float> img_uncond_out;
+         sd_sample::SampleStepCacheDispatcher step_cache(cache_runtime, step, sigma);
+-        std::vector<sd::Tensor<float>> controls;
++        ps5_ai_controlnet::EvaluationResidualCache<SDCondition> control_cache;
++        const auto get_controls = [&](const SDCondition& condition) -> const ps5_ai_controlnet::Residuals& {
++            return control_cache.get(condition, [&](const SDCondition& current,
++                                                      ps5_ai_controlnet::Residuals* result) {
++                compute_sample_controls(control_image, noised_input, timesteps_tensor, current, result);
++            });
++        };
+         DiffusionParams diffusion_params;
+         diffusion_params.x                = &noised_input;
+         diffusion_params.timesteps        = &timesteps_tensor;
+@@ -2609,13 +2695,6 @@
+         step_guidance_input.step          = step;
+         step_guidance_input.schedule_size = sigmas.size();
+         bool is_skiplayer_step            = skip_layer_guidance.is_enabled_for_step(step_guidance_input);
+-
+-        compute_sample_controls(control_image,
+-                                noised_input,
+-                                timesteps_tensor,
+-                                cond,
+-                                &controls);
+-        bool uncond_controls_ready = false;
+ 
+         static const std::vector<sd::Tensor<float>> empty_ref_latents;
+         bool uncond_without_ref_latents = !img_uncond.empty() &&
+@@ -2637,14 +2716,14 @@
+                 if (config_->animatediff_loaded && noised_input.dim() >= 4 && noised_input.shape()[3] > 1) {
+                     nvf = static_cast<int>(noised_input.shape()[3]);
+                 }
+-                UNetDiffusionExtra unet_extra{nvf, &controls, control_strength};
++                UNetDiffusionExtra unet_extra{nvf, nullptr, control_strength};
+                 const auto& ip_tokens = use_uncond_ip ? ip_adapter_uncond_tokens : ip_adapter_tokens;
+                 if (!ip_tokens.empty()) {
+                     unet_extra.ip_context = &ip_tokens;
+                     unet_extra.ip_scale   = ip_adapter_strength;
+                 }
+                 diffusion_params.extra = unet_extra;
+-            } else if (sd_version_is_sd3(version)) {
++            } else if (sd_version_is_sd3(version) || version == VERSION_MOSS_IMAGE) {
+                 diffusion_params.extra = SkipLayerDiffusionExtra{local_skip_layers};
+             } else if (sd_version_is_flux(version) || sd_version_is_flux2(version) || sd_version_is_longcat(version) || sd_version_is_sefi_image(version)) {
+                 diffusion_params.extra = FluxDiffusionExtra{&guidance_tensor,
+@@ -2710,16 +2789,8 @@
+                 return std::move(cached_output);
+             }
+ 
+-            // A re-enabled condition can miss the cache even when the positive pass was reused.
+-            if (!uncond_controls_ready && !uncond.empty() &&
+-                (&condition == &uncond || &condition == &img_uncond)) {
+-                compute_sample_controls(control_image,
+-                                        noised_input,
+-                                        timesteps_tensor,
+-                                        uncond,
+-                                        &controls);
+-                uncond_controls_ready = true;
+-            }
++            if (auto* unet_extra = std::get_if<UNetDiffusionExtra>(&diffusion_params.extra))
++                unet_extra->controls = &get_controls(condition);
+ 
+             for (const auto& extension : generation_extensions) {
+                 extension->before_diffusion(diffusion_params, step);
+@@ -2765,23 +2836,55 @@
+                 return {};
+             }
+ 
+-            std::vector<sd::Tensor<float>> uncond_controls;
+-            compute_sample_controls(control_image, noised_input, timesteps_tensor, uncond, &uncond_controls);
+-            if (controls.size() != uncond_controls.size()) {
+-                return {};
+-            }
+-            std::vector<sd::Tensor<float>> batched_controls;
+-            batched_controls.reserve(controls.size());
+-            for (size_t i = 0; i < controls.size(); i++) {
+-                sd::Tensor<float> batched_control = batch_two_condition_tensors(controls[i], uncond_controls[i]);
+-                if (batched_control.empty()) {
+-                    return {};
+-                }
+-                batched_controls.push_back(std::move(batched_control));
+-            }
+-
+             sd::Tensor<float> batched_x =
+                 sd::ops::concat(noised_input, noised_input, static_cast<size_t>(noised_input.dim() - 1));
++
++            const bool pair_shapes_ok = sd_version_is_sdxl(version) &&
++                noised_input.dim() == 4 && noised_input.shape()[3] == 1 &&
++                control_image.dim() == 4 && control_image.shape()[3] == 1 &&
++                timesteps_tensor.dim() == 1 && timesteps_tensor.numel() == 1 &&
++                batched_context.dim() == 3 && batched_context.shape()[2] == 2 &&
++                batched_y.dim() == 2 && batched_y.shape()[1] == 2;
++            if (controlnet_pair_enabled && !control_image.empty() && pair_shapes_ok &&
++                control_net != nullptr && !control_net->cfg_pair_minimum_allocation_possible(noised_input)) {
++                controlnet_pair_enabled = false;
++                LOG_WARN("ControlNet CFG pair skipped by minimum contiguous-span metadata check; remaining evaluations sequential");
++            }
++            if (controlnet_pair_enabled && !control_image.empty() && pair_shapes_ok) {
++                if (control_net == nullptr)
++                    throw std::runtime_error("Requested ControlNet runner is missing");
++                auto pair_timesteps = sd::ops::concat(timesteps_tensor, timesteps_tensor, 0);
++                const int64_t control_start = ggml_time_us();
++                auto pair_result = control_net->compute(n_threads, batched_x, control_image,
++                                                        pair_timesteps, batched_context, batched_y);
++                if (!pair_result.has_value()) {
++                    if (control_net->last_compute_status() != GGML_STATUS_ALLOC_FAILED)
++                        throw std::runtime_error("ControlNet CFG pair execution failed; sequential retry forbidden");
++                    require_cfg_allocation_fallback_safe("ControlNet_CFG_pair_allocation_fallback");
++                    controlnet_pair_enabled = false;
++                    LOG_WARN("ControlNet CFG pair allocation unavailable; GPU idle verified; remaining evaluations sequential");
++                } else {
++                    const int residual_count = static_cast<int>(pair_result->size());
++                    const uint64_t checked_values = control_cache.set_pair(condition, uncond, std::move(*pair_result), true);
++                    ps5_ai_controlnet_phase(residual_count, checked_values,
++                                           (ggml_time_us() - control_start) / 1000000.0);
++                }
++            }
++
++            ps5_ai_controlnet::Residuals combined_controls;
++            const ps5_ai_controlnet::Residuals* batched_controls = control_cache.pair(condition, uncond);
++            if (batched_controls == nullptr) {
++                const auto& positive_controls = get_controls(condition);
++                const auto& negative_controls = get_controls(uncond);
++                if (positive_controls.size() != negative_controls.size()) return {};
++                combined_controls.reserve(positive_controls.size());
++                for (size_t i = 0; i < positive_controls.size(); i++) {
++                    auto tensor = batch_two_condition_tensors(positive_controls[i], negative_controls[i]);
++                    if (tensor.empty()) return {};
++                    combined_controls.push_back(std::move(tensor));
++                }
++                batched_controls = &combined_controls;
++            }
+ 
+             DiffusionParams batched_params = diffusion_params;
+             batched_params.x               = &batched_x;
+@@ -2789,11 +2892,14 @@
+             batched_params.c_concat        = batched_concat.empty() ? nullptr : &batched_concat;
+             batched_params.y               = batched_y.empty() ? nullptr : &batched_y;
+             batched_params.ref_latents     = nullptr;
+-            batched_params.extra           = UNetDiffusionExtra{1, &batched_controls, control_strength};
++            batched_params.extra           = UNetDiffusionExtra{1, batched_controls, control_strength};
+ 
+             sd::Tensor<float> output = work_diffusion_model->compute(n_threads, batched_params);
+             if (output.empty()) {
+-                LOG_ERROR("batched diffusion model compute failed");
++                if (work_diffusion_model->last_compute_status() != GGML_STATUS_ALLOC_FAILED)
++                    throw std::runtime_error("Batched UNet execution failed; sequential retry forbidden");
++                require_cfg_allocation_fallback_safe("UNet_CFG_pair_allocation_fallback");
++                LOG_WARN("Batched UNet allocation unavailable; GPU idle verified; reusing ControlNet residuals for sequential CFG");
+             }
+             return output;
+         };
+@@ -2860,6 +2966,8 @@
+                 auto parts = sd::ops::chunk(batched_out, 2, 3);
+                 cond_out   = std::move(parts[0]);
+                 uncond_out = std::move(parts[1]);
++            } else if (!batched_out.empty()) {
++                throw std::runtime_error("Batched UNet returned an invalid CFG batch shape");
+             }
+         }
+ 
+@@ -2873,9 +2981,12 @@
+         if (uncond_out.empty() && !uncond.empty()) {
+             if (!skip_uncond) {
+                 const std::vector<int>* uncond_skip_layers = nullptr;
++                const std::vector<int> moss_skip_layers    = {22};
+                 if (is_skiplayer_step && slg_uncond) {
+                     LOG_VERBOSE("Skipping layers at uncond step %d\n", step);
+                     uncond_skip_layers = &skip_layer_guidance.layers();
++                } else if (version == VERSION_MOSS_IMAGE) {
++                    uncond_skip_layers = &moss_skip_layers;
+                 }
+                 uncond_out = run_condition(uncond,
+                                            uncond.c_concat.empty() ? nullptr : &uncond.c_concat,
+@@ -2946,6 +3057,7 @@
+         }
+         if (apply_denoise_mask) {
+             denoised = denoised * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
++            ++mask_denoise_evaluations;
+         }
+         if (preview_needed && sd_should_preview_denoised()) {
+             preview_image(step, denoised, version, preview.mode, preview.callback, preview.data, false);
+@@ -2964,6 +3076,7 @@
+         return {};
+     }
+ 
++    if(apply_denoise_mask)ps5_ai_reference_phase(3,mask_denoise_evaluations,0);
+     auto x0 = std::move(x0_opt);
+     sd_sample::log_sample_cache_summary(cache_runtime, steps);
+     if (inverse_noise_scaling) {
+--- a/src/pipeline/model_builders.cpp
++++ b/src/pipeline/model_builders.cpp
+@@ -31,6 +31,7 @@
+ #include "model/diffusion/minit2i.hpp"
+ #include "model/diffusion/mmdit.hpp"
+ #include "model/diffusion/model.hpp"
++#include "model/diffusion/moss_image.hpp"
+ #include "model/diffusion/pid.hpp"
+ #include "model/diffusion/pixart.hpp"
+ #include "model/diffusion/qwen_image.hpp"
+@@ -468,6 +469,11 @@
+                                                                tensor_storage_map, version, "", false, weight_manager, tokenizers);
+             result.diffusion   = std::make_shared<Iris::IrisRunner>(ctx.backends.runtime_backend(SDBackendModule::DIFFUSION),
+                                                                   tensor_storage_map, "model.diffusion_model", weight_manager);
++        } else if (version == VERSION_MOSS_IMAGE) {
++            result.conditioner = std::make_shared<LLMEmbedder>(ctx.backends.runtime_backend(SDBackendModule::TE),
++                                                               tensor_storage_map, version, "", false, weight_manager, tokenizers);
++            result.diffusion   = std::make_shared<MOSSImage::MOSSImageRunner>(ctx.backends.runtime_backend(SDBackendModule::DIFFUSION),
++                                                                            tensor_storage_map, "model.diffusion_model", weight_manager);
+         } else {  // SD1.x SD2.x SDXL
+             std::map<std::string, std::string> embbeding_map;
+             for (uint32_t i = 0; i < sd_ctx_params->embedding_count; i++) {

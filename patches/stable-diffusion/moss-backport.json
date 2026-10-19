@@ -1,0 +1,87 @@
+{
+  "schema": "ps5-ai-moss-scoped-backport-provenance-v1",
+  "upstream_repository": "https://github.com/leejet/stable-diffusion.cpp",
+  "upstream_base_revision": "8cd731e7b4667eb8f40a153315b9a7125d09a58d",
+  "ggml_revision": "d25b121ce1d6ae0c7e62ad080460d9fc1e46dd93",
+  "moss_support_commit": "68285df319457e2d79310b48513e4ba1bf8ebe9a",
+  "support_commit_parent": "af0fc72c966b08e728422bc3657259cfb4359991",
+  "support_commit_url": "https://github.com/leejet/stable-diffusion.cpp/commit/68285df319457e2d79310b48513e4ba1bf8ebe9a",
+  "license": "MIT (upstream SD.cpp); inherited PS5 integration notices retained in individual overlays",
+  "scope": "Eight runtime support files, not latest-master upgrade; no upstream GGML/kernel changes",
+  "reproduction": "Use tools/build_moss_core.py with --source-freeze and exact private SD/GGML checkout pins. It validates frozen hashes, materializes ALL repository overlays and rebuilds every one of75 core archive members. moss-runtime.patch is a review/reproduction diff against normalized-LF base8cd731e, including preserved PS5 modifications in3 files; do not apply it after overwriting the same files with overlay copies.",
+  "patch": "moss-runtime.patch",
+  "patch_sha256": "27a3b3011940c88846d25c8faf4b8122646087eeabb282c9ca07003464ad85e8",
+  "runtime_files": [
+    {
+      "path": "src/conditioning/conditioner.hpp",
+      "overlay": "overlay/src/conditioning/conditioner.hpp",
+      "base_normalized_lf_sha256": "5f8396d8fe6a649e96b047e68ceac4761fcf13ab4402348711f7c8dfb9df04d3",
+      "overlay_bytes": 188894,
+      "overlay_sha256": "0ae529d95106ccff78f7a44fb7abc7d468350b37c0541b4ee0c54fa751d8872b",
+      "role": "MOSS upstream support with preserved PS5 overrides"
+    },
+    {
+      "path": "src/model.h",
+      "overlay": "overlay/src/model.h",
+      "base_normalized_lf_sha256": "7ab395bfc3840c6472a62b29e2515e2bfcff09c097ef0ed64c68fb8d0fe83f59",
+      "overlay_bytes": 10582,
+      "overlay_sha256": "53a41d7249c92f0d8c06d42e1662d6c9e16f026243d2a26aeb2dda64388673bc",
+      "role": "scoped upstream MOSS support"
+    },
+    {
+      "path": "src/model/diffusion/moss_image.hpp",
+      "overlay": "overlay/src/model/diffusion/moss_image.hpp",
+      "base_normalized_lf_sha256": null,
+      "overlay_bytes": 14798,
+      "overlay_sha256": "791ac3c654c8dcb0e606251e3814d58d17e38086e76c5bc49adff3d5413e5d67",
+      "role": "scoped upstream MOSS support"
+    },
+    {
+      "path": "src/model/te/llm.hpp",
+      "overlay": "overlay/src/model/te/llm.hpp",
+      "base_normalized_lf_sha256": "f6128bc8f1327a775c39bf04543aa574e0d73949cec62ed3901c437b5c326238",
+      "overlay_bytes": 174549,
+      "overlay_sha256": "05869a762d03d61faf311fef77c8e325e54eb2b3ff79745cc5b6ffa91f8af18d",
+      "role": "scoped upstream MOSS support"
+    },
+    {
+      "path": "src/model_loader.cpp",
+      "overlay": "overlay/src/model_loader.cpp",
+      "base_normalized_lf_sha256": "6a737fab343f782655c1d149cd50525fcde4c87f1009ee3b1771278c31fc6e72",
+      "overlay_bytes": 67912,
+      "overlay_sha256": "e9171774ff329dc676d13e542c6445a0a4e540c3f30b6bd84283aacf009e171d",
+      "role": "MOSS upstream support with preserved PS5 overrides"
+    },
+    {
+      "path": "src/name_conversion.cpp",
+      "overlay": "overlay/src/name_conversion.cpp",
+      "base_normalized_lf_sha256": "ae1a63da26efdf558d4adfdb0418d438a90b2bf5448416c48de16a4c857b387b",
+      "overlay_bytes": 83372,
+      "overlay_sha256": "93fd2d62830819adc4cd437bb67928d0618a9f287db3637b8daa96fc7f07bf77",
+      "role": "scoped upstream MOSS support"
+    },
+    {
+      "path": "src/pipeline/diffusion_engine.cpp",
+      "overlay": "overlay/src/pipeline/diffusion_engine.cpp",
+      "base_normalized_lf_sha256": "8d857beffa75230a2a585e2ceef44399df46fbbb67dc4535078ff999e2f6951c",
+      "overlay_bytes": 159896,
+      "overlay_sha256": "c241677cd396b68360d3571f7407283ce70764715226361d9ea6219e21ad3447",
+      "role": "MOSS upstream support with preserved PS5 overrides"
+    },
+    {
+      "path": "src/pipeline/model_builders.cpp",
+      "overlay": "overlay/src/pipeline/model_builders.cpp",
+      "base_normalized_lf_sha256": "d58f1f00a8837610642deb38d5908b3745b2242d385f6547d7dffd17c7d70500",
+      "overlay_bytes": 50784,
+      "overlay_sha256": "84c8c771d0fd5ee711c8219a257cc1fa941ed9bf10a5b30e32f77a0a711366c0",
+      "role": "scoped upstream MOSS support"
+    }
+  ],
+  "additional_ps5_engine_changes": [
+    "bounded quantized scratch admission in overlay/src/core/vulkan_scratch_bounds.hpp",
+    "external tokenizer +explicit flow scheduler/native engine integration",
+    "requested12GiB VA profile with1GiB regions, capacity not proved",
+    "compile-time runtime admission default0 before explicit AGC/data allocation"
+  ],
+  "verification": "Host config57, CPU-loan44, actual pool35 cases, pinned GGML metadata constructor21 checks;3 PS5-target syntax-only inputs pass. This is not console inference or physical memory allocation verification."
+}

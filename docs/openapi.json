@@ -1,13 +1,13 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "PS5 AI Anima Images API",
-    "version": "0.1.0-text2img",
-    "description": "OpenAI Images generation protocol subset for Anima Turbo v1.1. The CPU gateway on PS5 port8191 forwards exactly one job to the same-console native GPU engine on8190. All inference runs onPS5. PNG, n=1, non-streaming, Bearer authentication and same-LAN /24 access only. Native asynchronous jobs remain on8190. Returned image URLs are image-only HMAC capabilities valid up to1hour; API secrets are never put in URLs. Text-to-image only in this version. SDXL manga LoRA, IP-Adapter, ControlNet, img2img, masks and inpainting are unsupported and explicitly rejected; WAI models and ports8188/8189 are not reused."
+    "title": "PS5 AI MOSS Image API",
+    "version": "0.1.0-host-prepared",
+    "description": "Host-prepared OpenAI Images generation protocol subset for MOSS Image SFT. The CPU gateway on PS5 port8193 is designed to forward exactly one job to the same-console native GPU engine on8192. No MOSS inference or PS5 deployment has been verified. PNG, n=1, non-streaming, Bearer authentication and same private-LAN /24 access. Native asynchronous jobs remain on8192. Image-only HMAC URLs last up to1hour; API secrets never enter URLs. Text-to-image only. SDXL manga LoRA, IP-Adapter, ControlNet, img2img, masks and inpainting are explicitly unsupported. WAI ports8188/8189 and Anima8190/8191 remain isolated. Default50 steps, CFG3, Euler, flow_shift5; width and height must be64..1024 and multiples of16."
   },
   "servers": [
     {
-      "url": "http://{ps5_host}:8191",
+      "url": "http://{ps5_host}:8193",
       "variables": {
         "ps5_host": {
           "default": "192.168.1.100",
@@ -47,7 +47,7 @@
               "null"
             ],
             "enum": [
-              "anima-turbo-v1.1",
+              "moss-image-sft",
               null
             ],
             "description": " Null uses the default."
@@ -70,7 +70,7 @@
               "null"
             ],
             "default": "1024x1024",
-            "description": "auto, or WIDTHxHEIGHT; dimensions64..1024 and multiples of64 Null uses the default."
+            "description": "auto, or WIDTHxHEIGHT; dimensions64..1024 and multiples of16 Null uses the default."
           },
           "response_format": {
             "type": [
@@ -161,7 +161,7 @@
             ],
             "minimum": 1,
             "maximum": 100,
-            "default": 8,
+            "default": 50,
             "description": " Null uses the default."
           },
           "cfg_scale": {
@@ -171,7 +171,7 @@
             ],
             "minimum": 0,
             "maximum": 30,
-            "default": 1,
+            "default": 3,
             "description": " Null uses the default."
           },
           "seed": {
@@ -208,7 +208,7 @@
               null
             ],
             "default": 0,
-            "description": "Compatibility field: fixed0. SDXL manga LoRA is incompatible with Anima."
+            "description": "Compatibility field: fixed0. SDXL manga LoRA is incompatible with MOSS Image."
           },
           "manga_monochrome": {
             "type": [
@@ -221,6 +221,16 @@
             ],
             "default": false,
             "description": "Compatibility field: fixedfalse. No automatic monochrome prompt is added."
+          },
+          "flow_shift": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "maximum": 3.4028234663852886e+38,
+            "default": 5,
+            "description": "PS5 MOSS extension. Must remain a positive finite float after conversion; values that underflow to zero are rejected. Null uses default5."
           }
         }
       }
@@ -579,7 +589,7 @@
         "operationId": "health",
         "responses": {
           "200": {
-            "description": "Anima gateway/backend health, exact model path guard, and supported-feature flags. model_id=anima-turbo-v1.1. features.text_to_image=true; img2img, inpainting, ip_adapter, controlnet, sdxl_manga_lora=false."
+            "description": "MOSS Image gateway/backend health, exact model path guard, and supported-feature flags. model_id=moss-image-sft. features.text_to_image=true; img2img, inpainting, ip_adapter, controlnet, sdxl_manga_lora=false."
           },
           "401": {
             "description": "OpenAI-shaped error",
@@ -741,7 +751,7 @@
     "/v1/images/edits": {
       "post": {
         "operationId": "unsupportedImageEdit",
-        "description": "Unsupported for the Anima text-to-image backend. Authenticated POSTs return400 without uploading an image or submitting inference.",
+        "description": "Unsupported for the MOSS Image text-to-image backend. Authenticated POSTs return400 without uploading an image or submitting inference.",
         "responses": {
           "400": {
             "description": "OpenAI-shaped error",

@@ -63,7 +63,7 @@ static const char *wai_find(char rows[][128],size_t n,const char *prefix) {
     return NULL;
 }
 static int wai_technical_row(const char *line) {
-    static const char *prefix[]={"PS5 AI Anima","MODEL:","PS5 UTC ","PID:","STATE:","JOB:","PROGRESS:",
+    static const char *prefix[]={"PS5 AI MOSS Image","MODEL:","PS5 UTC ","PID:","STATE:","JOB:","PROGRESS:",
         "PROCESS CURRENT RSS:","PROCESS PEAK RSS:","PROCESS CPU:","GPU BUSY:","TEMPERATURE:",
         "DIRECT DATA USED:","DIRECT DATA PEAK:","DRIVER ARENA USED:","DISPATCH:"};
     for(unsigned i=0;i<sizeof(prefix)/sizeof(prefix[0]);i++)if(!strncmp(line,prefix[i],strlen(prefix[i])))return 1;
@@ -78,7 +78,7 @@ static int ps5_ai_dashboard_draw(unsigned char *frame,const struct ps5_ai_status
     memset(frame,0,(size_t)PS5_AI_STATUS_FRAME_BYTES);wai_rect(&c,0,0,1920,1080,WAI_BG);
     wai_round(&c,64,46,88,88,20,WAI_CARD);
     for(unsigned y=0;y<72;y++)for(unsigned x=0;x<72;x++)wai_pixel(&c,72+(int)x,54+(int)y,wai_brand_pixels[y*72+x]);
-    wai_text(&c,176,40,920,3,WAI_FG,WAI_BG,"PS5 AI Anima");
+    wai_text(&c,176,40,920,3,WAI_FG,WAI_BG,"PS5 AI MOSS Image");
     const char *model=wai_find(rows,n,"MODEL: ");
     if(model)wai_text(&c,180,111,1080,0,WAI_MUTED,WAI_BG,model);
     /* Heartbeat describes the display loop only, never GPU utilization. */

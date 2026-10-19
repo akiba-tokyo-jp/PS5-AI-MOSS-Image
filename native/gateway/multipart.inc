@@ -129,10 +129,10 @@ static int multipart_json(edit_part *parts,unsigned count,const char *init,const
     if(used+2>cap)return 0;json[used++]='}';json[used]=0;return 1;
 }
 static int openai_edit_submit(socket_t fd,const unsigned char *body,size_t size,const char *type) {
-    /* Keep the inherited parser source for a future Anima-compatible backend,
+    /* Keep the inherited parser source for a future MOSS Image-compatible backend,
      * but never upload or enqueue an unsupported SDXL image-conditioning job. */
-    const int anima_image_edits_supported=0;
-    if(!anima_image_edits_supported){openai_error(fd,400,"Anima Turbo v1.1 currently supports text-to-image only; image edits, masks and IP-Adapter are unsupported","image");return 0;}
+    const int moss_image_edits_supported=0;
+    if(!moss_image_edits_supported){openai_error(fd,400,"MOSS Image SFT currently supports text-to-image only; image edits, masks and IP-Adapter are unsupported","image");return 0;}
     edit_part parts[24];unsigned count;char error[768],param[64]={0},mode[32]="img2img";
     if(!multipart_parts(type,body,size,parts,&count,error,sizeof(error))){openai_error(fd,400,error,NULL);return 0;}
     edit_part *image=NULL,*reference_image=NULL,*mask=NULL;int grayscale=0,has_mask_mode=0;
