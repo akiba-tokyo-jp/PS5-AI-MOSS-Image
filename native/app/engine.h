@@ -44,6 +44,8 @@ typedef struct ps5_ai_engine_status {
     char driver[256];
     char model[512];
     char reason[512];
+    /* Internal engine/API diagnostic, not the shared display/driver ABI. */
+    char model_initialization[640];
 } ps5_ai_engine_status;
 
 typedef struct ps5_ai_stats {

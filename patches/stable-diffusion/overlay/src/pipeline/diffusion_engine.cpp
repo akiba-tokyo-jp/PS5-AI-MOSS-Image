@@ -1,4 +1,5 @@
 #include "diffusion_engine.h"
+#include "init_stage.h"
 extern "C" void ps5_ai_reference_phase(int, int, double);
 
 #include <algorithm>
@@ -788,7 +789,7 @@ bool StableDiffusionGGML::init_model_loader(ModelLoader& model_loader, ModelConf
 
     if (strlen(SAFE_STR(sd_ctx_params->diffusion_model_path)) > 0) {
         LOG_INFO("loading diffusion model from '%s'", sd_ctx_params->diffusion_model_path);
-        if (!model_loader.init_from_file(sd_ctx_params->diffusion_model_path, "model.diffusion_model.")) {
+        if (!ps5_ai_init_stage_call(PS5_AI_INIT_DIT_HEADER, [&]() { return model_loader.init_from_file(sd_ctx_params->diffusion_model_path, "model.diffusion_model."); })) {
             LOG_WARN("loading diffusion model from '%s' failed", sd_ctx_params->diffusion_model_path);
         }
     }
@@ -845,7 +846,7 @@ bool StableDiffusionGGML::init_model_loader(ModelLoader& model_loader, ModelConf
 
     if (strlen(SAFE_STR(sd_ctx_params->llm_path)) > 0) {
         LOG_INFO("loading llm from '%s'", sd_ctx_params->llm_path);
-        if (!model_loader.init_from_file(sd_ctx_params->llm_path, "text_encoders.llm.")) {
+        if (!ps5_ai_init_stage_call(PS5_AI_INIT_QWEN_HEADER, [&]() { return model_loader.init_from_file(sd_ctx_params->llm_path, "text_encoders.llm."); })) {
             LOG_WARN("loading llm from '%s' failed", sd_ctx_params->llm_path);
         }
     }
@@ -859,7 +860,7 @@ bool StableDiffusionGGML::init_model_loader(ModelLoader& model_loader, ModelConf
 
     if (strlen(SAFE_STR(sd_ctx_params->vae_path)) > 0) {
         LOG_INFO("loading vae from '%s'", sd_ctx_params->vae_path);
-        if (!model_loader.init_from_file(sd_ctx_params->vae_path, "vae.")) {
+        if (!ps5_ai_init_stage_call(PS5_AI_INIT_VAE_HEADER, [&]() { return model_loader.init_from_file(sd_ctx_params->vae_path, "vae."); })) {
             LOG_WARN("loading vae from '%s' failed", sd_ctx_params->vae_path);
             external_vae_is_invalid = true;
         }
@@ -1056,7 +1057,7 @@ bool StableDiffusionGGML::init(const sd_ctx_params_t* sd_ctx_params) {
     model_manager->set_prefetch_disabled(disable_prefetch);
     ModelLoader model_loader;
 
-    if (!init_model_loader(model_loader, *configuration)) {
+    if (!ps5_ai_init_stage_call(PS5_AI_INIT_HEADERS, [&]() { return init_model_loader(model_loader, *configuration); })) {
         return false;
     }
 
@@ -1078,7 +1079,7 @@ bool StableDiffusionGGML::init(const sd_ctx_params_t* sd_ctx_params) {
         }
     }
 
-    if (!init_backend()) {
+    if (!ps5_ai_init_stage_call(PS5_AI_INIT_BACKENDS, [&]() { return init_backend(); })) {
         return false;
     }
     {
@@ -1157,7 +1158,7 @@ void StableDiffusionGGML::configure_weight_loading() {
     if (enable_mmap && apply_lora_immediately) {
         LOG_WARN("in mode 'immediately', LoRAs will cause extra memory usage with mmap");
     }
-    model_manager->prepare_file_io();
+    ps5_ai_init_stage_call(PS5_AI_INIT_FILE_IO, [&]() { model_manager->prepare_file_io(); });
     load_alphas_cumprod();
 }
 
@@ -1319,12 +1320,12 @@ bool StableDiffusionGGML::validate_and_load_runners() {
     const auto* sd_ctx_params   = &config_->params;
     const bool use_tae          = uses_tae();
     const bool tae_preview_only = this->tae_preview_only();
-    cond_stage_model->set_flash_attention_enabled(flash_attention_for(SDBackendModule::TE));
+    cond_stage_model->set_flash_attention_enabled(ps5_ai_init_stage_call(PS5_AI_INIT_TE_FLASH, [&]() { return flash_attention_for(SDBackendModule::TE); }));
     if (clip_vision) {
         clip_vision->set_flash_attention_enabled(flash_attention_for(SDBackendModule::CLIP_VISION));
     }
     if (first_stage_model || preview_vae || audio_vae_model) {
-        const bool enabled = flash_attention_for(SDBackendModule::VAE);
+        const bool enabled = ps5_ai_init_stage_call(PS5_AI_INIT_VAE_FLASH, [&]() { return flash_attention_for(SDBackendModule::VAE); });
         if (first_stage_model) {
             first_stage_model->set_flash_attention_enabled(enabled);
         }
@@ -1335,7 +1336,7 @@ bool StableDiffusionGGML::validate_and_load_runners() {
             audio_vae_model->set_flash_attention_enabled(enabled);
         }
     }
-    const bool diffusion_fa = flash_attention_for(SDBackendModule::DIFFUSION);
+    const bool diffusion_fa = ps5_ai_init_stage_call(PS5_AI_INIT_DIT_FLASH, [&]() { return flash_attention_for(SDBackendModule::DIFFUSION); });
     diffusion_model->set_flash_attention_enabled(diffusion_fa);
     if (high_noise_diffusion_model) {
         high_noise_diffusion_model->set_flash_attention_enabled(diffusion_fa);
@@ -1702,10 +1703,10 @@ bool StableDiffusionGGML::build_runners(const RunnerGroups& groups) {
         bool success = false;
         switch (group) {
             case RunnerGroup::Core:
-                success = build_core_runners();
+                success = ps5_ai_init_stage_call(PS5_AI_INIT_CORE_RUNNERS, [&]() { return build_core_runners(); });
                 break;
             case RunnerGroup::VAE:
-                success = build_vae_runners();
+                success = ps5_ai_init_stage_call(PS5_AI_INIT_VAE_RUNNER, [&]() { return build_vae_runners(); });
                 break;
             case RunnerGroup::ControlNet:
                 success = build_control_net_runner();
@@ -1718,10 +1719,10 @@ bool StableDiffusionGGML::build_runners(const RunnerGroups& groups) {
             return false;
         }
     }
-    if (!validate_and_load_runners()) {
+    if (!ps5_ai_init_stage_call(PS5_AI_INIT_VALIDATE, [&]() { return validate_and_load_runners(); })) {
         return false;
     }
-    return groups.count(RunnerGroup::Core) == 0 || build_denoiser();
+    return groups.count(RunnerGroup::Core) == 0 || ps5_ai_init_stage_call(PS5_AI_INIT_DENOISER, [&]() { return build_denoiser(); });
 }
 
 bool StableDiffusionGGML::is_using_v_parameterization_for_sd2(bool is_inpaint) {

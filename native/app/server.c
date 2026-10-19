@@ -701,6 +701,7 @@ static void health(socket_t fd) {
     /* Engine hooks must return NUL-terminated bounded strings. Clamp defensively. */
     s.backend[sizeof(s.backend)-1] = s.device[sizeof(s.device)-1] = 0;
     s.driver[sizeof(s.driver)-1] = s.model[sizeof(s.model)-1] = s.reason[sizeof(s.reason)-1] = 0;
+    s.model_initialization[sizeof(s.model_initialization)-1] = 0;
     char backend[400], device[1600], driver[1600], model[3200], reason[3200], body[12288];
     quote_json(backend, sizeof(backend), s.backend); quote_json(device, sizeof(device), s.device);
     quote_json(driver, sizeof(driver), s.driver); quote_json(model, sizeof(model), s.model);
@@ -732,11 +733,11 @@ static void health(socket_t fd) {
         "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-image\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false,\"selected_moss_lora\":true},\"selected_moss_lora\":%s,\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
-        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s,\"lifecycle\":%s}",
+        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s,\"lifecycle\":%s,\"model_initialization\":%s}",
         s.available && s.gpu_available ? "ready" : "degraded", lora_json, backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
-        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json,lifetime_json);
+        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json,lifetime_json,s.model_initialization[0] ? s.model_initialization : "null");
     send_json(fd, 200, body);
 }
 static void submit(socket_t fd, const char *body) {

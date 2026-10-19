@@ -17,6 +17,7 @@
 #include "json.hpp"
 #include "engine_config.h"
 #include "moss_runtime_admission.h"
+#include "moss_trial_contract.hpp"
 #include "moss_lora_contract.hpp"
 #include "moss_lora_receipt.h"
 #include "v3_shutdown.h"
@@ -55,6 +56,7 @@ static_assert(sizeof(ggml_tensor) == 432, "Exact linked MAX_NAME160 tensor ABI")
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#include "init_stage_impl.hpp"
 
 static std::mutex status_mutex;
 static std::mutex log_mutex;
@@ -158,7 +160,7 @@ static nlohmann::json bounded_config(const char* path) {
 extern "C" int ps5_ai_v12_read_memory_plan(const char* path, ps5_ai_memory_plan* out,
                                           char* error, size_t error_size) noexcept {
     if (out) *out = {};
-#if !PS5_AI_MOSS_RUNTIME_ADMITTED
+#if !PS5_AI_MOSS_CAN_RUN_ADMISSION
     (void)path;
     {
         std::lock_guard<std::mutex> lock(status_mutex);
@@ -565,7 +567,7 @@ static void verify_flash_attention_support() {
 }
 
 static int engine_init_impl(const char* config_path, char* error, size_t error_size) {
-#if !PS5_AI_MOSS_RUNTIME_ADMITTED
+#if !PS5_AI_MOSS_CAN_RUN_ADMISSION
     return ps5_ai_v12_read_memory_plan(config_path, nullptr, error, error_size);
 #endif
     try {
@@ -574,6 +576,9 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         gpu_device = nullptr;
         partial_taesd_gpu_decode = false;
         std::snprintf(current_status.backend, sizeof(current_status.backend), "stable-diffusion.cpp/Vulkan");
+#if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
+        ps5_ai_ggml_report("MOSS_EXPERIMENTAL_SMALL_TRIAL enabled=1 production_runtime_admitted=0 capacity_readback_verification_pending=1 image_size=256x256 image_attempt_limit=1 prior_GPU_or_model_success_claimed=0");
+#endif
         if (!config_path) {
             throw std::runtime_error("Engine config path is missing");
         }
@@ -660,13 +665,16 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
 
 static void engine_status_impl(ps5_ai_engine_status* status) {
     if (status) {
-        std::lock_guard<std::mutex> lock(status_mutex);
-        *status = current_status;
+        { std::lock_guard<std::mutex> lock(status_mutex); *status = current_status; }
+        (void)ps5_ai_init_stage_json(status->model_initialization,sizeof(status->model_initialization));
     }
 }
 
 #include "precision_gate.inc"
 #include "precision_conv_gate.inc"
+#if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
+#include "moss_precision_gate.inc"
+#endif
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
 extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexcept {
@@ -764,6 +772,9 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
         resources.release();
         precision_readback_gate();
         precision_conv_readback_gate();
+#if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
+        moss_precision_readback_gate();
+#endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
         ps5_ai_ggml_report("Native_Direct_data_gate_completed success=1 verified_tensor_bytes=67108864 before_used=%llu after_used=%llu peak_used=%llu reserved=%llu active_imports=%llu scope=single_SCALE_graph_not_model_success",
@@ -792,6 +803,24 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         return -1;
     }
     *stats = {};
+    if (!ps5_ai_moss_trial_request_valid(request->width,request->height,request->steps,
+                                        request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
+        set_error(error,error_size,PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
+            ? "MOSS quality trial requires 256x256,4 or50 steps,CFG3,flow shift5,Euler and seed20261019; production admission is not asserted"
+            : "MOSS trial requires 256x256,4 steps,CFG3,flow shift5 and Euler; production admission is not asserted");
+        return -1;
+    }
+#if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
+    if (engine_config.moss_lora_strength!=0.7) {
+        set_error(error,error_size,"MOSS quality step comparison requires unchanged configured LoRA strength0.7");
+        return -1;
+    }
+#endif
+    static std::atomic<bool> experimental_attempt_claimed{false};
+    if (!ps5_ai_moss_trial_claim(experimental_attempt_claimed,request->width,request->height)) {
+        set_error(error,error_size,"MOSS experimental verification permits one256x256 generation attempt per process; failures do not reset this claim");
+        return -1;
+    }
     phase_profile_begin();
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;
@@ -826,7 +855,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if (request->init_image_id[0] || request->reference_image_id[0] || request->mask_image_id[0] ||
             request->controlnet[0] || request->control_image_id[0])
             throw std::runtime_error("MOSS-Image-SFT currently supports text2img only; SDXL IP-Adapter/ControlNet, img2img and inpainting were not run");
-        ps5_ai_native_capacity_snapshot("before_moss_generation");
+        if (!model_context)
+            ps5_ai_init_stage_call(PS5_AI_INIT_PREAMBLE, [&]() { ps5_ai_native_capacity_snapshot("before_moss_generation"); });
+        else
+            ps5_ai_native_capacity_snapshot("before_moss_generation");
         if (!model_context) {
             sd_ctx_params_t context_params;
             sd_ctx_params_init(&context_params);
@@ -835,10 +867,12 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             // It is admitted only after the separate startup CPU-oracle gate.
             // FP16 im2col is not used as the numerical reference for this gate.
             context_params.conv_direct_mode="on";
-            write_event({{"event","native_conv_policy"},{"mode","on"},{"basis","direct GPU convolution passed independent CPU oracle"}});
+            ps5_ai_init_stage_call(PS5_AI_INIT_PRECONTEXT_EVENT, [&]() {
+                write_event({{"event","native_conv_policy"},{"mode","on"},{"basis","direct GPU convolution passed independent CPU oracle"}});
+            });
             ps5_ai_native_ui_phase(PS5_AI_STATUS_LOADING);
             ps5_ai_native_ui_log("Loading MOSS-Image-SFT + Qwen3.5 + FLUX2 VAE");
-            model_context = new_sd_ctx(&context_params);
+            model_context = ps5_ai_init_stage_call(PS5_AI_INIT_CONTEXT, [&]() { return new_sd_ctx(&context_params); });
             if (!model_context) {
                 throw std::runtime_error("MOSS-Image split model load failed; see engine.jsonl");
             }

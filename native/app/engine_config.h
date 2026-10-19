@@ -89,9 +89,11 @@ struct PS5AIEngineConfig {
         // Validate before explicit AGC/Direct setup as well as full engine parsing.
         validate_keys(object);
         validate_selected_lora(object);
+        if (!object.contains("gpu_pool_bytes") || !object.contains("working_reserve_bytes"))
+            throw std::runtime_error("MOSS requires explicit gpu_pool_bytes and working_reserve_bytes; no inherited memory fallback is used");
         ps5_ai_memory_plan result = {
-            memory_integer(object, "gpu_pool_bytes", UINT64_C(12) << 30),
-            memory_integer(object, "working_reserve_bytes", UINT64_C(1) << 30)};
+            memory_integer(object, "gpu_pool_bytes", PS5_AI_MEMORY_PLAN_DEFAULT_POOL_BYTES),
+            memory_integer(object, "working_reserve_bytes", PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES)};
         // These bounds match the actual pool's page-index/address arithmetic,
         // not an arbitrary application memory ceiling. Runtime quota/backing
         // admission is performed by the pool, after this configuration read.
@@ -101,7 +103,7 @@ struct PS5AIEngineConfig {
             result.working_reserve_bytes < PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES ||
             result.working_reserve_bytes % PS5_AI_MEMORY_PLAN_PAGE_BYTES ||
             result.gpu_pool_bytes > UINT64_MAX - result.working_reserve_bytes)
-            throw std::runtime_error("Native Direct MOSS memory bytes must fit pool address/page arithmetic; reserve is aligned and at least64MiB outside the pool");
+            throw std::runtime_error("Native Direct MOSS memory bytes must fit pool address/page arithmetic; reserve is aligned and at least1GiB outside the pool");
         return result;
     }
 

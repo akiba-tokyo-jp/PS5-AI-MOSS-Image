@@ -148,7 +148,12 @@ int main(void){ps5_ai_request r;int url;char e[768],p[64],sig[65];
         for port,name in [(np,'native'),(pp,'gateway')]:
             code,health=request(port,'GET','/health')
             check(code==200 and health['model_id']=='moss-image-sft',name+' explicit MOSS Image health identity')
-            check(health['features']=={'text_to_image':True,'img2img':False,'inpainting':False,'ip_adapter':False,'controlnet':False,'sdxl_manga_lora':False},name+' truthful text2img-only feature flags')
+            features={'text_to_image':True,'img2img':False,'inpainting':False,'ip_adapter':False,'controlnet':False,'sdxl_manga_lora':False}
+            if name=='native':features['selected_moss_lora']=True
+            check(health['features']==features,name+' truthful feature flags without inventing gateway LoRA telemetry')
+            if name=='native':
+                check(health['selected_moss_lora'] is None or not health['selected_moss_lora']['application_verified'],
+                      'host failure fixture never claims actual LoRA application')
             check(request(port,'GET','/health',auth=False)[0]==401,name+' rejects missing Bearer')
         code,models=request(pp,'GET','/v1/models')
         check(code==200 and [m['id'] for m in models['data']]==['moss-image-sft'],'OpenAI discovery lists only MOSS Image')

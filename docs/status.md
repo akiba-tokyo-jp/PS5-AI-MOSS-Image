@@ -1,5 +1,26 @@
 # MOSS Imageの状態
 
+2026-10-19 JST。**privateの実験版です。PS5で256×256・50stepsの正常な画像を生成し、WindowsからOpenAI互換APIでPNGを取得しました。** 同一SELF・同一全条件で4stepsを再現してからstepsだけ50へ変え、強い色縞が解消しました。この条件の4stepsのsampling不足が原因と判断します。
+
+| 確認項目 | 現在の結果 |
+|---|---|
+| 実機構成 | FW12.40、PPSA99190、MOSS-Image-SFT Q4_K＋Qwen3.5-9B Q4_K_M＋FLUX.2 small VAE＋指定rank16 LoRA |
+| GPU / CPU | RADV NAVI21でDiT/Flash Attention/VAE完了を観測、Qwen text encodingはPS5 CPU |
+| 指定LoRA | strength0.7、loaded/matched/used各504、skip0、実適用確認 |
+| 比較時間 | fresh processの256×256、Euler、CFG3、shift5、seed20261019。4steps 68.525607秒 → 50steps 148.133782秒（初回読込込み） |
+| API / 画像 | 50stepsのHTTP200応答149.406秒、RGB256×256 PNG194,931B、native GETと応答bytes一致。各process POST1回・自動再送0 |
+| 数値検証 | 6つの限定GPU読み戻しゲートがPASS。50stepsのDiT出力100・VAE出力1、textを含む3,854,336値でnonfinite0。全演算品質の普遍的証明ではない |
+| メモリ | 承認済みtrial10GiB pool。native総量11.4375GiBのため要求12GiB＋reserve1GiBは未達。API GPUピークはCPU weightsも含む共有poolの上界 |
+| 終了 | native432／gateway435を通常API終了後、別取得で両PID不在。独立observer005でGPU titleなし |
+| 継続する制限 | production admission0／privateを維持。warm、高解像度、連続運用、最小必要stepsは未検証。通常APIの既定stepsは元から50 |
+
+[実機結果・条件を固定した原因比較・メモリ・証拠の詳細](moss-native-small-trial-20261019.md)を参照してください。正常50stepsの小画像のみ同梱し、生ログ・失敗画像・重み・秘密はGitに含めません。
+
+<details>
+<summary>初期ホスト構築時点の記録（実機試験前の履歴）</summary>
+
+以下の未配備・未検証という記述とbuild hashは、初期host/native-v2の保存履歴です。上記のcorrected trial結果で更新された現在の実機状態とは区別してください。
+
 2026-10-19 JST。**private開発版、指定構成はMOSS-Image-SFT＋axiomofmindのrank16 LoRAです。**
 モデル取得・LoRA変換/接続・ホスト試験・fresh cross buildまで完了しました。
 **MOSSのPS5配備・モデル読込・GPU推論・PNG生成は未実施です。**
@@ -45,3 +66,5 @@ native builder自体も3,793入力の前後一致を確認しています。
 [モデル/メモリ](moss-models.md)、[LoRA](moss-requested-lora.md)、[配置/lifecycle](deployment.md)、[ビルド](build.md)を参照してください。
 旧[検証JSON](moss-verification.json)は今回のLoRA接続前のホスト検証履歴です。
 継承したWAI/Animaの成功画像・ベンチマークはMOSSの実績ではありません。
+
+</details>

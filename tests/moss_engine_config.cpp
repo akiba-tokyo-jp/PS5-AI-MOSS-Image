@@ -27,7 +27,27 @@ int main(int argc, char** argv) {
         rejects([&]{ PS5AIEngineConfig::engine_object(bad); }, "root engine/schema typo/default fallback must reject");
     // Keep the requested12GiB target explicit; parsing does not prove that the
     // native runtime can allocate it with the outside-pool reserve.
-    const auto empty = nlohmann::json{{"gpu_pool_bytes",12884901888ULL}};
+    const auto empty = nlohmann::json{{"gpu_pool_bytes",12884901888ULL},{"working_reserve_bytes",1073741824ULL}};
+    static_assert(PS5_AI_MEMORY_PLAN_DEFAULT_POOL_BYTES == (UINT64_C(12) << 30), "requested12GiB profile constant");
+    static_assert(PS5_AI_MEMORY_PLAN_DEFAULT_WORKING_RESERVE_BYTES == (UINT64_C(1) << 30), "explicit1GiB working reserve constant");
+    for (const char* key : {"gpu_pool_bytes", "working_reserve_bytes"}) {
+        auto missing = empty; missing.erase(key);
+        rejects([&]{ PS5AIEngineConfig::parse(missing); }, "missing memory field silently defaulted in full parsing");
+        rejects([&]{ PS5AIEngineConfig::memory_plan(missing); }, "missing memory field passed pre-AGC parsing");
+    }
+    for (const auto& bad : {nlohmann::json::object(),nlohmann::json(nullptr),nlohmann::json::array()}) {
+        rejects([&]{ PS5AIEngineConfig::parse(bad); }, "absent/invalid memory object silently defaulted");
+        rejects([&]{ PS5AIEngineConfig::memory_plan(bad); }, "absent/invalid memory object passed pre-AGC parsing");
+    }
+    for (const char* key : {"gpu_pool_bytes", "working_reserve_bytes"}) {
+        auto invalid = empty; invalid[key] = nullptr;
+        rejects([&]{ PS5AIEngineConfig::parse(invalid); }, "null memory field silently defaulted");
+        rejects([&]{ PS5AIEngineConfig::memory_plan(invalid); }, "null memory field passed pre-AGC parsing");
+    }
+    auto inherited_reserve = empty; inherited_reserve["working_reserve_bytes"] = UINT64_C(64) << 20;
+    rejects([&]{ PS5AIEngineConfig::memory_plan(inherited_reserve); }, "inherited64MiB reserve passed MOSS1GiB minimum");
+    auto explicit_candidate = empty; explicit_candidate["gpu_pool_bytes"] = UINT64_C(10) << 30;
+    require(PS5AIEngineConfig::memory_plan(explicit_candidate).gpu_pool_bytes == (UINT64_C(10) << 30), "explicit candidate memory plan was silently restored to12GiB");
     auto config = PS5AIEngineConfig::parse(empty);
     config.resolve_defaults("Vulkan0");
     require(config.model == "/app0/models/MOSS-Image-SFT-Q4_K.gguf", "wrong DiT default");
@@ -92,7 +112,7 @@ int main(int argc, char** argv) {
     require(!config.mmap && !context.enable_mmap,"MOSS must not mmap models");
     require(context.tokenizer==config.tokenizer.c_str() && config.tokenizer=="/app0/models/tokenizer_qwen3.5.json","external Qwen3.5 tokenizer not connected");
     require(PS5_AI_MOSS_RUNTIME_ADMITTED==0,"preparation build runtime admission must stay false");
-    require(PS5AIEngineConfig::parse(nlohmann::json::object()).gpu_pool_bytes==12884901888ULL,"12 GiB target silently reduced");
+    rejects([&]{ PS5AIEngineConfig::parse(nlohmann::json::object()); }, "unspecified memory must not inherit12GiB silently");
     require(config.working_reserve_bytes==1073741824ULL,"working reserve must remain explicit outside pool");
     rejects([&]{ auto j=empty;j["gpu_pool_bytes"]=-1;PS5AIEngineConfig::parse(j); }, "negative Direct reservation accepted");
     rejects([&]{ auto j=empty;j["gpu_pool_bytes"]=12884901889ULL;PS5AIEngineConfig::parse(j); }, "unaligned Direct reservation accepted");

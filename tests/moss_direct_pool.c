@@ -123,6 +123,33 @@ int main(int argc, char **argv) {
     uint64_t target = PS5_AI_DATA_VA_BYTES;
     uint64_t piece = PS5_AI_DATA_REGION_BYTES;
     uint64_t count = target / piece + (target % piece != 0);
+#if PS5_AI_MOSS_TRIAL_10G
+    /* Exercise the actual allocator under the explicit trial layout.  These
+     * capacities are mocks, not a claim about the current console. */
+    if (!strcmp(name, "trial10_historical_capacity") || !strcmp(name, "trial10_reserve_refusal")) {
+        assert(target == (UINT64_C(10) << 30) && piece == (UINT64_C(1) << 30) && count == 10);
+        host_direct_bytes = INT64_C(12280922112);
+        const int refuse = !strcmp(name, "trial10_reserve_refusal");
+        if (refuse) other_owned = UINT64_C(512) << 20;
+        assert(!ps5_ai_direct_pool_configure(target, piece, UINT64_C(1) << 30));
+        const int result = ps5_ai_flex_prepare();
+        if (refuse) {
+            assert(result == -1 && allocs == 9 && maps == 9 && unmaps == 9 && frees == 9);
+            assert(!held && !mock_owned && !direct.ready && !direct.ownership_uncertain);
+            return 0;
+        }
+        assert(!result && direct.ready && allocs == 10 && maps == 10);
+        assert(mock_owned == target && state.free_bytes == target);
+        assert(ps5_ai_direct_pool_max_claim_bytes() == piece);
+        void *embedding = ps5_ai_flex_alloc(UINT64_C(572129280), 64);
+        assert(embedding && find(embedding, UINT64_C(572129280)));
+        assert(!ps5_ai_flex_free(embedding, UINT64_C(572129280)));
+        assert(!ps5_ai_flex_alloc(piece + PAGE, PAGE));
+        assert(!ps5_ai_direct_pool_release_if_idle());
+        assert(!mock_owned && unmaps == 10 && frees == 10 && !held);
+        return 0;
+    }
+#endif
     assert(target == UINT64_C(12884901888) && count == 12);
     assert(target % piece == 0);
     assert(PS5_AI_DATA_VA_BASE == UINT64_C(0x7d00000000));

@@ -755,7 +755,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         return -1; /* Preserve the MOSS guard0/configuration rejection reason. */
     }
     if (plan.gpu_pool_bytes != PS5_AI_DATA_VA_BYTES || plan.working_reserve_bytes != UINT64_C(1073741824))
-        return init_error(error,error_size,"MOSS requested Direct12GiB/working reserve1GiB configuration required");
+        return init_error(error,error_size,"MOSS configured Direct pool must match the compiled VA profile with1GiB working reserve");
     ps5_ai_native_config_mark(16,"memory_plan_returned");
     ps5_ai_ggml_report("native_Direct_plan target_bytes=%llu region_max_bytes=1073741824 CPU_Direct_reserve_bytes=%llu CPU_whole_pool_prefault=0 Mprotect_calls=0 capacity_execution_receipt_required_before_deployment=1",
         (unsigned long long)plan.gpu_pool_bytes,(unsigned long long)plan.working_reserve_bytes);
@@ -795,7 +795,7 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         direct.region_count!=plan.gpu_pool_bytes/PS5_AI_DATA_REGION_BYTES+(plan.gpu_pool_bytes%PS5_AI_DATA_REGION_BYTES!=0) || pool.reserved_bytes!=plan.gpu_pool_bytes || !pool.mapping_owned ||
         !pool.gpu_access_granted || pool.fault_retained || !pool.log_healthy || !log_healthy)
         return init_error(error,error_size,"Native owned region accounting incomplete");
-    ps5_ai_native_capacity_snapshot("candidate_12GiB_pool_prepared");
+    ps5_ai_native_capacity_snapshot("candidate_configured_pool_prepared");
     native_lifecycle_mark(PS5_AI_LIFE_BACKEND);
     int rc=__real_ps5_ai_engine_init(config_path,error,error_size);
     if (rc) return init_error(error,error_size,"Native real engine initialization failed");

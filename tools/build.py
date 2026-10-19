@@ -9,6 +9,39 @@ from pathlib import Path
 from build_input_snapshot import collect as collect_inputs, require_unchanged
 
 ROOT=Path(__file__).resolve().parents[1]
+
+MOSS_SMALL_TRIAL_CONTRACT={
+    'schema':'ps5-ai-moss-experimental-small-trial-v1',
+    'experimental_small_trial':True,'production_runtime_admitted':False,
+    'trial_10g':True,'gpu_pool_bytes':10737418240,'working_reserve_bytes':1073741824,
+    'max_vram_gib':'Vulkan0=9.5','width':256,'height':256,'steps':4,
+    'cfg_scale':3.0,'sampler':'euler','flow_shift':5.0,'max_generation_attempts':1,
+    'selected_moss_lora_required':True,'startup_readback_gates_required':True}
+MOSS_QUALITY_COMPARISON_CONTRACT={key:value for key,value in MOSS_SMALL_TRIAL_CONTRACT.items() if key!='steps'}
+MOSS_QUALITY_COMPARISON_CONTRACT.update({
+    'schema':'ps5-ai-moss-experimental-quality-step-comparison-v1','allowed_steps':[4,50],
+    'seed':20261019,'moss_lora_strength':0.7})
+
+def same_typed_contract_value(actual,expected):
+    return type(actual) is type(expected) and (
+        len(actual)==len(expected) and all(same_typed_contract_value(a,e) for a,e in zip(actual,expected))
+        if isinstance(expected,list) else actual==expected)
+
+def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False):
+    """A trial is permission to RUN verification, never prior GPU admission."""
+    if type(enabled) is not bool or type(trial_10g) is not bool or type(quality_comparison) is not bool:
+        raise RuntimeError('MOSS trial switches must be explicit booleans')
+    if not enabled:
+        if trial_10g or quality_comparison:raise RuntimeError('Trial switches require --experimental-small-trial')
+        return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=0','-DPS5_AI_MOSS_TRIAL_10G=0']
+    expected_contract=MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
+    valid_contract=isinstance(contract,dict) and set(contract)==set(expected_contract) and all(
+        same_typed_contract_value(contract[key],expected)
+        for key,expected in expected_contract.items())
+    if not trial_10g or not valid_contract:
+        raise RuntimeError('Experimental MOSS requires the exact reviewed small10GiB trial profile and both switches')
+    return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=1','-DPS5_AI_MOSS_TRIAL_10G=1']+(
+        ['-DPS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL=1'] if quality_comparison else [])
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 
@@ -36,7 +69,7 @@ def check_archive_update(before,after,allowed):
     changed=sorted(name for name in before if before[name]!=after[name])
     if not set(changed).issubset(set(allowed)):raise RuntimeError('Unreviewed archive members changed: '+str(changed))
     return changed
-def validate_moss_core(manifest_path, expected_members, build_config):
+def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None):
     """Consume only a complete, immutable 75-member MOSS core rebuild."""
     manifest=json.loads(Path(manifest_path).read_text(encoding='utf-8'))
     if (manifest.get('schema')!='moss-core-build-v1' or
@@ -70,10 +103,48 @@ def validate_moss_core(manifest_path, expected_members, build_config):
     inputs=manifest.get('sources',[])+manifest.get('header_inputs',[])+manifest.get('overlay_inputs',[])+[manifest['profile'],manifest['builder']]
     if len(manifest.get('sources',[]))!=75 or not manifest.get('header_inputs'):
         raise RuntimeError('Missing full-core source/header provenance')
+    changed=[]
     for record in inputs:
         source=Path(record['path'])
         if not source.is_file() or source.stat().st_size!=record['bytes'] or digest(source)!=record['sha256']:
-            raise RuntimeError('MOSS core source/header changed since compile: '+str(source))
+            changed.append(record)
+    if changed:
+        # This exception is restricted to the three native-only inputs changed
+        # for the explicit quality trial. Every original compiler .d is pinned
+        # and checked; a change to ANY consumed core input remains a hard error.
+        allowed={ROOT/'native/app/moss_trial_contract.hpp',ROOT/'native/app/engine_sdcpp.cpp',
+                 ROOT/'native/app/moss_precision_gate.inc'}
+        if quality_native_only is not True or any(Path(row['path']).resolve() not in allowed for row in changed):
+            raise RuntimeError('MOSS core source/header changed since compile: '+str(changed[0]['path']))
+        members_proof=manifest.get('members',[])
+        if len(members_proof)!=75 or {row['member'] for row in members_proof}!=set(members):
+            raise RuntimeError('Missing all75 actual dependency records for native-only core carryforward')
+        consumed=set();dep_records=[]
+        recorded={Path(row['path']).resolve() for row in inputs}
+        for member in members_proof:
+            dependency=member['dependencies'];dep=Path(dependency['path']).resolve()
+            expected_dep=Path(manifest_path).resolve().parent/'deps'/(member['member']+'.d')
+            if dep!=expected_dep or not dep.is_file() or dep.stat().st_size!=dependency['bytes'] or digest(dep)!=dependency['sha256']:
+                raise RuntimeError('Actual core dependency file missing/changed: '+str(dep))
+            text=dep.read_text(encoding='utf-8').replace('\\\n',' ')
+            if ': ' not in text:raise RuntimeError('Unrecognized actual compiler dependency format')
+            names=re.findall(r'(?:\\[^\r\n]|[^\s])+',text.split(': ',1)[1])
+            paths={Path(name.replace('\\ ',' ')).resolve() for name in names}
+            if Path(member['source']).resolve() not in paths or not paths:
+                raise RuntimeError('Core dependency file omits its actual source')
+            if not paths.issubset(recorded):
+                raise RuntimeError('Actual core dependency has no original hash record: '+str(paths-recorded))
+            consumed.update(paths);dep_records.append(dependency)
+        if any(Path(row['path']).resolve() in consumed for row in changed):
+            raise RuntimeError('Native-only carryforward denied: changed file is a consumed core input')
+        if carryforward is not None:
+            carryforward.update({'schema':'moss-quality-native-only-core-carryforward-v1',
+                'original_manifest_sha256':digest(manifest_path),'original_manifest_unchanged':True,
+                'archive_sha256':archive['sha256'],'new_core_compilation':False,
+                'actual_dependency_files_verified':75,'actual_dependency_paths':len(consumed),
+                'changed_superset_files_not_consumed':[{'path':row['path'],'before':row,
+                    'after':{'bytes':Path(row['path']).stat().st_size,'sha256':digest(row['path'])}} for row in changed],
+                'dependency_files':dep_records})
     return path,manifest
 
 def mapped(data):
@@ -81,10 +152,13 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
+    trial_path=ROOT/('build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
+    trial_contract=json.loads(trial_path.read_text()) if a.experimental_small_trial else None
+    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -98,7 +172,8 @@ def main():
     if not re.search(r'^#define PS5_AI_MOSS_RUNTIME_ADMITTED 0$',admission,re.M):
         raise RuntimeError('MOSS preparation build must retain runtime admission0')
     baseline_core=archive_members(Path(c['DEPS'])/'libstable-diffusion.graph-admission-1024-v3.a')
-    validate_moss_core(a.core_manifest,baseline_core,c)
+    core_carryforward={}
+    validate_moss_core(a.core_manifest,baseline_core,c,a.quality_step_comparison_trial,core_carryforward)
     batch_pair=profile.get('controlnet_batch_pair',0)
     if type(batch_pair)!=int or batch_pair not in (0,1):raise RuntimeError('ControlNet batch-pair profile must be 0 or 1')
     shader_header=profile['generated_shader_header'];shader_path=Path(expand(shader_header['path']))
@@ -122,7 +197,7 @@ def main():
             log.write(subprocess.list2cmdline(cmd)+'\n'+result.stdout+result.stderr+'\n');log.flush()
             if result.returncode:raise RuntimeError(result.stderr[-8000:])
             return result.stdout
-        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',
+        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,
           '-fvisibility-nodllstorageclass=default','-isysroot','${SDK}',
           '-isystem','${SDK}/target/include/c++/v1','-isystem','${SDK}/target/include',
           '-I','${PLATFORM}/src','-I','${ROOT}/native/app','-I','${ROOT}/native/ui',
@@ -145,7 +220,7 @@ def main():
             if stem in ('engine_sdcpp','startup'):extra+=['-DPS5_AI_ENABLE_FP16='+str(int(a.precision=='fp16'))]
             print('Compiling '+source,flush=True)
             run(['${LLVM}/clang.exe',*common,*extra,'-c','${ROOT}/'+source,'-o','${OUT}/obj/'+name])
-        print('Compiling the owned RADV platform layer',flush=True);run(profile['platform_compile'])
+        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*profile['platform_compile'][1:]])
         driver=out/'libvulkan_radeon.native-direct-data.a';shutil.copyfile(Path(c['DEPS'])/driver.name,driver)
         before=run(['${LLVM}/llvm-ar.exe','t',str(driver)]).splitlines()
         if len(before)!=704 or before.count('radv_ps5_platform_native.o')!=1:raise RuntimeError('Unexpected driver archive members')
@@ -153,7 +228,9 @@ def main():
         print('Verifying the complete75-member MOSS core rebuild',flush=True)
         core_name='libstable-diffusion.graph-admission-1024-v3.a'
         baseline=archive_members(Path(c['DEPS'])/core_name)
-        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c)
+        current_carryforward={}
+        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,a.quality_step_comparison_trial,current_carryforward)
+        if current_carryforward!=core_carryforward:raise RuntimeError('Core native-only carryforward evidence changed during build')
         core=out/'libstable-diffusion.moss.a';shutil.copyfile(core_source,core)
         core_changed=sorted(name for name,record in archive_members(core).items() if record!=baseline[name])
 
@@ -165,7 +242,7 @@ def main():
         if ggml_names!=['ggml-vulkan.cpp.o'] or ggml_names[0] not in ggml_before:
             raise RuntimeError('Unexpected GGML provider recipe/archive member')
         for recipe in ggml_recipes:
-            run(recipe);ggml_objects.append(recipe[recipe.index('-o')+1])
+            run([recipe[0],*trial_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
         run(['${LLVM}/llvm-ar.exe','r',str(ggml),*ggml_objects])
         ggml_changed=check_archive_update(ggml_before,archive_members(ggml),ggml_names)
         substitutions={driver.name:driver,core_name:core,ggml_name:ggml}
@@ -210,9 +287,14 @@ def main():
         require_unchanged(frozen_inputs,current_inputs)
         sources={str(s.relative_to(ROOT)):digest(s) for folder in ['native/app','native/ui','native/runtime','native/link',
                  'patches/stable-diffusion/overlay'] for s in (ROOT/folder).rglob('*') if s.is_file()}
-        for name in ['build-profiles/native.json','tools/build.py']:sources[name]=digest(ROOT/name)
+        for name in ['build-profiles/native.json','tools/build.py']+([str(trial_path.relative_to(ROOT))] if a.experimental_small_trial else []):sources[name]=digest(ROOT/name)
         (out/'manifest.json').write_text(json.dumps({'local_build_only':True,'console_executed':False,
-            'model_family':'moss-image-sft','requested_direct_bytes':12884901888,
+            'model_family':'moss-image-sft','requested_direct_bytes':10737418240 if a.trial_10g else 12884901888,
+            'user_requested_direct_target_bytes':12884901888,
+            'experimental_small_trial':a.experimental_small_trial,'trial_10g':a.trial_10g,
+            'quality_step_comparison_trial':a.quality_step_comparison_trial,'core_native_only_carryforward':core_carryforward,
+            'trial_compile_flags':trial_flags,'trial_contract':trial_contract,
+            'trial_contract_sha256':digest(trial_path) if a.experimental_small_trial else None,
             'runtime_admitted':False,'requested_precision':a.precision,'controlnet_batch_pair':batch_pair,
             'input_hashes_stable':True,'inputs_before_after':frozen_inputs,
             'full_core_manifest_sha256':digest(a.core_manifest),'full_core_manifest':core_manifest,

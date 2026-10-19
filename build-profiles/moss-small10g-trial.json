@@ -1,0 +1,18 @@
+{
+  "schema": "ps5-ai-moss-experimental-small-trial-v1",
+  "experimental_small_trial": true,
+  "production_runtime_admitted": false,
+  "trial_10g": true,
+  "gpu_pool_bytes": 10737418240,
+  "working_reserve_bytes": 1073741824,
+  "max_vram_gib": "Vulkan0=9.5",
+  "width": 256,
+  "height": 256,
+  "steps": 4,
+  "cfg_scale": 3.0,
+  "sampler": "euler",
+  "flow_shift": 5.0,
+  "max_generation_attempts": 1,
+  "selected_moss_lora_required": true,
+  "startup_readback_gates_required": true
+}

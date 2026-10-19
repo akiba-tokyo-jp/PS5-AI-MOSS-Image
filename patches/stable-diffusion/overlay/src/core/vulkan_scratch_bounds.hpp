@@ -69,7 +69,8 @@ static uint32_t matmul_split(uint32_t m,uint32_t n,uint32_t k,uint32_t cores,uin
  * quantize/pad Y to Q8_1 (6214-6223). Four bytes per logical element is an
  * upper bound for those branches. Quantized X must be exactly contiguous;
  * this excludes the vector handler's unusual non-contiguous X staging rule.
- * No BF16/IQ/MoE/kernel addition is admitted here. */
+ * BF16 has a separate matrix-left-only admission below. No IQ/MoE/kernel
+ * addition is admitted here. */
 static bool moss_quantized_weight(const ggml_tensor * t, uint64_t & elements) {
     if (!t) return false;
     uint64_t block=0, storage=0;
@@ -93,10 +94,26 @@ static bool moss_quantized_weight(const ggml_tensor * t, uint64_t & elements) {
     }
     return true;
 }
+/* Frozen Vulkan6119/6475 explicitly handles BF16 matrix-left operands. The
+ * matrix branch selects BF16 Y and copies/converts it when necessary
+ * (6171-6195); x/y staging remains <=4 bytes per logical element (6223-6224).
+ * Admit only contiguous, 32-bit-addressable BF16 weights, leaving activation,
+ * FLASH, normalization and RoPE type admission unchanged. This establishes
+ * the four-prealloc upper bound, not shader availability or numeric accuracy. */
+static bool moss_bfloat_weight(const ggml_tensor * t, uint64_t & elements) {
+    if(!t || t->type!=GGML_TYPE_BF16 || t->nb[0]!=2)return false;
+    elements=1;uint64_t stride=2;
+    for(unsigned i=0;i<4;++i) {
+        if(t->ne[i]<=0 || uint64_t(t->ne[i])>UINT32_MAX || t->nb[i]!=stride ||
+           !mul(elements,uint64_t(t->ne[i]),elements) || elements>UINT32_MAX ||
+           !mul(stride,uint64_t(t->ne[i]),stride) || stride>UINT32_MAX)return false;
+    }
+    return true;
+}
 static bool matmul(const ggml_tensor * dst,const Profile & profile,Bounds & out) {
     const auto * a=dst->src[0]; const auto * b=dst->src[1];
     uint64_t ae=0,be=0,de=0;
-    if (!(float_tensor(a,ae)||moss_quantized_weight(a,ae))||!float_tensor(b,be)||!float_tensor(dst,de)||dst->type!=GGML_TYPE_F32 ||
+    if (!(float_tensor(a,ae)||moss_quantized_weight(a,ae)||moss_bfloat_weight(a,ae))||!float_tensor(b,be)||!float_tensor(dst,de)||dst->type!=GGML_TYPE_F32 ||
         a->ne[0]!=b->ne[0] || dst->ne[0]!=a->ne[1] || dst->ne[1]!=b->ne[1] ||
         dst->ne[2]!=b->ne[2] || dst->ne[3]!=b->ne[3] || de>UINT32_MAX) return false;
     /* Staging covers matrix/vector/swap branches and F32 or F16 conversion.
