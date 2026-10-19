@@ -7,6 +7,7 @@
 #include "ggml-alloc.h"
 #include "ggml-vulkan.h"
 #include "probe.h"
+#include "moss_accumulation_policy.h"
 #include "json.hpp"
 #include <algorithm>
 #include <cassert>
@@ -24,9 +25,11 @@ static int graphs = 0, buffer_frees = 0, backend_frees = 0, events = 0;
 static int target_case() { return scenario.find("-q4-matrix-large") != std::string::npos ? 5 : scenario.find("-q4-matrix-small") != std::string::npos ? 4 : scenario.find("-bf16-matrix") != std::string::npos ? 3 : scenario.find("-bf16") != std::string::npos ? 2 : scenario.find("-flash") != std::string::npos ? 1 : 0; }
 static std::string fault() { const auto pos = std::min({scenario.find("-bf16"), scenario.find("-q4-matrix"), scenario.find("-flash")}); return scenario.substr(0, pos); }
 static ps5_ai_ggml_dispatch_stats stats{10, 10, 10, 0, 1};
+static ps5_ai_moss_quant_receipt quant_stats{};
 static void write_event(const nlohmann::json &value) {
     assert(value.at("CPU_fallback") == false && value.at("model_inference") == false); ++events;
     assert(value.at("CPU_wall_time") == true);
+    assert(value.at("moss_f32_accumulation")==bool(PS5_AI_MOSS_F32_ACCUMULATION));
     const double elapsed = value.at("graph_and_wait_seconds").get<double>();
     assert(std::isfinite(elapsed) && elapsed >= 0);
 #if defined(PS5_AI_ENABLE_FP16) && PS5_AI_ENABLE_FP16
@@ -41,6 +44,11 @@ static void write_event(const nlohmann::json &value) {
 
 struct ggml_backend_buffer { std::vector<void *> allocations; };
 extern "C" {
+void ps5_ai_vk_quant_accumulation_selected(unsigned lhs_type,unsigned f16acc) {
+    if(f16acc>1){++quant_stats.invalid;return;}
+    if(lhs_type==unsigned(GGML_TYPE_Q4_K))++(f16acc?quant_stats.q4_f16acc:quant_stats.q4_f32acc);
+}
+void ps5_ai_moss_quant_snapshot(ps5_ai_moss_quant_receipt *out){assert(out);*out=quant_stats;}
 ggml_backend_t ggml_backend_vk_init(size_t device) { assert(device == 0); return scenario == "no-backend" ? nullptr : reinterpret_cast<ggml_backend_t>(uintptr_t(1)); }
 bool ggml_backend_is_vk(ggml_backend_t) { return scenario != "not-vulkan"; }
 ggml_backend_dev_t ggml_backend_get_device(ggml_backend_t) { return scenario == "wrong-device" ? nullptr : gpu_device; }
@@ -75,6 +83,12 @@ ggml_status ggml_backend_graph_compute(ggml_backend_t, ggml_cgraph *graph) {
     std::fill(data, data + ggml_nelements(out), 0.f);
     for (size_t i = 0; i < f.expected.size(); ++i) data[f.sampled_output_indices.empty() ? i : f.sampled_output_indices[i]] = float(f.expected[i]);
     const bool active = graphs == target_case();
+    if(out->op==GGML_OP_MUL_MAT && out->src[0]->type==GGML_TYPE_Q4_K) {
+        assert(out->op_params[0]==(PS5_AI_MOSS_F32_ACCUMULATION?GGML_PREC_F32:GGML_PREC_DEFAULT));
+        if(out->src[1]->ne[1]>8 && !(fault()=="missing-accum" && active))
+            ps5_ai_vk_quant_accumulation_selected(unsigned(GGML_TYPE_Q4_K),
+                fault()=="invalid-accum" && active?2:unsigned(fault()=="f16-accum" && active));
+    }
     if (fault() == "mismatch" && active) data[0] += 1.f;
     if (fault() == "nan" && active) data[0] = std::numeric_limits<float>::quiet_NaN();
     if (fault() == "nan-unsampled" && active) data[2] = std::numeric_limits<float>::quiet_NaN();

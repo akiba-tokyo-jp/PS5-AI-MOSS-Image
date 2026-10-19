@@ -8,6 +8,7 @@
 #ifndef PS5_AI_MOSS_PERF_VARIANT
 #define PS5_AI_MOSS_PERF_VARIANT 0
 #endif
+#include "moss_accumulation_policy.h"
 #include "engine.h"
 #include "arena.h"
 #include "v3_shutdown.h"

@@ -28,15 +28,18 @@ MOSS_BENCHMARK_1024_CONTRACT.update({
 
 MOSS_PERFORMANCE_VARIANTS={0:('baseline-fp32','fp32'),1:('fp16','fp16'),2:('submit-fusion-fp32','fp32')}
 
-def moss_performance_contract(variant):
+def moss_performance_contract(variant,moss_f32_accumulation=False):
     if type(variant) is not int or variant not in MOSS_PERFORMANCE_VARIANTS:
         raise RuntimeError('Performance variant must be explicit integer0,1,or2')
+    if type(moss_f32_accumulation) is not bool or (moss_f32_accumulation and variant!=1):
+        raise RuntimeError('F32 accumulation requires the explicit FP16 performance variant')
     name,precision=MOSS_PERFORMANCE_VARIANTS[variant]
     contract={key:value for key,value in MOSS_BENCHMARK_1024_CONTRACT.items() if key not in ('width','height')}
     contract.update({'schema':'ps5-ai-moss-experimental-performance-v1',
         'allowed_sizes':[[256,256],[1024,1024]],'max_generation_attempts':4,
         'performance_variant':variant,'performance_variant_name':name,'requested_precision':precision,
         'small256_success_and_visual_review_before1024':True,'automatic_POST_retries':False})
+    if moss_f32_accumulation:contract['moss_f32_accumulation']=True
     return contract
 
 def validate_moss_performance_precision(variant,precision):
@@ -44,21 +47,69 @@ def validate_moss_performance_precision(variant,precision):
         expected=moss_performance_contract(variant)['requested_precision']
         if precision!=expected:raise RuntimeError('Performance variant/precision mismatch')
 
+def moss_accumulation_compile_flags(enabled):
+    if type(enabled) is not bool:raise RuntimeError('F32 accumulation policy must be an explicit bool')
+    return ['-DPS5_AI_MOSS_F32_ACCUMULATION='+str(int(enabled))]
+
+def moss_accumulation_policy(enabled):
+    moss_accumulation_compile_flags(enabled)
+    return 'force_f32' if enabled else 'model_default'
+
+def validate_moss_accumulation_mode(enabled,performance_variant,precision,experimental,trial_10g):
+    moss_accumulation_compile_flags(enabled)
+    if enabled and (performance_variant!=1 or type(performance_variant) is not int or precision!='fp16' or experimental is not True or trial_10g is not True):
+        raise RuntimeError('F32 accumulation requires explicit small10GiB performance variant1 and fp16')
+
+def validate_moss_core_accumulation(manifest,required):
+    """Bind declared policy to every actual member/compiler command, not labels."""
+    expected=moss_accumulation_compile_flags(required)[0]
+    declared='moss_f32_accumulation' in manifest
+    actual=manifest.get('moss_f32_accumulation',False)
+    if type(actual) is not bool or actual!=required:
+        raise RuntimeError('Core/native MOSS F32 accumulation policy mismatch')
+    if declared:
+        if manifest.get('moss_accumulation_policy')!=moss_accumulation_policy(required) or manifest.get('moss_accumulation_compile_flag')!=expected:
+            raise RuntimeError('Core accumulation policy/flag declaration mismatch')
+    elif any(key in manifest for key in ('moss_accumulation_policy','moss_accumulation_compile_flag')):
+        raise RuntimeError('Partial historical core precision declaration')
+    commands=manifest.get('commands',[]);members=manifest.get('members',[])
+    if len(commands)!=75 or len(members)!=75:
+        raise RuntimeError('Core precision proof needs all75 actual compile commands/members')
+    indices=set()
+    for row in members:
+        index=row.get('command_index')
+        if type(index) is not int or index not in range(75) or index in indices:
+            raise RuntimeError('Core precision proof has duplicate/invalid command index')
+        indices.add(index);command=commands[index]
+        if not isinstance(command,list) or not command or any(not isinstance(arg,str) for arg in command) or command.count('-c')!=1:
+            raise RuntimeError('Core precision proof is not a compiler command')
+        offset=command.index('-c')
+        if offset+1>=len(command) or not isinstance(row.get('source'),str) or Path(command[offset+1]).resolve()!=Path(row['source']).resolve():
+            raise RuntimeError('Core precision command/source binding mismatch')
+        definitions=[arg for arg in command if 'PS5_AI_MOSS_F32_ACCUMULATION' in arg]
+        if definitions!=([expected] if declared else []):
+            raise RuntimeError('Core precision policy lacks a single exact macro on every compile')
+    return {'moss_f32_accumulation':required,'moss_accumulation_policy':moss_accumulation_policy(required),
+            'historical_default0_without_macro':not declared,'actual_compile_commands_verified':75}
+
 def same_typed_contract_value(actual,expected):
     return type(actual) is type(expected) and (
         len(actual)==len(expected) and all(same_typed_contract_value(a,e) for a,e in zip(actual,expected))
         if isinstance(expected,list) else actual==expected)
 
-def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None):
+def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None,moss_f32_accumulation=False):
     """A trial is permission to RUN verification, never prior GPU admission."""
     if any(type(value) is not bool for value in (enabled,trial_10g,quality_comparison,benchmark_1024)):
         raise RuntimeError('MOSS trial switches must be explicit booleans')
-    if performance_variant is not None:moss_performance_contract(performance_variant)
+    moss_accumulation_compile_flags(moss_f32_accumulation)
+    if moss_f32_accumulation and (enabled is not True or trial_10g is not True or type(performance_variant) is not int or performance_variant!=1):
+        raise RuntimeError('F32 accumulation requires the explicit FP16 performance trial')
+    if performance_variant is not None:moss_performance_contract(performance_variant,moss_f32_accumulation)
     if sum((quality_comparison,benchmark_1024,performance_variant is not None))>1:raise RuntimeError('MOSS trial modes are mutually exclusive')
     if not enabled:
         if trial_10g or quality_comparison or benchmark_1024 or performance_variant is not None:raise RuntimeError('Trial switches require --experimental-small-trial')
         return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=0','-DPS5_AI_MOSS_TRIAL_10G=0']
-    expected_contract=moss_performance_contract(performance_variant) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
+    expected_contract=moss_performance_contract(performance_variant,moss_f32_accumulation) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
     valid_contract=isinstance(contract,dict) and set(contract)==set(expected_contract) and all(
         same_typed_contract_value(contract[key],expected)
         for key,expected in expected_contract.items())
@@ -106,7 +157,7 @@ def validate_moss_benchmark_gateway_wait_change(source,original):
         raise RuntimeError('Gateway change exceeds the reviewed wait-only literal')
     return {'old_wait_ms':1800000,'new_wait_ms':7200000,'all_other_bytes_identical':True,
             'restored_original_sha256':original['sha256']}
-def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False):
+def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False,moss_f32_accumulation=False):
     """Consume only a complete, immutable 75-member MOSS core rebuild."""
     manifest=json.loads(Path(manifest_path).read_text(encoding='utf-8'))
     if (manifest.get('schema')!='moss-core-build-v1' or
@@ -118,6 +169,7 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
         manifest.get('old_archive_members_reused')!=0 or
         manifest.get('MOSS_RUNTIME_ADMITTED')!=0):
         raise RuntimeError('Expected a completed local MOSS full-core manifest')
+    validate_moss_core_accumulation(manifest,moss_f32_accumulation)
     pins=manifest.get('source_pins',{})
     if pins!={'stable_diffusion_base':'8cd731e7b4667eb8f40a153315b9a7125d09a58d',
               'ggml':'d25b121ce1d6ae0c7e62ad080460d9fc1e46dd93',
@@ -197,14 +249,16 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
     validate_moss_performance_precision(a.performance_trial_variant,a.precision)
-    trial_path=ROOT/('build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
+    validate_moss_accumulation_mode(a.moss_f32_accumulation,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
+    accumulation_flags=moss_accumulation_compile_flags(a.moss_f32_accumulation)
+    trial_path=ROOT/('build-profiles/moss-performance-fp16-f32accum.json' if a.moss_f32_accumulation else 'build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
     trial_contract=json.loads(trial_path.read_text()) if a.experimental_small_trial else None
-    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant)
+    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant,a.moss_f32_accumulation)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -220,7 +274,7 @@ def main():
     baseline_core=archive_members(Path(c['DEPS'])/'libstable-diffusion.graph-admission-1024-v3.a')
     core_carryforward={}
     native_only_trial=a.quality_step_comparison_trial or a.benchmark_1024_cold_warm_trial
-    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial)
+    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation)
     batch_pair=profile.get('controlnet_batch_pair',0)
     if type(batch_pair)!=int or batch_pair not in (0,1):raise RuntimeError('ControlNet batch-pair profile must be 0 or 1')
     shader_header=profile['generated_shader_header'];shader_path=Path(expand(shader_header['path']))
@@ -244,7 +298,7 @@ def main():
             log.write(subprocess.list2cmdline(cmd)+'\n'+result.stdout+result.stderr+'\n');log.flush()
             if result.returncode:raise RuntimeError(result.stderr[-8000:])
             return result.stdout
-        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,
+        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,*accumulation_flags,
           '-fvisibility-nodllstorageclass=default','-isysroot','${SDK}',
           '-isystem','${SDK}/target/include/c++/v1','-isystem','${SDK}/target/include',
           '-I','${PLATFORM}/src','-I','${ROOT}/native/app','-I','${ROOT}/native/ui',
@@ -267,7 +321,7 @@ def main():
             if stem in ('engine_sdcpp','startup'):extra+=['-DPS5_AI_ENABLE_FP16='+str(int(a.precision=='fp16'))]
             print('Compiling '+source,flush=True)
             run(['${LLVM}/clang.exe',*common,*extra,'-c','${ROOT}/'+source,'-o','${OUT}/obj/'+name])
-        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*profile['platform_compile'][1:]])
+        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*accumulation_flags,*profile['platform_compile'][1:]])
         driver=out/'libvulkan_radeon.native-direct-data.a';shutil.copyfile(Path(c['DEPS'])/driver.name,driver)
         before=run(['${LLVM}/llvm-ar.exe','t',str(driver)]).splitlines()
         if len(before)!=704 or before.count('radv_ps5_platform_native.o')!=1:raise RuntimeError('Unexpected driver archive members')
@@ -276,7 +330,7 @@ def main():
         core_name='libstable-diffusion.graph-admission-1024-v3.a'
         baseline=archive_members(Path(c['DEPS'])/core_name)
         current_carryforward={}
-        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial)
+        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation)
         if current_carryforward!=core_carryforward:raise RuntimeError('Core native-only carryforward evidence changed during build')
         core=out/'libstable-diffusion.moss.a';shutil.copyfile(core_source,core)
         core_changed=sorted(name for name,record in archive_members(core).items() if record!=baseline[name])
@@ -289,7 +343,7 @@ def main():
         if ggml_names!=['ggml-vulkan.cpp.o'] or ggml_names[0] not in ggml_before:
             raise RuntimeError('Unexpected GGML provider recipe/archive member')
         for recipe in ggml_recipes:
-            run([recipe[0],*trial_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
+            run([recipe[0],*trial_flags,*accumulation_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
         run(['${LLVM}/llvm-ar.exe','r',str(ggml),*ggml_objects])
         ggml_changed=check_archive_update(ggml_before,archive_members(ggml),ggml_names)
         substitutions={driver.name:driver,core_name:core,ggml_name:ggml}
@@ -345,6 +399,10 @@ def main():
             'performance_variant_name':MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0] if a.performance_trial_variant is not None else None,
             'core_native_only_carryforward':core_carryforward,
             'trial_compile_flags':trial_flags,'trial_contract':trial_contract,
+            'moss_f32_accumulation':a.moss_f32_accumulation,
+            'moss_accumulation_policy':moss_accumulation_policy(a.moss_f32_accumulation),
+            'moss_accumulation_compile_flags':accumulation_flags,
+            'core_accumulation_policy_proof':validate_moss_core_accumulation(core_manifest,a.moss_f32_accumulation),
             'trial_contract_sha256':digest(trial_path) if a.experimental_small_trial else None,
             'runtime_admitted':False,'requested_precision':a.precision,'controlnet_batch_pair':batch_pair,
             'input_hashes_stable':True,'inputs_before_after':frozen_inputs,

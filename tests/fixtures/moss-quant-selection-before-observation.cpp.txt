@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: MIT
+// Pure GGML Vulkan selection reference, retained under the GGML MIT license.
+// Pre-observation functions only; no device calls, weights or private paths.
+static bool ggml_vk_get_mul_mat_mat_f16acc(ggml_backend_vk_context * ctx, ggml_type src0_type, ggml_type src1_type, ggml_prec prec) {
+    if (src0_type == GGML_TYPE_F32 || src0_type == GGML_TYPE_BF16) return false;
+    if (src1_type == GGML_TYPE_Q8_1) return false;
+    if (src0_type == GGML_TYPE_F16) {
+        return prec == GGML_PREC_DEFAULT && ctx->device->fp16 && !(ctx->device->coopmat_support && !ctx->device->coopmat_acc_f16_support);
+    }
+    // quant types
+    if (ctx->device->coopmat2) {
+        return prec == GGML_PREC_DEFAULT;
+    }
+    if (ctx->device->coopmat_support) {
+        return ctx->device->fp16 && ctx->device->coopmat_acc_f16_support && prec == GGML_PREC_DEFAULT;
+    }
+    return ctx->device->fp16 && prec == GGML_PREC_DEFAULT;
+}
+
+static const std::vector<vk_matmul_pipeline_pair>* ggml_vk_get_mul_mat_mat_pipeline_map(
+        ggml_backend_vk_context * ctx, ggml_type src0_type, ggml_type src1_type, ggml_prec prec, bool mul_mat_id = false) {
+    bool f16acc = ggml_vk_get_mul_mat_mat_f16acc(ctx, src0_type, src1_type, prec);
+    vk_matmul_pipeline_key key{src0_type, src1_type, mul_mat_id, f16acc};
+    auto it = ctx->device->pipeline_matmul.find(key);
+    if (it == ctx->device->pipeline_matmul.end() || it->second.empty()) {
+        // Try without f16acc
+        if (f16acc) {
+            key.f16acc = false;
+            it = ctx->device->pipeline_matmul.find(key);
+            if (it != ctx->device->pipeline_matmul.end() && !it->second.empty()) return &it->second;
+        }
+        return nullptr;
+    }
+    return &it->second;
+}
+
+// END_REFERENCE_FUNCTIONS

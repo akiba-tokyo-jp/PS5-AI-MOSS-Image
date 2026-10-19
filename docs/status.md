@@ -1,14 +1,16 @@
 # MOSS Imageの状態
 
-2026-10-20 JST、性能改善1〜3の実装・比較を完了しました。**現在残す実験profileはvariant2、FP32＋提出単位調整＋限定fusionです。private、production admission0、最大4試行、10GiB poolを維持します。** 最後のnative569/gateway572は通常API終了202後に両PID不在、独立observer011でidleを確認して停止しています。
+2026-10-20 JST。**FP16データ経路＋FP32累積の実験版で、MOSSの1024生成を1219.096190秒から1064.248911秒へ短縮しました。** private、production admission0、最大4試行、10GiB poolを維持します。速度改善を継続する中で得た単回比較で、最速構成や長期安定性の証明ではありません。[現在の実装・実測](moss-mixed-precision-20261020.md)。
 
-| 今回の比較 | 計測入りFP32基準 | 提出調整＋限定fusion FP32 |
-|---|---:|---:|
-| 256初回、model読込込み | 153.972336秒 | 152.631656秒 |
-| 同processの256後1024初回 | 1219.096190秒 | 1214.444805秒 |
-| PNG | 各sizeで候補と全バイト・RGB一致 | 目視正常、GPU/finite/LoRA504確認 |
+| 今回の比較 | 計測入りFP32基準 | 提出調整＋限定fusion FP32 | FP16データ＋FP32累積 |
+|---|---:|---:|---:|
+| 256初回、model読込込み | 153.972336秒 | 152.631656秒 | 145.839851秒 |
+| 同processの256後1024初回 | 1219.096190秒 | 1214.444805秒 | 1064.248911秒 |
+| PNG | 目視正常 | 基準と全バイト・RGB一致 | 目視正常、GPU/finite/LoRA504確認 |
 
-単回差は約0.87%／0.38%で、大幅高速化は未達、再現性や統計的な改善率は未確定です。FP16はfeature/env/logの有効化を確認しましたが、Q4_K N9数値ゲート41/153 mismatchで起動を拒否し、生成POST0でした。比較の任意warm繰り返しは実施していません。schema2のdriver計測はlookupを含むnested CPU wallで、GPU timestampや除去可能な待ち時間ではありません。[性能比較の詳細](moss-performance-optimization-20261020.md)。
+FP32基準比の単回差は256で5.28%、1024で12.70%です。初期のFP16候補はQ4_K N9数値ゲート41/153 mismatchで拒否されましたが、現在の混合精度版はMOSSとruntime LoRAの累積をFP32へ明示し、同じ許容値で合格して両サイズを生成しました。新たなmedium64タイル案は実機で既に既定動作と判明したため採用しません。schema2のdriver計測はlookupを含むnested CPU wallで、GPU timestampや除去可能な待ち時間ではありません。[以前の比較の詳細](moss-performance-optimization-20261020.md)。
+
+現在は実生成に成功した混合精度版と同じSELFをPS5へ配置済みです。復元後のnative672/gateway675のreadyと必須14起動ゲートを再確認し、画像POSTは追加せず通常APIで終了しました。両PID不在と独立observer015のidleを確認し、停止しています。以前の生成計測を復元後の追加生成として数えていません。
 
 ## 前回の1024 cold/warm（履歴）
 

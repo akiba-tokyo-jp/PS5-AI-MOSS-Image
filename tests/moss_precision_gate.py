@@ -74,6 +74,19 @@ def main():
         run("fp16-" + scenario, [fp16_exe, scenario])
     for scenario in ("upload-unknown-flash", "result-unknown-flash", "readback-unknown-flash", "cleanup-unknown-flash"):
         run("fp16-" + scenario, [fp16_exe, scenario], 42)
+    mixed_flags=["-DPS5_AI_ENABLE_FP16=1","-DPS5_AI_MOSS_F32_ACCUMULATION=1",
+                 "-DPS5_AI_MOSS_PERFORMANCE_TRIAL=1","-DPS5_AI_MOSS_PERF_VARIANT=1"]
+    mixed_exe=out/"moss-precision-gate-fp16-f32accum.exe"
+    run("mixed-compile",[llvm/"clang++.exe","-std=c++20","-O2","-static","-Wall","-Wextra","-Werror",
+        *mixed_flags,"-ffunction-sections","-fdata-sections",*includes,
+        root/"tests/moss_precision_gate.cpp",*objects,"-Wl,--gc-sections","-o",mixed_exe])
+    for scenario in ["success",*[x+y for x in ("missing-accum","f16-accum","invalid-accum","mismatch","nan")
+                                for y in ("-q4-matrix-small","-q4-matrix-large")]]:
+        run("mixed-"+scenario,[mixed_exe,scenario])
+    run("PS5-mixed-syntax",[llvm/"clang++.exe","--no-default-config","-target","x86_64-sie-ps5","-D__PROSPERO__=1",
+        *mixed_flags,"-fvisibility-nodllstorageclass=default","-isysroot",sdk,
+        "-isystem",sdk/"target/include/c++/v1","-isystem",sdk/"target/include",*includes,
+        "-std=c++20","-fexceptions","-fcxx-exceptions","-Wall","-Wextra","-Werror","-fsyntax-only",root/"tests/moss_precision_gate.cpp"])
     run("PS5-syntax", [llvm / "clang++.exe", "--no-default-config", "-target", "x86_64-sie-ps5", "-D__PROSPERO__=1",
                        "-fvisibility-nodllstorageclass=default", "-isysroot", sdk,
                        "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include", *includes,
@@ -82,7 +95,7 @@ def main():
                             "-DPS5_AI_ENABLE_FP16=1", "-fvisibility-nodllstorageclass=default", "-isysroot", sdk,
                             "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include", *includes,
                             "-std=c++20", "-fexceptions", "-fcxx-exceptions", "-Wall", "-Wextra", "-Werror", "-fsyntax-only", root / "tests/moss_precision_gate.cpp"])
-    sources = [root / "native/app/moss_precision_gate.inc", root / "tests/moss_precision_gate.cpp",
+    sources = [root / "native/app/moss_precision_gate.inc",root/"native/app/moss_accumulation_policy.h",root / "tests/moss_precision_gate.cpp",
                root / "tests/moss_precision_gate.py", sd / "ggml/src/ggml-quants.c", sd / "ggml/src/ggml-quants.h"]
     receipt = {"schema": "moss-precision-fixed-oracle-host-v1", "success": True, "results": results,
                "Q4_K_shape": [3072, 17, 7], "flash_shape": {"head_dim": 128, "heads": 24, "tokens": 8},

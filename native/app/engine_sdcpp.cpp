@@ -19,6 +19,7 @@
 #include "engine_config.h"
 #include "moss_runtime_admission.h"
 #include "moss_trial_contract.hpp"
+#include "moss_accumulation_policy.h"
 #include "moss_lora_contract.hpp"
 #include "moss_lora_receipt.h"
 #include "v3_shutdown.h"
@@ -302,6 +303,15 @@ static std::atomic<uint64_t> precision_outputs{0}, precision_values{0}, precisio
 static bool precision_announced=false,precision_fp16=false;
 static std::atomic<unsigned> perf_submit_multiplier{1},perf_max_nodes{100},perf_limited_fusion{0};
 static std::atomic<uint64_t> perf_fused_selected{0};
+static std::atomic<uint64_t> q4_matrix_f32acc{0},q4_matrix_f16acc{0},q4_matrix_invalid{0};
+extern "C" void ps5_ai_vk_quant_accumulation_selected(unsigned lhs_type,unsigned f16acc) {
+    if(f16acc>1){q4_matrix_invalid.fetch_add(1,std::memory_order_relaxed);return;}
+    if(lhs_type!=unsigned(GGML_TYPE_Q4_K))return;
+    (f16acc?q4_matrix_f16acc:q4_matrix_f32acc).fetch_add(1,std::memory_order_relaxed);
+}
+extern "C" void ps5_ai_moss_quant_snapshot(struct ps5_ai_moss_quant_receipt *out) {
+    if(out)*out={q4_matrix_f32acc.load(),q4_matrix_f16acc.load(),q4_matrix_invalid.load()};
+}
 extern "C" void ps5_ai_vk_optimization_profile(unsigned multiplier,unsigned max_nodes,unsigned limited_fusion,
                                               uint64_t base_cap,uint64_t ramped_cap) {
     perf_submit_multiplier=multiplier;perf_max_nodes=max_nodes;perf_limited_fusion=limited_fusion;
@@ -651,6 +661,8 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         current_status.gpu_available = 1;
         current_status.available = 1;
         write_event({{"event", "engine_configured"}, {"model", engine_config.model},
+                     {"moss_f32_accumulation",bool(PS5_AI_MOSS_F32_ACCUMULATION)},
+                     {"MOSS_linear_accumulation",PS5_AI_MOSS_F32_ACCUMULATION?"f32":"default"},
                      {"architecture", "MOSS-Image"}, {"llm_path", engine_config.llm}, {"vae_path", engine_config.vae}, {"tokenizer_path", engine_config.tokenizer},
                      {"backend", engine_config.backend}, {"params_backend", engine_config.params_backend},
                      {"packed_latent_channels",128}, {"taesd_enabled",false},
@@ -864,6 +876,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
 #endif
     phase_profile_begin();
     const uint64_t fused_before=perf_fused_selected.load(std::memory_order_relaxed);
+    ps5_ai_moss_quant_receipt quant_before{};ps5_ai_moss_quant_snapshot(&quant_before);
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;
     observation.requested_steps=request->steps;
@@ -990,6 +1003,12 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             throw std::runtime_error("Image rejected: completed GPU DiT/VAE and finite readback evidence is required");
         if (cpu_clip_pool_live_bytes.load() != 0)
             throw std::runtime_error("CPU Qwen shared Direct weights were not returned after conditioning");
+#if PS5_AI_MOSS_F32_ACCUMULATION
+        ps5_ai_moss_quant_receipt quant_completed{};ps5_ai_moss_quant_snapshot(&quant_completed);
+        if(quant_completed.q4_f32acc<=quant_before.q4_f32acc ||
+           quant_completed.q4_f16acc!=quant_before.q4_f16acc || quant_completed.invalid!=quant_before.invalid)
+            throw std::runtime_error("Image rejected: MOSS Q4 matrix F32 accumulation policy not observed");
+#endif
         if(!ps5_ai_direct_pool_log_checkpoint())
             throw std::runtime_error("Direct pool log checkpoint failed; image not published");
         const auto& image = images[0];
@@ -1034,6 +1053,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_native_capacity_snapshot("after_moss_generation");
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
+    ps5_ai_moss_quant_receipt quant_after{};ps5_ai_moss_quant_snapshot(&quant_after);
     write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", "text2img"},
                  {"moss_lora_path", engine_config.moss_lora_path}, {"moss_lora_strength", engine_config.moss_lora_strength},
                  {"moss_lora_loaded_tensors", moss_lora_loaded.load()}, {"moss_lora_matched_tensors", moss_lora_matched.load()},
@@ -1067,6 +1087,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
                  {"backend", engine_config.backend},
                  {"fp16_math",precision_fp16},{"finite_checked_outputs",precision_outputs.load()},
+                 {"moss_f32_accumulation",bool(PS5_AI_MOSS_F32_ACCUMULATION)},
+                 {"q4_matrix_recorded_f32acc",quant_after.q4_f32acc-quant_before.q4_f32acc},
+                 {"q4_matrix_recorded_f16acc",quant_after.q4_f16acc-quant_before.q4_f16acc},
+                 {"q4_matrix_accumulation_invalid",quant_after.invalid-quant_before.invalid},
+                 {"accumulation_observation_scope","recorded actual selected scalar matrix pipelines; generation GPU completion checked separately"},
                  {"performance_trial",bool(PS5_AI_MOSS_PERFORMANCE_TRIAL)},{"performance_variant",PS5_AI_MOSS_PERF_VARIANT},
                  {"submit_multiplier",perf_submit_multiplier.load()},{"max_nodes_per_submit",perf_max_nodes.load()},
                  {"limited_elementwise_fusion",perf_limited_fusion.load()!=0},

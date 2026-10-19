@@ -30,7 +30,20 @@ variant0はFP32基準、1は`--precision fp16`、2は`--precision fp32`の提出
 
 今回の共通coreは全75memberをfresh compileし、3nativeへ同じarchiveを結合しました。各nativeのGGML providerを新規compileし、3構成のcore/GGML/RADV archiveとshader headerがbyte同一であること、initializer24/provider6、input前後一致を確認しました。性能試験を理由に既存coreのsource/header検査を緩めていません。
 
-実機比較ではFP16が数値ゲートを通らず、variant2のFP32を残しています。ビルド成功が実機数値・画質・性能の合格を意味するものではありません。[今回の実測と制約](moss-performance-optimization-20261020.md)を参照してください。
+初期比較のFP16は数値ゲートを通りませんでしたが、後続の明示的FP32累積版は同じ許容値でゲートと実生成に合格しました。[混合精度版の実測](moss-mixed-precision-20261020.md)を現在の結果とし、[初期比較](moss-performance-optimization-20261020.md)は履歴として保持します。
+
+## FP16データ経路＋FP32累積の試験ビルド
+
+`moss-performance-fp16-f32accum.json`を選ぶ明示的なopt-inです。coreとnativeの両方へ`--moss-f32-accumulation`が必要です。
+
+```powershell
+python -B tools/build_moss_core.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-core-mixed --source-freeze D:/ps5-dev/moss-mixed-source-freeze.json --jobs 2 --moss-f32-accumulation
+python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core-mixed/manifest.private.json --out D:/ps5-dev/build/moss-native-mixed --experimental-small-trial --trial-10g --performance-trial-variant 1 --precision fp16 --moss-f32-accumulation
+```
+
+今回の構築は134入力のfreezeで実施しました。core全75compile commandの単一macro定義とmember/source対応をnative側でも検査し、core/nativeの不一致を拒否します。従来profileは既定0のままです。重みをF32へ変換するflagではなく、MOSS Linearとruntime LoRAの累積精度を指定します。実機では無効化環境変数の不在、実pipeline記録、固定数値ゲート、GPU完了と画像を別々に確認します。
+
+追加host試験は`tests/moss_accumulation_policy.py`、`tests/moss_f32_accumulation_build.py`、`tests/moss_quant_accumulation_selection.py`です。`--help`に従い個人用configとfresh D出力を指定します。selection試験は同梱したMITのpure関数fixtureと現在の実selection関数を比較し、モデルやVulkanを実行しません。
 
 ## 実機未確認のまま起動しないための境界
 

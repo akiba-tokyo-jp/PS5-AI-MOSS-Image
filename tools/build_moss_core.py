@@ -54,6 +54,19 @@ def d_path(path, label):
     return path
 
 
+def moss_accumulation_compile_flag(enabled):
+    if type(enabled) is not bool:raise ValueError("F32 accumulation policy must be an explicit bool")
+    return "-DPS5_AI_MOSS_F32_ACCUMULATION="+str(int(enabled))
+
+
+def materialize_compile_commands(rows,expand,moss_f32_accumulation=False):
+    flag=moss_accumulation_compile_flag(moss_f32_accumulation)
+    for row in rows:
+        if any("PS5_AI_MOSS_F32_ACCUMULATION" in arg for arg in row["argv"]):
+            raise ValueError("Core recipe must not override the explicit accumulation policy")
+    return [[expand(row["argv"][0]),flag,*[expand(arg) for arg in row["argv"][1:]]] for row in rows]
+
+
 def validate_profile(profile):
     if profile.get("schema") != "moss-core-profile-v1" or profile.get("parser") != "Windows CommandLineToArgvW":
         raise ValueError("Unexpected core recipe schema/parser")
@@ -163,6 +176,7 @@ def main():
     parser.add_argument("--jobs", type=int, choices=(1, 2), default=2)
     parser.add_argument("--source-freeze", type=Path, help="engine source-freeze receipt; required for actual compilation")
     parser.add_argument("--check-only", action="store_true", help="plan/guards only; no vendor mutation or compilation")
+    parser.add_argument("--moss-f32-accumulation",action="store_true",help="Explicit MOSS Linear F32 accumulation; preserved in all75 actual compile commands")
     args = parser.parse_args()
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     rows = validate_profile(profile)
@@ -187,7 +201,7 @@ def main():
     replacements = {"ROOT": ROOT.as_posix(), "SD": sd.as_posix(), "SDK": sdk.as_posix(), "LLVM": llvm.as_posix(), "OUT": out.as_posix()}
     def expand(arg):
         return re.sub(r"\$\{([^}]+)\}", lambda match: replacements[match[1]], arg)
-    commands = [[expand(arg) for arg in row["argv"]] for row in rows]
+    commands = materialize_compile_commands(rows,expand,args.moss_f32_accumulation)
     for row, command in zip(rows, commands):
         source = Path(expand(row["source"])).resolve(strict=True)
         if not inside(source, sd) or source.drive.upper() != "D:":
@@ -202,6 +216,9 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(header["text"], encoding="utf-8", newline="\n")
     manifest = {"schema": "moss-core-build-v1", "state": "checked_plan_only" if args.check_only else "building", "local_build_only": True, "console_executed": False, "PS5_connections": 0, "model_weights_loaded": False, "inference_performed": False, "GPU_used": False, "PNG_generated": False, "MOSS_RUNTIME_ADMITTED": 0, "jobs": args.jobs, "profile": record(PROFILE), "builder": record(__file__), "source_pins": {"stable_diffusion_base": actual_sd, "ggml": actual_ggml, "moss_backport_reference": profile["moss_upstream_commit"]}, "config_paths": {key: replacements[key] for key in ["SD", "SDK", "LLVM"]}, "commands": commands, "member_names": [row["member"] for row in rows], "members": [], "sources": [], "header_inputs": [], "archive": None, "warnings": [], "hash_inputs_stable": False}
+    manifest.update({"moss_f32_accumulation":args.moss_f32_accumulation,
+        "moss_accumulation_policy":"force_f32" if args.moss_f32_accumulation else "model_default",
+        "moss_accumulation_compile_flag":moss_accumulation_compile_flag(args.moss_f32_accumulation)})
     target_manifest = out / "manifest.private.json"
     write_json(target_manifest, manifest)
     if args.check_only:

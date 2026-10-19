@@ -208,6 +208,12 @@ static void moss_precision_readback_gate() {
             a = ggml_new_tensor_2d(r.ctx, bf16 ? GGML_TYPE_BF16 : GGML_TYPE_Q4_K, k, fixture.left_rows);
             b = ggml_new_tensor_2d(r.ctx, GGML_TYPE_F32, k, fixture.right_cols);
             out = ggml_mul_mat(r.ctx, a, b);
+#if PS5_AI_MOSS_F32_ACCUMULATION
+            // The fixed admission must use the exact same accumulation policy
+            // as MOSS Linear and its runtime LoRA path; thresholds stay intact.
+            if(!ggml_prec_set_acc(out,GGML_PREC_F32))
+                throw std::runtime_error("MOSS matrix F32 accumulation policy unavailable");
+#endif
         } else {
             a = ggml_new_tensor_3d(r.ctx, GGML_TYPE_F32, dim, tokens, heads);
             b = ggml_new_tensor_3d(r.ctx, GGML_TYPE_F16, dim, tokens, heads);
@@ -240,6 +246,8 @@ static void moss_precision_readback_gate() {
         ggml_backend_synchronize(r.backend);
         if (!ps5_ai_ggml_wait_backend("moss_precision_upload", 0)) ps5_ai_ggml_retain("moss_precision_upload_completion_unknown");
         ps5_ai_ggml_dispatch_stats before{}, after{}; ps5_ai_ggml_dispatch_snapshot(&before);
+        ps5_ai_moss_quant_receipt quant_before{},quant_after{};
+        ps5_ai_moss_quant_snapshot(&quant_before);
         if (before.work_pending) ps5_ai_ggml_retain("moss_precision_before_graph_pending");
         ps5_ai_ggml_report("BEFORE moss_precision case=%s CPU_fallback=0 model_loaded=0", case_name);
         const auto graph_started = std::chrono::steady_clock::now();
@@ -250,6 +258,7 @@ static void moss_precision_readback_gate() {
         const double graph_and_wait_seconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - graph_started).count();
         ps5_ai_ggml_dispatch_snapshot(&after);
+        ps5_ai_moss_quant_snapshot(&quant_after);
         if (after.work_pending) ps5_ai_ggml_retain("moss_precision_result_pending");
         if (!after.hardware_verified || after.dispatches <= before.dispatches || after.submits <= before.submits || after.fenced_completions <= before.fenced_completions)
             throw std::runtime_error("MOSS precision lacks hardware dispatch/submit/fence proof");
@@ -262,6 +271,11 @@ static void moss_precision_readback_gate() {
         const Comparison result = compare_fixture(actual, fixture, absolute, relative);
         write_event({{"event", "native_moss_precision_readback"}, {"case", case_name},
             {"requested_fp16_math", requested_fp16_math}, {"FA_accumulation", test == 1 ? "f32" : "not_applicable"},
+            {"moss_f32_accumulation",bool(PS5_AI_MOSS_F32_ACCUMULATION)},
+            {"matrix_accumulation_request",test==1?"not_applicable":PS5_AI_MOSS_F32_ACCUMULATION?"f32":"default"},
+            {"q4_matrix_recorded_f32acc",quant_after.q4_f32acc-quant_before.q4_f32acc},
+            {"q4_matrix_recorded_f16acc",quant_after.q4_f16acc-quant_before.q4_f16acc},
+            {"q4_matrix_accumulation_invalid",quant_after.invalid-quant_before.invalid},
             {"graph_and_wait_seconds", graph_and_wait_seconds}, {"CPU_wall_time", true},
             {"timing_scope", "graph_compute+synchronize+checked wait; upload/readback excluded; not pure GPU timestamp"},
             {"CPU_oracle", test == 1 ? "stable double softmax of actual F32 Q and F16 KV" : test == 2 ? "double dot of actual BF16 weights and unchanged F32 RHS" : test == 3 ? "double dot of actual BF16 weights and pinned Vulkan BF16-rounded F32 RHS" : "current GGML Q4_K reference quantizer/dequantizer then double dot"},
@@ -271,6 +285,11 @@ static void moss_precision_readback_gate() {
             {"submit_delta", after.submits - before.submits}, {"fence_delta", after.fenced_completions - before.fenced_completions}, {"CPU_fallback", false}, {"model_inference", false}});
         if (result.invalid || result.mismatches || !ps5_ai_ggml_log_healthy())
             throw std::runtime_error("MOSS precision numerical mismatch/nonfinite or unavailable durable receipt");
+#if PS5_AI_MOSS_F32_ACCUMULATION
+        if((test==4 || test==5) && (quant_after.q4_f32acc<=quant_before.q4_f32acc ||
+            quant_after.q4_f16acc!=quant_before.q4_f16acc || quant_after.invalid!=quant_before.invalid))
+            throw std::runtime_error("MOSS fixed matrix lacks actual F32 accumulation pipeline proof");
+#endif
         r.clear();
     }
 }

@@ -11,6 +11,8 @@ int ps5_ai_profile_enabled(void);
 void ps5_ai_profile_add(unsigned metric,uint64_t ns,uint64_t bytes,int valid);
 unsigned ps5_ai_profile_set_runner(unsigned group);
 unsigned ps5_ai_profile_get_runner(void);
+/* Actual selected matrix map after fallback; command recording, not completion. */
+void ps5_ai_vk_quant_accumulation_selected(unsigned lhs_type,unsigned f16acc);
 #ifdef __cplusplus
 }
 #endif

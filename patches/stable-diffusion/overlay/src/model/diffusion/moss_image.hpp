@@ -10,7 +10,21 @@
 #include "model/diffusion/model.hpp"
 #include "model_loader.h"
 
+#ifndef PS5_AI_MOSS_F32_ACCUMULATION
+#define PS5_AI_MOSS_F32_ACCUMULATION 0
+#endif
+#if PS5_AI_MOSS_F32_ACCUMULATION != 0 && PS5_AI_MOSS_F32_ACCUMULATION != 1
+#error "PS5_AI_MOSS_F32_ACCUMULATION must be 0 or 1"
+#endif
+
 namespace MOSSImage {
+    // This MOSS-only policy changes accumulator precision, not weight dtype or
+    // Vulkan's FP16 staging. Linear propagates it into runtime LoRA projections.
+    inline std::shared_ptr<Linear> make_linear(int64_t in_features, int64_t out_features, bool bias) {
+        return std::make_shared<Linear>(in_features, out_features, bias, false,
+                                        PS5_AI_MOSS_F32_ACCUMULATION == 1);
+    }
+
     struct MOSSImageConfig {
         int64_t dim      = 3072;
         int64_t ffn_dim  = 8192;
@@ -69,11 +83,11 @@ namespace MOSSImage {
             blocks["norm2"]    = std::make_shared<RMSNorm>(config.dim, 1e-6f);
             blocks["q_norm"]   = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
             blocks["k_norm"]   = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
-            blocks["qkv"]      = std::make_shared<Linear>(config.dim, config.dim * 3, true);
-            blocks["proj"]     = std::make_shared<Linear>(config.dim, config.dim, true);
-            blocks["ffn_up"]   = std::make_shared<Linear>(config.dim, config.ffn_dim, true);
-            blocks["ffn_gate"] = std::make_shared<Linear>(config.dim, config.ffn_dim, true);
-            blocks["ffn_down"] = std::make_shared<Linear>(config.ffn_dim, config.dim, true);
+            blocks["qkv"]      = make_linear(config.dim, config.dim * 3, true);
+            blocks["proj"]     = make_linear(config.dim, config.dim, true);
+            blocks["ffn_up"]   = make_linear(config.dim, config.ffn_dim, true);
+            blocks["ffn_gate"] = make_linear(config.dim, config.ffn_dim, true);
+            blocks["ffn_down"] = make_linear(config.ffn_dim, config.dim, true);
         }
 
         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x, ggml_tensor* pe) {
@@ -107,10 +121,10 @@ namespace MOSSImage {
             blocks["norm2"]            = std::make_shared<RMSNorm>(config.dim, 1e-6f);
             blocks["q_norm"]           = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
             blocks["k_norm"]           = std::make_shared<RMSNorm>(config.head_dim, 1e-6f);
-            blocks["proj.qkv"]         = std::make_shared<Linear>(config.dim, config.dim * 3, false);
-            blocks["proj.o"]           = std::make_shared<Linear>(config.dim, config.dim, false);
-            blocks["proj.ffn_up_gate"] = std::make_shared<Linear>(config.dim, config.ffn_dim * 2, false);
-            blocks["proj.ffn_down"]    = std::make_shared<Linear>(config.ffn_dim, config.dim, false);
+            blocks["proj.qkv"]         = make_linear(config.dim, config.dim * 3, false);
+            blocks["proj.o"]           = make_linear(config.dim, config.dim, false);
+            blocks["proj.ffn_up_gate"] = make_linear(config.dim, config.ffn_dim * 2, false);
+            blocks["proj.ffn_down"]    = make_linear(config.ffn_dim, config.dim, false);
         }
 
         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x, ggml_tensor* pe, ggml_tensor* mod) {
@@ -146,20 +160,20 @@ namespace MOSSImage {
 
         Model(const MOSSImageConfig& config)
             : config(config) {
-            blocks["video_embedder"]     = std::make_shared<Linear>(config.channels, config.dim, true);
-            blocks["text_embedder.proj"] = std::make_shared<Linear>(config.text_dim, config.dim, true);
+            blocks["video_embedder"]     = make_linear(config.channels, config.dim, true);
+            blocks["text_embedder.proj"] = make_linear(config.text_dim, config.dim, true);
             for (int i = 0; i < 2; ++i) {
                 blocks["text_embedder.blocks." + std::to_string(i)] = std::make_shared<TextBlock>(config);
             }
-            blocks["time_embedding.0"]        = std::make_shared<Linear>(config.freq_dim, config.dim, true);
-            blocks["time_embedding.2"]        = std::make_shared<Linear>(config.dim, config.dim, true);
-            blocks["shared_block_modulation"] = std::make_shared<Linear>(config.dim, 6 * config.dim, true);
-            blocks["video_head_modulation"]   = std::make_shared<Linear>(config.dim, 2 * config.dim, true);
+            blocks["time_embedding.0"]        = make_linear(config.freq_dim, config.dim, true);
+            blocks["time_embedding.2"]        = make_linear(config.dim, config.dim, true);
+            blocks["shared_block_modulation"] = make_linear(config.dim, 6 * config.dim, true);
+            blocks["video_head_modulation"]   = make_linear(config.dim, 2 * config.dim, true);
             for (int64_t i = 0; i < config.depth; ++i) {
                 blocks["layers." + std::to_string(i)] = std::make_shared<Block>(config);
             }
             blocks["final_norm_video"]   = std::make_shared<RMSNorm>(config.dim, 1e-6f);
-            blocks["final_linear_video"] = std::make_shared<Linear>(config.dim, config.channels, false);
+            blocks["final_linear_video"] = make_linear(config.dim, config.channels, false);
         }
 
         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* image, ggml_tensor* time, ggml_tensor* text, ggml_tensor* pe, const std::vector<int>& skip) {
