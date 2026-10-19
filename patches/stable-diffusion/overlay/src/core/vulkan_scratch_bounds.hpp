@@ -18,6 +18,10 @@ struct Profile {
     bool no_async = false;
     bool no_fusion = false;
     uint32_t shader_cores_upper = 0; // Frozen winsys 36, or provider count0 fallback.
+    // 0: original no-fusion; 1: exact PS5 F32 same-shape SIGMOID/SILU->MUL.
+    // Mode1 reuses unary_mul, which requests none of x/y/split/add-RMS staging.
+    // General fusion must remain disabled in both modes; unknown modes refuse.
+    uint32_t ps5_elementwise_fusion_mode = 0;
 };
 struct Bounds {
     bool known = true;
@@ -301,7 +305,8 @@ static Bounds inspect(const ggml_cgraph * graph,const Profile & profile) {
     Bounds result;
     if (!graph || graph->n_nodes<0 || graph->n_nodes>327680 ||
         !profile.ps5_scalar_no_coopmat || !profile.no_async || !profile.no_fusion ||
-        profile.shader_cores_upper!=36) {
+        profile.shader_cores_upper!=36 || profile.ps5_elementwise_fusion_mode>1 ||
+        (profile.ps5_elementwise_fusion_mode==1 && !profile.f16_math_disabled)) {
         result.known=false;result.reason="unsupported_or_unverified_profile";return result;
     }
     for(int i=0;i<graph->n_nodes;++i) {

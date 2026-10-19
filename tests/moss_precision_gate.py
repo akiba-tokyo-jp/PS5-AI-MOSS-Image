@@ -63,10 +63,25 @@ def main():
         for scenario in ("upload-unknown", "result-unknown", "readback-unknown", "cleanup-unknown", "compute-failed", "pending"):
             run(scenario + suffix, [exe, scenario + suffix], 42)
     run("nan-unsampled-q4-matrix-large", [exe, "nan-unsampled-q4-matrix-large"])
+    fp16_exe = out / "moss-precision-gate-fp16.exe"
+    run("fixture-fp16-compile", [llvm / "clang++.exe", "-std=c++20", "-O2", "-static", "-Wall", "-Wextra", "-Werror",
+                                 "-DPS5_AI_ENABLE_FP16=1", "-ffunction-sections", "-fdata-sections", *includes,
+                                 root / "tests/moss_precision_gate.cpp", *objects, "-Wl,--gc-sections", "-o", fp16_exe])
+    # Synthetic mode/policy/refusal tests do not emulate FP16 GPU accuracy.
+    # The unchanged double oracle and tolerances must pass on actual hardware.
+    for scenario in ("oracles", "success", "mismatch-bf16", "mismatch-bf16-matrix", "mismatch-q4-matrix-small",
+                     "mismatch-q4-matrix-large", "mismatch-flash", "nan-flash", "no-fence-flash"):
+        run("fp16-" + scenario, [fp16_exe, scenario])
+    for scenario in ("upload-unknown-flash", "result-unknown-flash", "readback-unknown-flash", "cleanup-unknown-flash"):
+        run("fp16-" + scenario, [fp16_exe, scenario], 42)
     run("PS5-syntax", [llvm / "clang++.exe", "--no-default-config", "-target", "x86_64-sie-ps5", "-D__PROSPERO__=1",
                        "-fvisibility-nodllstorageclass=default", "-isysroot", sdk,
                        "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include", *includes,
                        "-std=c++20", "-fexceptions", "-fcxx-exceptions", "-Wall", "-Wextra", "-Werror", "-fsyntax-only", root / "tests/moss_precision_gate.cpp"])
+    run("PS5-fp16-syntax", [llvm / "clang++.exe", "--no-default-config", "-target", "x86_64-sie-ps5", "-D__PROSPERO__=1",
+                            "-DPS5_AI_ENABLE_FP16=1", "-fvisibility-nodllstorageclass=default", "-isysroot", sdk,
+                            "-isystem", sdk / "target/include/c++/v1", "-isystem", sdk / "target/include", *includes,
+                            "-std=c++20", "-fexceptions", "-fcxx-exceptions", "-Wall", "-Wextra", "-Werror", "-fsyntax-only", root / "tests/moss_precision_gate.cpp"])
     sources = [root / "native/app/moss_precision_gate.inc", root / "tests/moss_precision_gate.cpp",
                root / "tests/moss_precision_gate.py", sd / "ggml/src/ggml-quants.c", sd / "ggml/src/ggml-quants.h"]
     receipt = {"schema": "moss-precision-fixed-oracle-host-v1", "success": True, "results": results,
@@ -75,6 +90,8 @@ def main():
                "Q4_K_large_compared_values": 99, "Q4_K_large_finite_checked_values": 933888,
                "Q4_K_matrix_oracle": "Pinned scalar FP32/no int-dot Q4_K decode and unchanged F32 RHS; CPU double dot; no model weights",
                "BF16_shapes": [[3072, 17, 7], [3072, 17, 9]], "BF16_oracle": "N7 direct F32 RHS; N9 pinned Vulkan BF16 RHS staging; double dot actual rounded values",
+               "requested_math_modes_host_checked": ["fp32", "fp16"], "FA_accumulation": "f32 as required by actual MOSS model",
+               "FP16_GPU_accuracy_proven": False, "tolerances_relaxed": False,
                "PS5_access": False, "native_GPU_execution": False, "GPU_proof": "not performed; synthetic backend tests only",
                "learned_model_inference": False, "CPU_graph_backend_linked": False,
                "sources": {str(x): hashlib.sha256(x.read_bytes()).hexdigest() for x in sources}}

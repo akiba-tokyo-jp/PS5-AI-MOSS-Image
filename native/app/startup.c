@@ -2,6 +2,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "probe.h"
 #include "precision_mode.h"
+#ifndef PS5_AI_MOSS_PERFORMANCE_TRIAL
+#define PS5_AI_MOSS_PERFORMANCE_TRIAL 0
+#endif
+#ifndef PS5_AI_MOSS_PERF_VARIANT
+#define PS5_AI_MOSS_PERF_VARIANT 0
+#endif
 #include "engine.h"
 #include "arena.h"
 #include "v3_shutdown.h"
@@ -768,6 +774,13 @@ int __wrap_ps5_ai_engine_init(const char *config_path, char *error, size_t error
         setenv("GGML_VK_DISABLE_COOPMAT","1",1) || setenv("GGML_VK_DISABLE_COOPMAT2","1",1) ||
         setenv("GGML_VK_SUBALLOCATION_BLOCK_SIZE","67108864",1) || setenv("GGML_VK_VISIBLE_DEVICES","0",1))
         return init_error(error,error_size,"Native GPU environment guard failed");
+#if PS5_AI_MOSS_PERFORMANCE_TRIAL && PS5_AI_MOSS_PERF_VARIANT == 2
+    if(setenv("GGML_VK_PS5_SUBMIT_BATCH","2",1) || setenv("GGML_VK_PS5_ELEMENTWISE_FUSION","1",1))
+        return init_error(error,error_size,"MOSS bounded submission/fusion environment failed");
+#else
+    if(unsetenv("GGML_VK_PS5_SUBMIT_BATCH") || unsetenv("GGML_VK_PS5_ELEMENTWISE_FUSION"))
+        return init_error(error,error_size,"MOSS baseline optimization environment clear failed");
+#endif
     native_lifecycle_mark(PS5_AI_LIFE_AGC);
     ps5_ai_ggml_report("BEFORE native_RADV_platform_init sole_Init8_owner=1 hard_timeout=none");
     if (!log_healthy) return init_error(error,error_size,"Native Init8 BEFORE log failed");

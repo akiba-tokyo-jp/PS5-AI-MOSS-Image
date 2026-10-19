@@ -1,6 +1,6 @@
 # PS5 AI MOSS Image API
 
-privateの実験版です。2026-10-20に専用10GiB trialでMOSS＋指定LoRAの1024×1024・50stepsを初回と同process2回目で生成し、OpenAI互換APIで両PNGを取得しました。PS5内生成時間は1242.706350秒／1177.725365秒で、正常な同一画像を確認しました。production runtime admission0／privateを維持し、現在のnative/gatewayは正常終了しています。[実測の範囲](moss-1024-cold-warm-20261020.md)を参照してください。別のホスト用プロトコル検査は失敗専用の代替処理で、モデル推論や画像生成を行いません。
+privateの実験版です。最新の性能比較ではMOSS＋指定LoRAをPS5で生成し、OpenAI互換APIから256/1024 PNGを取得しました。FP32提出単位調整＋限定fusionの実験profileを残し、production runtime admission0／privateを維持します。最後のnative/gatewayは正常終了し、PID不在と独立idleを確認しています。[今回の性能比較](moss-performance-optimization-20261020.md)、[以前の1024 cold/warm](moss-1024-cold-warm-20261020.md)を参照してください。別のホスト用プロトコル検査は失敗専用の代替処理で、モデル推論や画像生成を行いません。
 
 | 用途 | 接続先・識別子 |
 |---|---|
@@ -37,9 +37,11 @@ WAIは8188／8189、Animaは8190／8191を維持します。WAI・Anima・MOSS�
 
 `steps`・`cfg_scale`・`flow_shift`・`seed`・`sampler`・`negative_prompt`はこのサーバー独自の拡張です。OpenAI Images API全体の実装を意味しません。応答形式はbase64 PNGまたは期限付きの画像専用署名URLです。`GET /v1/models`、`GET /health`、`GET /openapi.json`で識別と仕様を確認できます。[OpenAPI仕様](openapi.json)。JSON仕様と実機ビルドの埋込schemaは一致を維持しており、infoの`host-prepared`／実機未検証という説明文は初期ホスト構築時の履歴です。今回の結果は本資料で更新し、説明文だけのための再ビルドはしていません。
 
-通常のnative／gateway／PowerShellクライアントの既定stepsは元から50です。4stepsは初回smoke限定値でした。上のJSONは今回実測したrequestと同じです。1024 benchmark用SELFは1024×1024・50steps、CFG3、shift5、Euler、seed20261020、LoRA0.7に限定し、1process最大2試行で失敗も消費、3回目は拒否します。旧256専用profileとは区別します。gateway待機は2時間、検証clientは7800秒で、timeout後もPOSTを再送しません。今回の2試行は完了し、追加の実行はこの結果から自動で許可されません。
+通常のnative／gateway／PowerShellクライアントの既定stepsは元から50です。4stepsは初回smoke限定値でした。上のJSONは実測したrequestと同じです。現在の性能試験用SELFは256/1024の正方形・50steps、CFG3、shift5、Euler、seed20261020、LoRA0.7に限定し、1process最大4試行で失敗も消費、5回目は拒否します。不正requestはclaimを消費しません。clientは256の成功・目視・空queueを確認してから1024へ進みます。HTTPからprecision/fusion/モデルを任意に切り替えるAPIではありません。
 
-幅・高さは64〜1024の整数で、それぞれ16の倍数を指定します。`80x96`など、64の倍数に限らない寸法もプロトコル上は受け付けます。1024×1024の今回2枚以外のサイズや最大能力を実証した意味ではありません。
+旧1024 benchmark用SELFの最大2試行、旧256専用SELFの最大1試行は別契約として保持します。gateway待機は2時間、検証clientは7800秒で、timeout後もPOSTを再送しません。今回の許可された比較は完了し、結果や残りclaimから追加実行を自動で許可しません。
+
+幅・高さはプロトコル上64〜1024の整数で、それぞれ16の倍数を指定します。`80x96`などもプロトコル上の寸法ですが、現在の試験SELFが許可するのは256/1024の正方形だけです。今回の限定条件以外のサイズや最大能力を実証した意味ではありません。
 
 `flow_shift`はfloatへ変換しても正かつ有限である数を指定します。0・負数・NaN・無限大・floatで0に丸められる極小値を拒否します。省略またはOpenAI側の`null`では5を使用します。`quality: "auto"`／`"standard"`は受け付けますが、別の品質モデルへ切り替える指定ではありません。
 

@@ -14,9 +14,23 @@ python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/
 python -B tools/build_gateway.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-gateway --native
 ```
 
-[source-freeze例](../config/moss-source-freeze.json.example)をD側の個人用JSONへコピーし、`repository_root`と`private_vendor_root`の2パスを実際のcloneへ合わせます。例の古い21入力を現行LoRA/lifecycleの完全freezeとして使い回しません。ソース改修後はレビュー・host確認を行い、実際の全対象入力のsize/SHAを含む新しいfreezeを作成します。現ローカルcore用freezeは181入力で、source/header/overlayの前後hashも別途確認しています。core builderの引数は同toolの`--help`を参照してください。SDK・shader生成物・レビュー済み依存アーカイブが別途必要で、クリーンPCからのワンコマンド依存構築ではありません。
+[source-freeze例](../config/moss-source-freeze.json.example)をD側の個人用JSONへコピーし、`repository_root`と`private_vendor_root`の2パスを実際のcloneへ合わせます。例の古い21入力を現行LoRA/lifecycleの完全freezeとして使い回しません。ソース改修後はレビュー・host確認を行い、実際の全対象入力のsize/SHAを含む新しいfreezeを作成します。初期LoRA/lifecycle buildのcore用181入力freezeは履歴です。今回の性能試験は新しい132入力freezeを作成し、source/header/overlayの前後hashも別途確認しました。core builderの引数は同toolの`--help`を参照してください。SDK・shader生成物・レビュー済み依存アーカイブが別途必要で、クリーンPCからのワンコマンド依存構築ではありません。
 
 nativeは`title/PPSA99190/eboot.bin`、gatewayは`ps5-ai-moss-openai-gateway.elf`を出力します。SELF整合性・loaded bytes・動的依存・ソースhashを検証します。`fp32`は演算設定であり、GGUFのQ4保存形式とは別です。
+
+## 2026-10-20の性能試験専用ビルド
+
+新しい3profileは`moss-performance-baseline-fp32.json`、`moss-performance-fp16.json`、`moss-performance-submit-fusion-fp32.json`です。次のように明示的な試験flagを指定します。
+
+```powershell
+python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core/manifest.private.json --out D:/ps5-dev/build/moss-performance-baseline --experimental-small-trial --trial-10g --performance-trial-variant 0 --precision fp32
+```
+
+variant0はFP32基準、1は`--precision fp16`、2は`--precision fp32`の提出単位調整＋限定fusionです。variant/precision不一致、固定契約の欠落・追加・値/型の不一致は拒否します。最大4試行、256/1024・50stepsなどの固定条件で、production admission0の通常ビルドを解除するflagではありません。
+
+今回の共通coreは全75memberをfresh compileし、3nativeへ同じarchiveを結合しました。各nativeのGGML providerを新規compileし、3構成のcore/GGML/RADV archiveとshader headerがbyte同一であること、initializer24/provider6、input前後一致を確認しました。性能試験を理由に既存coreのsource/header検査を緩めていません。
+
+実機比較ではFP16が数値ゲートを通らず、variant2のFP32を残しています。ビルド成功が実機数値・画質・性能の合格を意味するものではありません。[今回の実測と制約](moss-performance-optimization-20261020.md)を参照してください。
 
 ## 実機未確認のまま起動しないための境界
 

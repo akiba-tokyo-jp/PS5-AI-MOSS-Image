@@ -21,11 +21,21 @@
 static ggml_backend_dev_t gpu_device = reinterpret_cast<ggml_backend_dev_t>(uintptr_t(42));
 static std::string scenario;
 static int graphs = 0, buffer_frees = 0, backend_frees = 0, events = 0;
-static int target_case() { return scenario.find("-q4-matrix-large") != std::string::npos ? 5 : scenario.find("-q4-matrix-small") != std::string::npos ? 4 : scenario.find("-bf16-matrix") != std::string::npos ? 3 : scenario.find("-bf16") != std::string::npos ? 2 : 0; }
-static std::string fault() { const auto pos = std::min(scenario.find("-bf16"), scenario.find("-q4-matrix")); return scenario.substr(0, pos); }
+static int target_case() { return scenario.find("-q4-matrix-large") != std::string::npos ? 5 : scenario.find("-q4-matrix-small") != std::string::npos ? 4 : scenario.find("-bf16-matrix") != std::string::npos ? 3 : scenario.find("-bf16") != std::string::npos ? 2 : scenario.find("-flash") != std::string::npos ? 1 : 0; }
+static std::string fault() { const auto pos = std::min({scenario.find("-bf16"), scenario.find("-q4-matrix"), scenario.find("-flash")}); return scenario.substr(0, pos); }
 static ps5_ai_ggml_dispatch_stats stats{10, 10, 10, 0, 1};
 static void write_event(const nlohmann::json &value) {
     assert(value.at("CPU_fallback") == false && value.at("model_inference") == false); ++events;
+    assert(value.at("CPU_wall_time") == true);
+    const double elapsed = value.at("graph_and_wait_seconds").get<double>();
+    assert(std::isfinite(elapsed) && elapsed >= 0);
+#if defined(PS5_AI_ENABLE_FP16) && PS5_AI_ENABLE_FP16
+    assert(value.at("requested_fp16_math") == true);
+#else
+    assert(value.at("requested_fp16_math") == false);
+#endif
+    if (value.at("case") == "F32_Q_F16_KV_head128_heads24_tokens8")
+        assert(value.at("FA_accumulation") == "f32");
 }
 #include "moss_precision_gate.inc"
 
@@ -36,7 +46,12 @@ bool ggml_backend_is_vk(ggml_backend_t) { return scenario != "not-vulkan"; }
 ggml_backend_dev_t ggml_backend_get_device(ggml_backend_t) { return scenario == "wrong-device" ? nullptr : gpu_device; }
 void ggml_backend_free(ggml_backend_t) { ++backend_frees; }
 void ggml_backend_synchronize(ggml_backend_t) {}
-bool ggml_backend_supports_op(ggml_backend_t, const ggml_tensor *) { return !(fault() == "unsupported" && graphs == target_case()); }
+bool ggml_backend_supports_op(ggml_backend_t, const ggml_tensor *op) {
+    // Source-linked regression: omitting the model's explicit F32 FA policy
+    // must refuse the ordinary success path in either requested math mode.
+    if (op->op == GGML_OP_FLASH_ATTN_EXT) assert(op->op_params[3] == GGML_PREC_F32);
+    return !(fault() == "unsupported" && graphs == target_case());
+}
 ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors(ggml_context *ctx, ggml_backend_t) {
     if (fault() == "allocation" && graphs == target_case()) return nullptr;
     auto *result = new ggml_backend_buffer;

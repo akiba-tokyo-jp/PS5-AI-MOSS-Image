@@ -1,4 +1,22 @@
 #include "ggml-vulkan-common.h"
+#include "ggml-vulkan-ps5-profile.h"
+#include "phase_profile.h"
+
+extern "C" void ps5_ai_vk_optimization_profile(unsigned, unsigned, unsigned, uint64_t, uint64_t) __attribute__((weak));
+extern "C" void ps5_ai_vk_limited_fusion_selected(unsigned) __attribute__((weak));
+
+static uint64_t ggml_vk_submission_flops_cap(const vk_device & device) {
+    uint64_t cap = 200'000'000'000ULL;
+    // Preserve the existing weak-AMD watchdog mitigation, including its thresholds.
+    if (device->vendor_id == VK_VENDOR_ID_AMD && device->shader_core_count > 0) {
+        if (device->architecture == AMD_GCN && device->shader_core_count < 32) {
+            cap = 500'000'000ULL * device->shader_core_count;
+        } else if (device->architecture != AMD_GCN && device->shader_core_count < 24) {
+            cap = 2'000'000'000ULL * device->shader_core_count;
+        }
+    }
+    return cap;
+}
 
 namespace {
 inline std::ostream & operator<<(std::ostream & os, vk::Buffer buffer) {
@@ -4734,6 +4752,26 @@ vk_device ggml_vk_get_device(size_t idx) {
         device->serialize_submissions = getenv("GGML_VK_SERIALIZE_SUBMISSIONS") != nullptr;
 
         device->disable_fusion = getenv("GGML_VK_DISABLE_FUSION") != nullptr;
+
+        ggml_vk_ps5_profile::Options ps5_options;
+        const char * ps5_profile_error = nullptr;
+        if (!ggml_vk_ps5_profile::parse({
+                getenv("GGML_VK_PS5_SUBMIT_BATCH"), getenv("GGML_VK_PS5_ELEMENTWISE_FUSION"),
+                getenv("GGML_VK_SERIALIZE_SUBMISSIONS"), getenv("GGML_VK_DISABLE_ASYNC"),
+                getenv("GGML_VK_DISABLE_FUSION"), getenv("GGML_VK_DISABLE_F16"),
+                getenv("GGML_VK_DISABLE_COOPMAT"), getenv("GGML_VK_DISABLE_COOPMAT2"),
+                GGML_VK_MAX_NODES_PER_SUBMIT}, ps5_options, ps5_profile_error)) {
+            throw std::runtime_error(ps5_profile_error);
+        }
+        device->ps5_submit_batch_multiplier = ps5_options.submit_multiplier;
+        device->ps5_elementwise_fusion = ps5_options.elementwise_fusion;
+        if (ps5_options.submit_multiplier == 2) device->max_nodes_per_submit = 200;
+        const uint64_t ps5_flops_cap = ggml_vk_submission_flops_cap(device) * ps5_options.submit_multiplier;
+        GGML_LOG_INFO("ggml_vulkan: PS5 optimization submit_multiplier=%u max_nodes=%u limited_fusion=%u adaptive_flops_cap=%llu max_ramped_flops_cap=%llu\n",
+            ps5_options.submit_multiplier, device->max_nodes_per_submit, unsigned(ps5_options.elementwise_fusion),
+            (unsigned long long)ps5_flops_cap, (unsigned long long)(ps5_flops_cap * 8u));
+        if (ps5_ai_vk_optimization_profile) ps5_ai_vk_optimization_profile(ps5_options.submit_multiplier,
+            device->max_nodes_per_submit, unsigned(ps5_options.elementwise_fusion), ps5_flops_cap, ps5_flops_cap * 8u);
 
         device->add_rms_fusion = !device->disable_fusion &&
                                  device->subgroup_arithmetic &&
@@ -14184,6 +14222,7 @@ static int32_t find_first_set(uint32_t x) {
 }
 
 static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+    PS5AIProfileScope backend_timing(ps5_ai_profile_vulkan_metric(4));
     VK_LOG_DEBUG("ggml_backend_vk_graph_compute(" << cgraph->n_nodes << " nodes)");
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
 
@@ -14269,17 +14308,9 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
     uint32_t submit_count = 0;
     uint64_t batch_flops = 0;
     uint64_t total_flops = 0;
-    uint64_t flops_cap = 200'000'000'000ULL;
-
-    // On weaker AMD GPUs larger submissions can hit a driver timeout, submit more often to avoid this
-    if (ctx->device->vendor_id == VK_VENDOR_ID_AMD && ctx->device->shader_core_count > 0) {
-        if (ctx->device->architecture == AMD_GCN && ctx->device->shader_core_count < 32) {
-            flops_cap = 500'000'000ULL * ctx->device->shader_core_count;
-        } else if (ctx->device->architecture != AMD_GCN && ctx->device->shader_core_count < 24) {
-            flops_cap = 2'000'000'000ULL * ctx->device->shader_core_count;
-        }
-    }
-    uint64_t flops_per_submit = std::min(flops_cap, ctx->last_total_flops / 40u);
+    const uint64_t flops_cap = ggml_vk_submission_flops_cap(ctx->device);
+    uint64_t flops_per_submit = ggml_vk_ps5_profile::initial_flops(flops_cap, ctx->last_total_flops,
+        ctx->device->ps5_submit_batch_multiplier);
 
     auto const submit_after = [&](int start, int end) {
         if (ctx->device->serialize_submissions) {
@@ -14345,7 +14376,18 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         ctx->fused_topk_qsa = false;
         ctx->fused_rms_norm_mode = RMS_NORM_COUNT;
         const char *fusion_string {};
-        if (!ctx->device->disable_fusion) {
+        bool ps5_limited_fusion = false;
+        // The same existing consumer/dependency checks and common alias validation
+        // below are mandatory. This selects only the existing unary_mul shader;
+        // it has two inputs/one output and adds no four-prealloc buffer request.
+        if (ctx->device->ps5_elementwise_fusion && ctx->device->disable_fusion && i + 1 < cgraph->n_nodes &&
+            ggml_vk_ps5_profile::limited_unary_mul_metadata(cgraph->nodes[i], cgraph->nodes[i+1]) &&
+            ggml_vk_can_fuse(ctx, cgraph, i, { GGML_OP_UNARY, GGML_OP_MUL })) {
+            ctx->num_additional_fused_ops = 1;
+            ps5_limited_fusion = true;
+            fusion_string = ggml_get_unary_op(cgraph->nodes[i]) == GGML_UNARY_OP_SIGMOID ? "PS5_SIGMOID_MUL" : "PS5_SILU_MUL";
+            op_srcs_fused_elementwise[0] = op_srcs_fused_elementwise[1] = true;
+        } else if (!ctx->device->disable_fusion) {
             uint32_t num_adds = ggml_vk_fuse_multi_add(ctx, cgraph, i);
             if (num_adds) {
                 ctx->num_additional_fused_ops = num_adds - 1;
@@ -14590,6 +14632,10 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
                       (almost_ready && !ctx->almost_ready_fence_pending);
 
         bool enqueued = ggml_vk_build_graph(ctx, cgraph, i, cgraph->nodes[submit_node_idx], submit_node_idx, i + ctx->num_additional_fused_ops >= last_node, almost_ready, submit);
+
+        if (enqueued && ps5_limited_fusion && ctx->num_additional_fused_ops == 1 && ps5_ai_vk_limited_fusion_selected) {
+            ps5_ai_vk_limited_fusion_selected(unsigned(ggml_get_unary_op(cgraph->nodes[i])));
+        }
 
         if (vk_perf_logger_enabled && enqueued) {
             compute_ctx = ggml_vk_get_compute_ctx(ctx);

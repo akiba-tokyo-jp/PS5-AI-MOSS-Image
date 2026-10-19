@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "probe.h"
+#include "phase_profile.h"
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include <atomic>
@@ -79,7 +80,9 @@ static VKAPI_ATTR VkResult VKAPI_CALL queue_submit(VkQueue queue, uint32_t count
         in_graph, count, has_commands, fence != VK_NULL_HANDLE,
         (unsigned long long)dispatches.load());
     if (!ps5_ai_ggml_log_healthy()) ps5_ai_ggml_retain("GGML_submit_BEFORE_log_failed");
-    VkResult rc = device_function<PFN_vkQueueSubmit>(probe_device, "vkQueueSubmit")(queue, count, info, fence);
+    VkResult rc;
+    {PS5AIProfileScope timing(ps5_ai_profile_vulkan_metric(0));
+        rc=device_function<PFN_vkQueueSubmit>(probe_device,"vkQueueSubmit")(queue,count,info,fence);}
     (rc == VK_SUCCESS ? ps5_ai_ggml_report_routine : ps5_ai_ggml_report)("RETURN GGML_vkQueueSubmit result=%d", rc);
     if (rc != VK_SUCCESS || !ps5_ai_ggml_log_healthy()) ps5_ai_ggml_retain("GGML_QueueSubmit_outcome_uncertain");
     return rc;
@@ -95,8 +98,10 @@ static VKAPI_ATTR VkResult VKAPI_CALL wait_fences(VkDevice device, uint32_t coun
     ps5_ai_ggml_report_routine("BEFORE GGML_vkWaitForFences count=%u wait_all=%u timeout_requested_ns=%llu hard_timeout_guaranteed=0",
         count, wait_all, (unsigned long long)bounded_timeout);
     if (!ps5_ai_ggml_log_healthy()) ps5_ai_ggml_retain("GGML_wait_BEFORE_log_failed");
-    VkResult rc = device_function<PFN_vkWaitForFences>(device, "vkWaitForFences")(
-        device, count, fences, wait_all, bounded_timeout);
+    VkResult rc;
+    {PS5AIProfileScope timing(ps5_ai_profile_vulkan_metric(1));
+        rc=device_function<PFN_vkWaitForFences>(device,"vkWaitForFences")(
+            device,count,fences,wait_all,bounded_timeout);}
     (rc == VK_SUCCESS ? ps5_ai_ggml_report_routine : ps5_ai_ggml_report)("RETURN GGML_vkWaitForFences result=%d recorded_graph_dispatches_total=%llu dispatch_diagnostic=aggregate_command_recording",
         rc, (unsigned long long)dispatches.load());
     if (rc != VK_SUCCESS || !ps5_ai_ggml_log_healthy()) ps5_ai_ggml_retain("GGML_fence_outcome_uncertain");
@@ -117,7 +122,12 @@ static VKAPI_ATTR void VKAPI_CALL dispatch(VkCommandBuffer command, uint32_t x, 
     /* Command recording does not execute GPU work. The existing atomic proof
      * counter is durably summarized before actual submit and at fence return.
      * All hardware checks, submit/fence/quiet guards and fault retention remain. */
+    PS5AIProfileScope timing(ps5_ai_profile_vulkan_metric(2));
     device_function<PFN_vkCmdDispatch>(probe_device, "vkCmdDispatch")(command, x, y, z);
+}
+static VKAPI_ATTR void VKAPI_CALL bind_pipeline(VkCommandBuffer command,VkPipelineBindPoint point,VkPipeline pipeline) {
+    PS5AIProfileScope timing(ps5_ai_profile_vulkan_metric(3));
+    device_function<PFN_vkCmdBindPipeline>(probe_device,"vkCmdBindPipeline")(command,point,pipeline);
 }
 static VKAPI_ATTR void VKAPI_CALL dispatch_indirect(VkCommandBuffer, VkBuffer, VkDeviceSize) {
     ps5_ai_ggml_retain("GGML_indirect_dispatch_not_supported_by_diagnostic");
@@ -161,6 +171,7 @@ static PFN_vkVoidFunction lookup_wrapper(const char *name) {
     RETURN_WRAPPER(QueueSubmit, queue_submit); RETURN_WRAPPER(QueueSubmit2, queue_submit2);
     RETURN_WRAPPER(QueueSubmit2KHR, queue_submit2); RETURN_WRAPPER(WaitForFences, wait_fences);
     RETURN_WRAPPER(CmdDispatch, dispatch); RETURN_WRAPPER(CmdDispatchIndirect, dispatch_indirect);
+    RETURN_WRAPPER(CmdBindPipeline, bind_pipeline);
     RETURN_WRAPPER(FreeMemory, guarded_FreeMemory); RETURN_WRAPPER(DestroyBuffer, guarded_DestroyBuffer);
     RETURN_WRAPPER(DestroyCommandPool, guarded_DestroyCommandPool);
     RETURN_WRAPPER(DestroyDescriptorPool, guarded_DestroyDescriptorPool);

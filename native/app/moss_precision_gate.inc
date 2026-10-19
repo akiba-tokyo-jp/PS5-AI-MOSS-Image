@@ -4,11 +4,17 @@
  * the already selected shared Vulkan device with positive hardware receipts.
  */
 #include "ggml-quants.h"
+#include <chrono>
 
 namespace moss_precision {
 constexpr int k = 3072, m = 17, n = 7;
 constexpr int dim = 128, heads = 24, tokens = 8;
 constexpr float flash_scale = 0.08838834764831845f;
+#if defined(PS5_AI_ENABLE_FP16) && PS5_AI_ENABLE_FP16
+constexpr bool requested_fp16_math = true;
+#else
+constexpr bool requested_fp16_math = false;
+#endif
 
 struct Fixture {
     int left_rows = m;
@@ -207,6 +213,10 @@ static void moss_precision_readback_gate() {
             b = ggml_new_tensor_3d(r.ctx, GGML_TYPE_F16, dim, tokens, heads);
             v = ggml_new_tensor_3d(r.ctx, GGML_TYPE_F16, dim, tokens, heads);
             out = ggml_flash_attn_ext(r.ctx, a, b, v, nullptr, flash_scale, 0.f, 0.f);
+            // The MOSS model requests F32 FA accumulation even with FP16 math
+            // enabled. Exercise that actual policy, not DEFAULT f16acc.
+            if (!ggml_prec_set_acc(out, GGML_PREC_F32))
+                throw std::runtime_error("MOSS Flash precision policy unavailable");
         }
         ggml_set_input(a); ggml_set_input(b); if (v) ggml_set_input(v); ggml_set_output(out);
         auto *graph = ggml_new_graph_custom(r.ctx, 16, false); ggml_build_forward_expand(graph, out);
@@ -232,10 +242,13 @@ static void moss_precision_readback_gate() {
         ps5_ai_ggml_dispatch_stats before{}, after{}; ps5_ai_ggml_dispatch_snapshot(&before);
         if (before.work_pending) ps5_ai_ggml_retain("moss_precision_before_graph_pending");
         ps5_ai_ggml_report("BEFORE moss_precision case=%s CPU_fallback=0 model_loaded=0", case_name);
+        const auto graph_started = std::chrono::steady_clock::now();
         const ggml_status status = ggml_backend_graph_compute(r.backend, graph);
         ggml_backend_synchronize(r.backend);
         if (status != GGML_STATUS_SUCCESS || !ps5_ai_ggml_wait_backend("moss_precision_result", 1))
             ps5_ai_ggml_retain("moss_precision_compute_completion_unknown");
+        const double graph_and_wait_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - graph_started).count();
         ps5_ai_ggml_dispatch_snapshot(&after);
         if (after.work_pending) ps5_ai_ggml_retain("moss_precision_result_pending");
         if (!after.hardware_verified || after.dispatches <= before.dispatches || after.submits <= before.submits || after.fenced_completions <= before.fenced_completions)
@@ -248,6 +261,9 @@ static void moss_precision_readback_gate() {
         const double relative = test == 1 ? 0.02 : test >= 2 ? 0.01 : 0.03;
         const Comparison result = compare_fixture(actual, fixture, absolute, relative);
         write_event({{"event", "native_moss_precision_readback"}, {"case", case_name},
+            {"requested_fp16_math", requested_fp16_math}, {"FA_accumulation", test == 1 ? "f32" : "not_applicable"},
+            {"graph_and_wait_seconds", graph_and_wait_seconds}, {"CPU_wall_time", true},
+            {"timing_scope", "graph_compute+synchronize+checked wait; upload/readback excluded; not pure GPU timestamp"},
             {"CPU_oracle", test == 1 ? "stable double softmax of actual F32 Q and F16 KV" : test == 2 ? "double dot of actual BF16 weights and unchanged F32 RHS" : test == 3 ? "double dot of actual BF16 weights and pinned Vulkan BF16-rounded F32 RHS" : "current GGML Q4_K reference quantizer/dequantizer then double dot"},
             {"compared_values", fixture.expected.size()}, {"finite_checked_values", actual.size()},
             {"sampled_output_indices", fixture.sampled_output_indices}, {"nonfinite", result.invalid}, {"mismatches", result.mismatches}, {"max_absolute_error", result.maximum},

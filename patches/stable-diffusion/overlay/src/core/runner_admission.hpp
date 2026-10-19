@@ -121,9 +121,11 @@ static bool exact_profile_switch(const char * name) {
     return value != nullptr && std::strcmp(value, "1") == 0;
 }
 static native_scratch_bounds::Profile current_profile() {
+    const char * limited = std::getenv("GGML_VK_PS5_ELEMENTWISE_FUSION");
+    const uint32_t limited_mode = !limited ? 0 : std::strcmp(limited,"1")==0 ? 1 : 2;
     return {exact_profile_switch("GGML_VK_DISABLE_COOPMAT") && exact_profile_switch("GGML_VK_DISABLE_COOPMAT2"),
             exact_profile_switch("GGML_VK_DISABLE_F16"), exact_profile_switch("GGML_VK_DISABLE_ASYNC"),
-            exact_profile_switch("GGML_VK_DISABLE_FUSION"), 36};
+            exact_profile_switch("GGML_VK_DISABLE_FUSION"), 36, limited_mode};
 }
 struct ScratchDecision {
     native_scratch_bounds::Bounds upper;

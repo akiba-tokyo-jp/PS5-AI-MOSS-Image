@@ -26,20 +26,39 @@ MOSS_BENCHMARK_1024_CONTRACT.update({
     'schema':'ps5-ai-moss-experimental-1024-cold-warm-v1','width':1024,'height':1024,
     'steps':50,'seed':20261020,'moss_lora_strength':0.7,'max_generation_attempts':2})
 
+MOSS_PERFORMANCE_VARIANTS={0:('baseline-fp32','fp32'),1:('fp16','fp16'),2:('submit-fusion-fp32','fp32')}
+
+def moss_performance_contract(variant):
+    if type(variant) is not int or variant not in MOSS_PERFORMANCE_VARIANTS:
+        raise RuntimeError('Performance variant must be explicit integer0,1,or2')
+    name,precision=MOSS_PERFORMANCE_VARIANTS[variant]
+    contract={key:value for key,value in MOSS_BENCHMARK_1024_CONTRACT.items() if key not in ('width','height')}
+    contract.update({'schema':'ps5-ai-moss-experimental-performance-v1',
+        'allowed_sizes':[[256,256],[1024,1024]],'max_generation_attempts':4,
+        'performance_variant':variant,'performance_variant_name':name,'requested_precision':precision,
+        'small256_success_and_visual_review_before1024':True,'automatic_POST_retries':False})
+    return contract
+
+def validate_moss_performance_precision(variant,precision):
+    if variant is not None:
+        expected=moss_performance_contract(variant)['requested_precision']
+        if precision!=expected:raise RuntimeError('Performance variant/precision mismatch')
+
 def same_typed_contract_value(actual,expected):
     return type(actual) is type(expected) and (
         len(actual)==len(expected) and all(same_typed_contract_value(a,e) for a,e in zip(actual,expected))
         if isinstance(expected,list) else actual==expected)
 
-def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False):
+def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None):
     """A trial is permission to RUN verification, never prior GPU admission."""
     if any(type(value) is not bool for value in (enabled,trial_10g,quality_comparison,benchmark_1024)):
         raise RuntimeError('MOSS trial switches must be explicit booleans')
-    if quality_comparison and benchmark_1024:raise RuntimeError('MOSS trial modes are mutually exclusive')
+    if performance_variant is not None:moss_performance_contract(performance_variant)
+    if sum((quality_comparison,benchmark_1024,performance_variant is not None))>1:raise RuntimeError('MOSS trial modes are mutually exclusive')
     if not enabled:
-        if trial_10g or quality_comparison or benchmark_1024:raise RuntimeError('Trial switches require --experimental-small-trial')
+        if trial_10g or quality_comparison or benchmark_1024 or performance_variant is not None:raise RuntimeError('Trial switches require --experimental-small-trial')
         return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=0','-DPS5_AI_MOSS_TRIAL_10G=0']
-    expected_contract=MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
+    expected_contract=moss_performance_contract(performance_variant) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
     valid_contract=isinstance(contract,dict) and set(contract)==set(expected_contract) and all(
         same_typed_contract_value(contract[key],expected)
         for key,expected in expected_contract.items())
@@ -47,7 +66,8 @@ def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,be
         raise RuntimeError('Experimental MOSS requires the exact reviewed small10GiB trial profile and both switches')
     return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=1','-DPS5_AI_MOSS_TRIAL_10G=1']+(
         ['-DPS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL=1'] if quality_comparison else [])+(
-        ['-DPS5_AI_MOSS_1024_COLD_WARM_TRIAL=1'] if benchmark_1024 else [])
+        ['-DPS5_AI_MOSS_1024_COLD_WARM_TRIAL=1'] if benchmark_1024 else [])+(
+        ['-DPS5_AI_MOSS_PERFORMANCE_TRIAL=1','-DPS5_AI_MOSS_PERF_VARIANT='+str(performance_variant)] if performance_variant is not None else [])
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 
@@ -177,13 +197,14 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
-    trial_path=ROOT/('build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
+    validate_moss_performance_precision(a.performance_trial_variant,a.precision)
+    trial_path=ROOT/('build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
     trial_contract=json.loads(trial_path.read_text()) if a.experimental_small_trial else None
-    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial)
+    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -319,7 +340,10 @@ def main():
             'user_requested_direct_target_bytes':12884901888,
             'experimental_small_trial':a.experimental_small_trial,'trial_10g':a.trial_10g,
             'quality_step_comparison_trial':a.quality_step_comparison_trial,
-            'benchmark_1024_cold_warm_trial':a.benchmark_1024_cold_warm_trial,'core_native_only_carryforward':core_carryforward,
+            'benchmark_1024_cold_warm_trial':a.benchmark_1024_cold_warm_trial,
+            'performance_trial':a.performance_trial_variant is not None,'performance_variant':a.performance_trial_variant,
+            'performance_variant_name':MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0] if a.performance_trial_variant is not None else None,
+            'core_native_only_carryforward':core_carryforward,
             'trial_compile_flags':trial_flags,'trial_contract':trial_contract,
             'trial_contract_sha256':digest(trial_path) if a.experimental_small_trial else None,
             'runtime_admitted':False,'requested_precision':a.precision,'controlnet_batch_pair':batch_pair,

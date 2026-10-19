@@ -1,4 +1,5 @@
 #include "phase_profile.h"
+#include "backend_precision_log.hpp"
 #if defined(GGML_MAX_NAME) && GGML_MAX_NAME != 160
 #error Native Direct MOSS-Image must use the exact linked SD/GGML tensor ABI
 #endif
@@ -231,6 +232,9 @@ static void write_event(const nlohmann::json& event) noexcept {
 static std::atomic<bool> phase_profile_active{false};
 struct PhaseCounter{std::atomic<uint64_t> ns{0},calls{0},bytes{0},invalid{0};};
 static PhaseCounter phase_counters[PS5_AI_PROFILE_METRICS];
+static thread_local unsigned phase_runner_group=2;
+extern "C" unsigned ps5_ai_profile_set_runner(unsigned group){const unsigned previous=phase_runner_group;phase_runner_group=group;return previous;}
+extern "C" unsigned ps5_ai_profile_get_runner(void){return phase_runner_group;}
 extern "C" int ps5_ai_profile_enabled(void){return phase_profile_active.load(std::memory_order_relaxed);}
 extern "C" void ps5_ai_profile_add(unsigned id,uint64_t ns,uint64_t bytes,int valid){
     if(id>=PS5_AI_PROFILE_METRICS || !ps5_ai_profile_enabled())return;
@@ -241,13 +245,15 @@ static void phase_profile_report(){
     phase_profile_active=false;
     const char* groups[]={"dit","controlnet_unused","other_runners"};
     const char* phases[]={"graph_total","weight_prepare_including_capacity","workspace_prepare_allocate","activation_upload","graph_call_including_internal_wait","explicit_workspace_wait","output_capture_readback","cleanup_including_wait"};
-    const char* extras[]={"weight_tensor_copy_set","weight_transfer_explicit_wait","startup_log_fsync","Direct_pool_log_fsync","engine_structured_log","startup_stderr_mirror","backend_quiescence_call_including_logging","backend_idle_poll_without_logging"};
+    const char* extras[]={"weight_tensor_copy_set","weight_transfer_explicit_wait","startup_log_fsync","Direct_pool_log_fsync","engine_structured_log","startup_stderr_mirror","backend_quiescence_call_including_logging","backend_idle_poll_without_logging",
+        "dit.vulkan_submit_driver_call","dit.vulkan_fence_wait_driver_call","dit.vulkan_dispatch_record_call","dit.vulkan_bind_pipeline_record_call","dit.vulkan_backend_graph_call",
+        "other_runners.vulkan_submit_driver_call","other_runners.vulkan_fence_wait_driver_call","other_runners.vulkan_dispatch_record_call","other_runners.vulkan_bind_pipeline_record_call","other_runners.vulkan_backend_graph_call"};
     nlohmann::json metrics=nlohmann::json::object();
     for(unsigned i=0;i<PS5_AI_PROFILE_METRICS;i++){
         auto& c=phase_counters[i];std::string name=i<24?std::string(groups[i/8])+"."+phases[i%8]:extras[i-24];
         metrics[name]={{"seconds",c.ns.load()/1e9},{"calls",c.calls.load()},{"bytes",c.bytes.load()},{"invalid_clock_samples",c.invalid.load()}};
     }
-    write_event({{"event","native_phase_profile"},{"schema",1},{"CPU_wall_time",true},{"pure_GPU_timestamp",false},{"nested_times_do_not_sum",true},{"scope","engine generation only; log summary excluded"},{"metrics",metrics}});
+    write_event({{"event","native_phase_profile"},{"schema",2},{"CPU_wall_time",true},{"pure_GPU_timestamp",false},{"nested_times_do_not_sum",true},{"scope","engine generation only; log summary excluded; Vulkan wait includes pending GPU execution"},{"metrics",metrics}});
 }
 
 extern "C" ggml_backend_buffer_t ps5_ai_cpu_clip_params_buffer(size_t size) {
@@ -294,12 +300,26 @@ static void engine_log(enum sd_log_level_t level, const char* text, void*) noexc
 
 static std::atomic<uint64_t> precision_outputs{0}, precision_values{0}, precision_nonfinite{0}, precision_dit_outputs{0}, precision_vae_outputs{0};
 static bool precision_announced=false,precision_fp16=false;
+static std::atomic<unsigned> perf_submit_multiplier{1},perf_max_nodes{100},perf_limited_fusion{0};
+static std::atomic<uint64_t> perf_fused_selected{0};
+extern "C" void ps5_ai_vk_optimization_profile(unsigned multiplier,unsigned max_nodes,unsigned limited_fusion,
+                                              uint64_t base_cap,uint64_t ramped_cap) {
+    perf_submit_multiplier=multiplier;perf_max_nodes=max_nodes;perf_limited_fusion=limited_fusion;
+    write_event({{"event","native_moss_optimization_profile"},{"performance_trial",bool(PS5_AI_MOSS_PERFORMANCE_TRIAL)},
+        {"variant",PS5_AI_MOSS_PERF_VARIANT},{"submit_multiplier",multiplier},{"max_nodes_per_submit",max_nodes},
+        {"limited_elementwise_fusion",limited_fusion!=0},{"adaptive_flops_cap_upper",base_cap},
+        {"maximum_ramped_flops_cap_upper",ramped_cap},{"serial_fenced_ownership_preserved",true}});
+}
+extern "C" void ps5_ai_vk_limited_fusion_selected(unsigned unary_op) {
+    (void)unary_op;perf_fused_selected.fetch_add(1,std::memory_order_relaxed);
+}
 static ggml_log_callback precision_previous_log=nullptr;
 static void *precision_previous_log_data=nullptr;
 static void precision_log(enum ggml_log_level level,const char *text,void *) {
     if (precision_previous_log) precision_previous_log(level,text,precision_previous_log_data);
     if (text && std::strstr(text,"ggml_vulkan:") && std::strstr(text," | fp16: ")) {
-        precision_announced=true;precision_fp16=std::strstr(text," | fp16: 1")!=nullptr;
+        const int parsed=ps5_ai_backend_precision_token(text);
+        precision_announced=parsed>=0;precision_fp16=parsed==1;
         write_event({{"event","native_backend_precision"},{"fp16",precision_fp16},{"GGML_VK_DISABLE_F16_present",std::getenv("GGML_VK_DISABLE_F16")!=nullptr},{"startup_log",text}});
     }
 }
@@ -674,6 +694,7 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
 #include "precision_conv_gate.inc"
 #if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
 #include "moss_precision_gate.inc"
+#include "moss_perf_gate.inc"
 #endif
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
@@ -774,6 +795,7 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
         precision_conv_readback_gate();
 #if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
         moss_precision_readback_gate();
+        moss_performance_readback_gate();
 #endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
@@ -805,20 +827,29 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     *stats = {};
     if (!ps5_ai_moss_trial_request_valid(request->width,request->height,request->steps,
                                         request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
-        set_error(error,error_size,PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+        set_error(error,error_size,PS5_AI_MOSS_PERFORMANCE_TRIAL
+            ? "MOSS performance trial requires256/1024 square,50steps,CFG3,shift5,Euler,seed20261020; production admission is not asserted"
+            : PS5_AI_MOSS_1024_COLD_WARM_TRIAL
             ? "MOSS benchmark requires1024x1024,50steps,CFG3,shift5,Euler,seed20261020; production admission is not asserted"
             : PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
             ? "MOSS quality trial requires 256x256,4 or50 steps,CFG3,flow shift5,Euler and seed20261019; production admission is not asserted"
             : "MOSS trial requires 256x256,4 steps,CFG3,flow shift5 and Euler; production admission is not asserted");
         return -1;
     }
-#if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL || PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+#if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL || PS5_AI_MOSS_1024_COLD_WARM_TRIAL || PS5_AI_MOSS_PERFORMANCE_TRIAL
     if (engine_config.moss_lora_strength!=0.7) {
         set_error(error,error_size,"MOSS controlled trial requires unchanged configured LoRA strength0.7");
         return -1;
     }
 #endif
-#if PS5_AI_MOSS_1024_COLD_WARM_TRIAL
+#if PS5_AI_MOSS_PERFORMANCE_TRIAL
+    static std::atomic<unsigned> performance_attempts{0};
+    if(!ps5_ai_moss_performance_trial_claim(performance_attempts,request->width,request->height,request->steps,
+                                          request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
+        set_error(error,error_size,"MOSS performance trial permits four attempts per process; failures consume claims and the fifth is refused");
+        return -1;
+    }
+#elif PS5_AI_MOSS_1024_COLD_WARM_TRIAL
     static std::atomic<unsigned> experimental_attempts{0};
     if(!ps5_ai_moss_benchmark_trial_claim(experimental_attempts,request->width,request->height)) {
         set_error(error,error_size,"MOSS1024 cold/warm benchmark permits two attempts per process; failures consume claims and the third is refused");
@@ -832,6 +863,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     }
 #endif
     phase_profile_begin();
+    const uint64_t fused_before=perf_fused_selected.load(std::memory_order_relaxed);
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;
     observation.requested_steps=request->steps;
@@ -1035,6 +1067,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"partial_gpu_taesd_decode", partial_taesd_gpu_decode},
                  {"backend", engine_config.backend},
                  {"fp16_math",precision_fp16},{"finite_checked_outputs",precision_outputs.load()},
+                 {"performance_trial",bool(PS5_AI_MOSS_PERFORMANCE_TRIAL)},{"performance_variant",PS5_AI_MOSS_PERF_VARIANT},
+                 {"submit_multiplier",perf_submit_multiplier.load()},{"max_nodes_per_submit",perf_max_nodes.load()},
+                 {"limited_elementwise_fusion",perf_limited_fusion.load()!=0},
+                 {"limited_fusion_selected_graph_nodes",perf_fused_selected.load(std::memory_order_relaxed)-fused_before},
                  {"finite_checked_values",precision_values.load()},{"nonfinite_values",precision_nonfinite.load()},
                  {"finite_checked_dit_outputs",precision_dit_outputs.load()},
                  {"finite_checked_vae_outputs",precision_vae_outputs.load()},
