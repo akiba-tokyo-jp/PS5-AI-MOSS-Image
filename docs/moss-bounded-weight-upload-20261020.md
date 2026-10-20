@@ -1,5 +1,7 @@
 # GPU重み転送のhost staging：実機のメモリ観測
 
+> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+
 2026-10-20 JST。MOSSのraw・同形式GPU重み転送を、必要量まで増やすhost Scratchで分割しました。**上限8MiBはworkerあたり**です。既存のVulkan tensor転送・同期経路を使い、CPUからGPUアドレスを直接書きません。モデル係数、推論精度、sampling条件は変えていません。
 
 ## 同じ要求での初回256比較

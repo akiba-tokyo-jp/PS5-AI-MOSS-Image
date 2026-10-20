@@ -1,110 +1,96 @@
 {
-  "tested_on": "2026-10-18 JST",
+  "schema": "ps5-ai-moss-public-verification-v1",
+  "model_id": "moss-image-sft",
+  "tested_on": "2026-10-20 JST",
   "firmware": "12.40",
-  "native_eboot_sha256": "0e9957344596289f0edda0d9163768d814ab647b8f108bebaf1d57764ea57e77",
-  "gpu_readback_bytes": 67108864,
-  "whole_pool_readback_verified": false,
-  "dispatch_delta_1024": 138826,
-  "submit_delta_1024": 29518,
-  "fence_delta_1024": 29518,
-  "home_screen_icon_visually_confirmed": false,
+  "GPU": "RADV NAVI21",
+  "all_learned_inference_on_PS5": true,
+  "production_runtime_admitted": false,
+  "maximum_trial_attempts_per_process": 4,
+  "automatic_POST_retries": 0,
+  "latest_results_document": "docs/moss-turbo-memory-options-20261020.md",
+  "sampling": {
+    "custom_sigmas": [
+      1,
+      0.91,
+      0.717,
+      0.024,
+      0
+    ],
+    "apply_flow_shift_again": false,
+    "composed_adapter": "NSFW0.7 + Turbo1.0; rank144 F32; runtime multiplier1"
+  },
+  "startup_numeric_gates": {
+    "original": 14,
+    "rank144_turbo": 3,
+    "bounded_upload": true
+  },
   "tests": [
     {
-      "model": "WAI-Illustrious-SDXL v17.0",
+      "id": "turbo4-upload-256",
+      "model_id": "moss-image-sft",
       "size": "256x256",
-      "steps": 8,
-      "sampler": "euler_a",
-      "cfg_scale": 5,
-      "seed": 135792,
-      "model_loaded_before": false,
-      "native_generation_seconds": 43.226907,
-      "Windows_OpenAI_seconds": 44.51499999995576,
-      "OpenAI_SDK_version": "3.34.0",
-      "PNG_bytes": 86190,
-      "PNG_sha256": "5170c8ba35689ab634a3c3786f969410b880a62282582bf4f471210bf791a826",
-      "native_OpenAI_PNG_byte_identical": true,
-      "existing_services_preserved": true,
-      "PS5_rebooted": false,
-      "system_file_writes": 0,
-      "gpu_used": true,
-      "gpu_unet_sampled_nodes": 1,
-      "gpu_flash_attention_sampled_nodes": 1,
-      "direct_reserved_bytes": 6442450944,
-      "direct_peak_bytes": 5203050496,
-      "process_peak_rss_bytes": 8996077568,
-      "journals": [
-        {
-          "name": "native-startup.log",
-          "bytes": 879584,
-          "rotation": 3
-        },
-        {
-          "name": "native-driver.log",
-          "bytes": 3270746,
-          "rotation": 0
-        },
-        {
-          "name": "native-pool.log",
-          "bytes": 60264,
-          "rotation": 0
-        },
-        {
-          "name": "native-startup.log.previous",
-          "bytes": 4194224,
-          "rotation": 2
-        }
-      ]
+      "profile": "F32 Turbo4 + bounded raw GPU weight upload; 10GiB; fixed-prompt performance trial",
+      "phase": "first256_including_lazy_load",
+      "native_generation_seconds": 71.377746,
+      "observations": 1,
+      "steps": 4,
+      "cfg_scale": 1,
+      "sampler": "euler",
+      "flow_shift": 5,
+      "seed": 20261020,
+      "image": "docs/images/moss-turbo4-upload-256-20261020.png",
+      "PNG_bytes": 178213,
+      "PNG_sha256": "be9e6ebad5da8ee7a4e536a40e905307a2aa24bcced8e86b600af9fa0aaa2ad7",
+      "PNG_byte_equal_prior_Turbo4": true,
+      "PNG_visually_reviewed": true,
+      "GPU_complete_finite_DiT": 4,
+      "Q4_F32_recordings": 672,
+      "Q4_F16_accumulation_recordings": 0,
+      "nonfinite_values": 0,
+      "LoRA_loaded_and_applied_tensors": 504,
+      "physical_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 4858265600,
+      "owned_Direct_after_generation_bytes": 4725997568,
+      "API_peak_cpu_bytes": 11560124416,
+      "API_peak_gpu_labelled_bytes": 4890230784
     },
     {
-      "model": "WAI-Illustrious-SDXL v17.0",
+      "id": "turbo4-upload-1024",
+      "model_id": "moss-image-sft",
       "size": "1024x1024",
-      "steps": 20,
-      "sampler": "euler_a",
-      "cfg_scale": 5,
-      "seed": 135792,
-      "model_loaded_before": true,
-      "native_generation_seconds": 91.648546,
-      "Windows_OpenAI_seconds": 93.09399999998277,
-      "OpenAI_SDK_version": "3.34.0",
-      "PNG_bytes": 857419,
-      "PNG_sha256": "3c4eaac8e2b5080a9b49c79c2fecbba213aac031438c3f8c064d010417c66986",
-      "native_OpenAI_PNG_byte_identical": true,
-      "existing_services_preserved": true,
-      "PS5_rebooted": false,
-      "system_file_writes": 0,
-      "gpu_used": true,
-      "gpu_unet_sampled_nodes": 1,
-      "gpu_flash_attention_sampled_nodes": 1,
-      "direct_reserved_bytes": 6442450944,
-      "direct_peak_bytes": 5436981248,
-      "process_peak_rss_bytes": 8996077568,
-      "journals": [
-        {
-          "name": "native-startup.log",
-          "bytes": 684066,
-          "rotation": 11
-        },
-        {
-          "name": "native-driver.log",
-          "bytes": 1880204,
-          "rotation": 2
-        },
-        {
-          "name": "native-pool.log",
-          "bytes": 62736,
-          "rotation": 0
-        },
-        {
-          "name": "native-startup.log.previous",
-          "bytes": 4194300,
-          "rotation": 10
-        },
-        {
-          "name": "native-driver.log.previous",
-          "bytes": 4194278,
-          "rotation": 1
-        }
-      ]
+      "profile": "F32 Turbo4 + bounded raw GPU weight upload; 10GiB; fixed-prompt performance trial",
+      "phase": "first1024_after_same_prompt256_same_process",
+      "native_generation_seconds": 51.092988,
+      "observations": 1,
+      "steps": 4,
+      "cfg_scale": 1,
+      "sampler": "euler",
+      "flow_shift": 5,
+      "seed": 20261020,
+      "image": "docs/images/moss-turbo4-upload-1024-20261020.png",
+      "PNG_bytes": 2133928,
+      "PNG_sha256": "9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a",
+      "PNG_byte_equal_prior_Turbo4": true,
+      "PNG_visually_reviewed": true,
+      "GPU_complete_finite_DiT": 4,
+      "Q4_F32_recordings": 672,
+      "Q4_F16_accumulation_recordings": 0,
+      "nonfinite_values": 0,
+      "LoRA_loaded_and_applied_tensors": 504,
+      "physical_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 5934579712,
+      "owned_Direct_after_generation_bytes": 4749066240,
+      "API_peak_cpu_bytes": 11595284480,
+      "API_peak_gpu_labelled_bytes": 5968183296
     }
+  ],
+  "normal_API_shutdown_and_independent_idle_observation": true,
+  "limitations": [
+    "Each condition is a single observation; clocks, temperatures and OS disk cache were uncontrolled.",
+    "1024 measurements are after256 in the same process; not standalone cold1024 or the second1024.",
+    "Physical shared memory, process RSS, GPU-labelled API peaks and owned Direct live usage overlap; do not add them.",
+    "Public documentation, schema and diagnostic wording were updated after the recorded executable builds; the source inventory is not an executable-build receipt.",
+    "Arbitrary-prompt operating mode and8GiB inference are not validated or included."
   ]
 }

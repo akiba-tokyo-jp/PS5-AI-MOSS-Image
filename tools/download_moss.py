@@ -13,7 +13,6 @@ import urllib.request
 
 LOCK = Path(__file__).resolve().parents[1] / "config" / "models.lock.json"
 REPOSITORY = LOCK.parents[1]
-DEFAULT_OUTPUT = Path("D:/PS5-AI/models/moss-image-sft-v1")
 CHUNK = 8 << 20
 
 
@@ -170,7 +169,7 @@ def main():
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--verify", action="store_true", help="Local hash/size checks only; no network or writes")
     action.add_argument("--download", action="store_true", help="Explicitly download missing locked files; no inference")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, required=True, help="Explicit model directory outside the repository")
     parser.add_argument("--base-only", action="store_true", help="Explicitly omit the required requested adapter; not a complete runnable selected configuration")
     args = parser.parse_args()
     try:

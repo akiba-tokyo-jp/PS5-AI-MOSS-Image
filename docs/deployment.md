@@ -1,8 +1,8 @@
-# MOSS Imageの配置計画（未実施）
+# MOSS Imageの配置と終了
 
-MOSSのモデル取得・変換・native SELFのfresh cross buildはWindows/Dドライブ上で完了しています。MOSS本体・モデルは未配備で、実機推論は未確認です。PS5上の現boot・既存サービス・GPUアプリ所有者を確認してから扱います。既存WAI/Anima、FW、システム領域へ変更を加えません。
+PPSA99190、native8192、OpenAI Images互換gateway8193でPS5画像生成を検証しました。公開する速度基準はTurbo4＋bounded upload、rank144 F32、Direct10GiBの限定performance buildです。無制限の通常運用版ではありません。firmwareやsystem領域を書き換える一般インストーラー、無人jailbreak／復旧ツールは含めません。
 
-候補rootは`/data/ai/native-moss-image-sft/PPSA99190`です。native8192、gateway8193（root `/data/ai/moss-openai-gateway`）を使い、WAI8188/8189・Anima8190/8191から分離します。GPUアプリは同時起動しません。
+## 配置内容
 
 ```text
 PPSA99190/
@@ -15,7 +15,7 @@ PPSA99190/
     Qwen3.5-9B-Q4_K_M.gguf
     flux2-vae_small.safetensors
     tokenizer_qwen3.5.json
-    moss-image-nsfw-uncensored-r16-f32.safetensors
+    moss-nsfw07-turbo4-r144-f32.safetensors
   licenses/
   ai-runtime/config.json
   ai-runtime/config/api-token
@@ -24,27 +24,28 @@ PPSA99190/
   ai-runtime/output/
 ```
 
-DownloaderはD側の`diffusion/`、`text_encoders/`、`vae/`、`tokenizers/`とraw adapterの`loras/`へ保存します。選定一式の取得と全体SHA256読み戻しは完了しました。[stage plan tool](../tools/models/prepare_moss_model_stage.py)は基本4個＋F32 derivativeの5ファイルを上記のflatな`models/`へ対応付けます。作成するのは転送計画だけで、PS5接続・コピー・現在の巨大ファイル再hashを行いません。実転送では全量をhashし、転送先でも全体size/SHAを確認してから公開します。
+モデルは[lock](../config/models.lock.json)と[Turbo合成手順](moss-turbo4-reproduction.md)を使い、元weightsを保持した別ファイルとして作成します。転送前後に全量のsize／SHAを照合します。headerだけの一致は全ファイルidentityの代わりではありません。weightsやprivate receiptをGitへ置きません。
 
-選定LoRAの元ファイルは`loras/moss-image-nsfw-uncensored-r16-bf16.safetensors`です。[専用converter](../tools/models/convert_moss_lora_bf16_f32.py)で全504 tensor・元SHA・名前・形状・有限値を検査し、値を正確にF32へ展開してq/k/vの結合先を正規化します。変換済みの`derived/moss-image-nsfw-uncensored-r16-f32.safetensors`だけを上記の固定モデルパスへ配置します。元BF16ファイルを名前だけ変えて配置しません。PS5でのLoRA適用・GPU数値・生成成功は別の検証です。今はstage/転送していません。VAEのF32変換やモデルの暗黙置換は行いません。
+F16 storageは別ファイル・別profileの限定試験です。通常のF32速度基準へ自動置換しません。旧rank16／50-step比較も別設定です。
 
-新タイトルのホーム登録はファイル転送と別です。既存のmount/登録条件と空いているTitle IDを実機で確認し、システム領域を変更せず扱える経路を確認する必要があります。今回の準備に自動登録・再起動・jailbreak改変は含めません。
+## 設定と所有権
 
-実機再開時はまず読み取りで利用可能Direct総量・空き区間・CPU側余裕を測定します。12GiB+1GiB reserveを満たせない条件では容量チェックを維持して停止します。モデルなしの段階的割当/解放とCompute読み戻し、Qwen3.5 CPU数値比較、MOSS DiT/VAE数値・PNGの順で証拠を残します。実機未検証の通常アプリはcompile-time admission0で止めます。
+native SELF、compiled Direct pool／VA、推論予算、対応する設定を一致させます。選択した10GiB版の関連値は`gpu_pool_bytes: 10737418240`、`max_vram_gib: "Vulkan0=9.5"`、`working_reserve_bytes: 1073741824`です。合成F32 LoRAのruntime multiplierは1です。これらは完全なconfigではなく、[モデル構成](moss-models.md)とビルドprofileの他の項目も必要です。JSONだけで予約容量を変えません。
 
-MOSSのnativeとgatewayは、同じ認証tokenの値を各プロセス専用の起動ファイルへ渡します。gatewayはこの値をそのままnativeへのBearer認証に使うため、異なる値にはできません。WAI・Animaとは別のMOSS専用tokenを生成し、ソースへ直書きしません。runtime/configはアプリownerだけに許可し、tokenは0600、LAN bindとBearer認証を維持します。
+runtime parentはアプリowner専用、config／tokenはownerだけが読める権限にします。既存設定と実行ファイルをprivate backupへ保存し、完成ファイルの全量readback後にatomic renameします。元モデルや他タイトルを上書きしません。native側で所有者フィールドが取得できない環境を、UID0なら安全という緩和で通しません。既存bootstrapの外部owner証拠とFD identity guardを保持します。
 
-nativeは起動時に`/app0/ai-runtime/config/api-token`が存在しないことを確認し、当該起動のowner witnessを確認した後の発行を待ちます。起動前にtokenを残さず、publisherで当該起動へ発行します。両プロセスはそれぞれの起動ファイルを読み取り後に削除し、値はメモリに保持します。token値をログ・URL・資料へ出しません。API生成POSTは1回だけです。タイムアウト時はhealth/job照会で結果を追跡し、自動再送しません。
+nativeとgatewayは同じ認証token値を各process専用の起動ファイルで受け取ります。tokenはGit、ログ、URL、コマンド表示へ出さず、起動後はファイルから削除してmemoryに保持します。APIはBearer認証と同じprivate IPv4 /24を維持します。
 
-[`config/native.json.example`](../config/native.json.example)と[`config/moss-native.json.example`](../config/moss-native.json.example)は同じMOSS設定例です。engineの未知キーはmemory-planの読み取り時に拒否し、明示的AGC/Direct初期化へ進めません。選定LoRAは`moss_lora_path`の固定canonical F32パスと`moss_lora_strength`（既定0.7、有限かつ0より大きく1.5以下）で指定します。空パス・無効強度によるbase-only運用は、この選定構成では受け付けません。汎用の`lora_path`は未知キーです。
+## 1回ずつ検証する手順
 
+1. 他のGPUタイトルが動いていないことと、既存boot／service identityを確認します。
+2. nativeを1回だけ起動し、元の数値ゲート、rank144 readback、bounded upload gate、物理pool、backend、ownershipを確認します。readyとモデル読込・画像検証は別です。
+3. 同じnativeを指すCPU gatewayを起動します。[APIのcanonical request](api.md)をまず256で1回だけ送り、native GPU完了、PNG decode、native／gateway画像一致と目視を確認します。
+4. 空queueと同ownerを確認してから同processで1024を1回送ります。seed20261020、4 Euler steps、CFG1、shift5を維持します。有効な生成はprocess全体で最大4試行、失敗も消費します。
+5. queueが空でGPU処理が完了してから、認証付き`POST /api/admin/shutdown`をnative／gatewayへそれぞれ1回要求します。両PID不在を別観測で確認し、独立したidle観測で同boot、既存service、タイトル登録、モデルmetadataを確認します。
 
-## 起動から通常終了までの境界
+タイムアウト・結果不明でPOSTを自動再送しません。GPU completionやownerが不明な資源をforce freeしません。kill成功を正常なGPU終了と同義に扱いません。画面heartbeatは表示loopの生存確認であり、推論の進捗そのものではありません。
 
-新しいboot、title owner/PID、session/launchの組合せを受理してから、当該起動にruntime/configとtokenを発行します。古いbootやPID番号の再利用だけを根拠にmount、起動、config受理、モデル稼働を判定しません。登録と`/app0`のmount、配備ファイル、起動ownerの一致も別々に確認します。
+## 保存量
 
-現sourceはconfiguration、明示AGC、driver、Direct、backend、GPU読み戻し、readyと、failed/retainedを分けて観測します。healthの`lifecycle`は観測値であり、OS closeの許可証ではありません。guard0の準備版はconfigurationの前提検査で拒否されます。SCE constructorの効果は不明であり、明示AGC要求0だけで安全な終了やGPU副作用なしとは判定しません。
-
-APIが応答できる状態でready前・初期化失敗・retainedの場合、`POST /api/admin/shutdown`は409を返し、別途fresh ownerを確認した通常OSタイトル終了を求めます。readyかつidleの経路でも、worker join、GPU quiescence、checked model cleanup、所有権/完了ログの証拠がそろってから終了へ進みます。初期化失敗をreadyとして扱ったり、自動kill・`exit`・手動GPU解放で代用しません。このlifecycle実装とhost検査は完了していますが、MOSS実機での終了/再起動成功は未確認です。
-
-LoRAの実機受入は設定パスの存在だけでは足りません。各生成で504 loaded/504 matched/504 used/0 skipped、GPU完了と有限値、実PNGとWindows取得を確認します。POSTは1回、job IDで追跡し、応答が曖昧なら次のPOSTを送りません。通常終了とowner消失を確認してから次のアプリを起動します。
+ログのbounded rotationは[ログ資料](logging.md)の範囲です。成功PNGやjob metadataを恒久的に無制限で保存できる保証、実ディスク空き容量を毎job強制するquota機能は、この公開版の実証済み機能ではありません。保存物を別の場所へ退避し、owner、認証、symlink制約を保って管理してください。長期連続・任意prompt運用の成功を本資料から推定しないでください。

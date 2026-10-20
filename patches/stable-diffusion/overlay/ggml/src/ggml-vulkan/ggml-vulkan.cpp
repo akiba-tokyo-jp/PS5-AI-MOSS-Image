@@ -2,6 +2,8 @@
 #include "moss_q4_bk64.h"
 #include "ggml-vulkan-ps5-profile.h"
 #include "phase_profile.h"
+#include "moss_lora_f16_storage_trial.h"
+#include "moss_lora_fp32_shared_backend.inc"
 
 extern "C" void ps5_ai_vk_optimization_profile(unsigned, unsigned, unsigned, uint64_t, uint64_t) __attribute__((weak));
 extern "C" void ps5_ai_vk_limited_fusion_selected(unsigned) __attribute__((weak));
@@ -1111,6 +1113,25 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
         ++actual.compile_count;actual.required_subgroup=required_subgroup_size;actual.aligned=moss_candidate_index%2;
         for(unsigned i=0;i<13;i++)actual.specialization[i]=specialization_constants[i];
         GGML_ASSERT(actual.pipeline && actual.compile_count==1);
+    }
+#endif
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    const int moss_lora_slot=moss_lora_precision_slot(device,pipeline);
+    if(moss_lora_slot>=0) {
+        GGML_ASSERT(moss_lora_precision_runtime(device));
+        const bool half=moss_lora_slot>=2;
+        GGML_ASSERT(spv_data==(half?static_cast<const void*>(matmul_f16_f32_fp32_data):matmul_f32_f32_fp32_data));
+        GGML_ASSERT(spv_size==(half?14112u:13980u) && entrypoint=="main" && parameter_count==3);
+        GGML_ASSERT(required_subgroup_size==device->subgroup_size && require_full_subgroups);
+        GGML_ASSERT(pipeline_shader_create_info.pNext==&pipeline_shader_stage_required_subgroup_size_create_info);
+        GGML_ASSERT(pipeline_shader_stage_required_subgroup_size_create_info.requiredSubgroupSize==required_subgroup_size);
+        GGML_ASSERT(bool(pipeline_shader_create_info.flags & vk::PipelineShaderStageCreateFlagBits::eRequireFullSubgroupsEXT));
+        GGML_ASSERT((wg_denoms==std::array<uint32_t,3>({64,64,1})) && specialization_constants.size()==12);
+        ps5_ai_vk_lora_storage_compile(unsigned(moss_lora_slot),spv_data,spv_size,
+            shader_module_create_info.pCode,shader_module_create_info.codeSize,
+            (uint64_t)(uintptr_t)VkPipeline(pipeline->pipeline),required_subgroup_size,unsigned(moss_lora_slot%2),
+            specialization_constants.data(),unsigned(specialization_constants.size()),
+            device->float_controls_rte_fp16,device->float_controls_denorm_preserve_fp16);
     }
 #endif
     if (vk_instance.debug_utils_support) {
@@ -2408,6 +2429,24 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
         }
         return spec;
     };
+
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    if(moss_lora_precision_hardware(device)) {
+        auto& pairs=moss_lora_precision_metadata(device);
+        const uint32_t warp=device->subgroup_size;
+        const std::vector<uint32_t> geometry{128,64,64,32,warp,32,2,4,2,1,warp};
+        for(unsigned type=0;type<2;++type) {
+            auto& pair=type?pairs.f16:pairs.f32;pair.align=64;
+            const size_t bytes=type?matmul_f16_f32_fp32_len:matmul_f32_f32_fp32_len;
+            const void* code=type?static_cast<const void*>(matmul_f16_f32_fp32_data):matmul_f32_f32_fp32_data;
+            GGML_ASSERT(bytes==(type?14112u:13980u));
+            ggml_vk_create_pipeline(device,pair.unaligned,type?"moss_lora_f16_fp32shared_unaligned":"moss_lora_f32_fp32shared_unaligned",
+                bytes,code,"main",3,sizeof(vk_mat_mat_push_constants),{64,64,1},ggml_vk_mul_mm_spec(geometry,false),1,false,true,warp);
+            ggml_vk_create_pipeline(device,pair.aligned,type?"moss_lora_f16_fp32shared_aligned":"moss_lora_f32_fp32shared_aligned",
+                bytes,code,"main",3,sizeof(vk_mat_mat_push_constants),{64,64,1},ggml_vk_mul_mm_spec(geometry,true),64,false,true,warp);
+        }
+    }
+#endif
 
     auto const &ggml_vk_mul_mm_spec_quant = [&device](std::vector<uint32_t> spec, bool aligned, uint32_t type) {
         spec.push_back(aligned ? 1u : 0u);  // constantID=11: ALIGNED
@@ -6624,6 +6663,20 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
     }
 #endif
 
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    bool moss_lora_private_selected=false;
+    if(moss_lora_precision_node(dst)) {
+        GGML_ASSERT(moss_lora_precision_runtime(ctx->device));
+        GGML_ASSERT(!selected_matrix_f16acc && !qx_needs_dequant && !qy_needs_dequant && !quantize_y && !x_non_contig && !y_non_contig);
+        GGML_ASSERT(moss_lora_precision_pairs && moss_lora_precision_owner==VkDevice(ctx->device->device));
+        auto& pair=src0->type==GGML_TYPE_F16?moss_lora_precision_pairs->f16:moss_lora_precision_pairs->f32;
+        GGML_ASSERT(pair.align==64);
+        pipeline=aligned?pair.aligned:pair.unaligned;
+        GGML_ASSERT(pipeline && pipeline->initialized && pipeline->align==(aligned?64u:1u));
+        GGML_ASSERT(ggml_nbytes(src0)<=ctx->device->properties.limits.maxStorageBufferRange);
+        moss_lora_private_selected=true;
+    }
+#endif
     if (ggml_nbytes(src0) > ctx->device->properties.limits.maxStorageBufferRange) {
         pipeline = ggml_vk_get_64b_indexing_pipeline(ctx, pipeline);
     }
@@ -6821,6 +6874,18 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
         ++moss_q4_bk64_report.baseline_calls;
         ++moss_q4_bk64_report.baseline_layer_calls[moss_candidate_layer];
         ++moss_q4_bk64_report.baseline_token_calls[moss_q4_bk64_token_index(src1->ne[1])];
+    }
+#endif
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    if(moss_lora_private_selected) {
+        const int slot=moss_lora_precision_slot(ctx->device,pipeline);
+        GGML_ASSERT(slot>=0 && pipeline->compiled);
+        ps5_ai_vk_lora_storage_record(src0->name,src0->ne[0],src0->ne[1],src1->ne[1],
+            src0->type==GGML_TYPE_F16,src0->type==GGML_TYPE_F32,src1->type==GGML_TYPE_F32,dst->type==GGML_TYPE_F32,
+            (ggml_prec)dst->op_params[0]==GGML_PREC_F32,selected_matrix_f16acc,
+            unsigned(qy_needs_dequant)|(unsigned(qx_needs_dequant)<<1)|(unsigned(quantize_y)<<2)|
+            (unsigned(split_k>1)<<3)|(unsigned(x_non_contig)<<4)|(unsigned(y_non_contig)<<5),
+            (uint64_t)(uintptr_t)VkPipeline(pipeline->pipeline),pipeline->compiled,unsigned(slot));
     }
 #endif
     if (ggml_is_quantized(src0->type) && ps5_ai_vk_quant_accumulation_selected) {
@@ -14644,6 +14709,9 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
 #if PS5_AI_MOSS_Q4_BK64_RAW64
     MossQ4BK64GraphScope moss_candidate_graph_scope;
 #endif
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    MossLoRAPrecisionGraphScope moss_lora_precision_graph_scope;
+#endif
 
     ctx->device->diag_cgraph = nullptr;
     ctx->device->diag_prev_start = -1;
@@ -15148,6 +15216,10 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
 #if PS5_AI_MOSS_Q4_BK64_RAW64
     // Existing synchronize and ownership proof above; exceptions retain uncertainty.
     moss_candidate_graph_scope.completed(ctx);
+#endif
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    // After the existing synchronize; no added submission or wait.
+    moss_lora_precision_graph_scope.completed(ctx);
 #endif
     return GGML_STATUS_SUCCESS;
 
@@ -16963,6 +17035,14 @@ vk_device_struct::~vk_device_struct() {
             ps5_ai_ggml_retain("MOSS_Q4_candidate_device_destroy_uncertain");
     }
 #endif
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    const bool owns_moss_lora=moss_lora_precision_pairs && moss_lora_precision_owner==VkDevice(device);
+    if(owns_moss_lora) {
+        ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+        if(moss_lora_precision_depth || moss_lora_precision_uncertain || !owned.hardware_verified || owned.work_pending)
+            ps5_ai_ggml_retain("MOSS_LoRA_private_pipeline_destroy_uncertain");
+    }
+#endif
     device.destroyFence(fence);
 
     ggml_vk_destroy_buffer(sync_staging);
@@ -16984,6 +17064,12 @@ vk_device_struct::~vk_device_struct() {
         ggml_vk_destroy_pipeline(device, pl);
     }
     all_pipelines.clear();
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+    if(owns_moss_lora) {
+        // Existing loop destroyed actual handles while these strong refs lived.
+        delete moss_lora_precision_pairs;moss_lora_precision_pairs=nullptr;moss_lora_precision_owner=VK_NULL_HANDLE;
+    }
+#endif
 #if PS5_AI_MOSS_Q4_BK64_RAW64
     if(owns_moss_candidate) {
         // Existing loop above destroyed compiled handles while these references were alive.

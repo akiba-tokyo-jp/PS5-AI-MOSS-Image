@@ -1,4 +1,4 @@
-* text=auto
+* text=auto eol=lf
 .gitattributes text eol=lf
 *.c text eol=lf
 *.cpp text eol=lf
@@ -14,17 +14,17 @@
 *.ps1 text eol=lf
 *.png binary
 *.mp4 binary
+
+# Preserve upstream legal documents byte for byte.
+LICENSE -text
+licenses/** -text
 *.patch text eol=lf whitespace=-blank-at-eol
 
 # Preserve pinned upstream Vulkan header bytes, including their final blank line.
 patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-common.h whitespace=-blank-at-eof
 patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-push-constants.h whitespace=-blank-at-eof
 
-# Preserve exact historical source bytes inherited from PS5 AI WAI.
-docs/dashboard-verification.json -text
-docs/precision-build-verification.json -text
-docs/precision-verification.json -text
-docs/verification.json -text
+# Preserve exact source/license bytes used by reviewed native artifacts.
 licenses/MIT.txt -text
 licenses/PS5LM-LICENSE.txt -text
 licenses/PS5_Vulkan-NOTICE.md -text
@@ -49,16 +49,13 @@ patches/mesa/overlay/src/amd/vulkan/radv_physical_device.c -text
 patches/stable-diffusion/overlay/ggml/src/ggml-alloc.c -text
 patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-buffers.cpp -text
 patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-types.h -text
-scripts/Invoke-WaiOpenAI.ps1 -text
 tests/backend_health.c -text
-tests/dashboard_preview.c -text
+tests/dashboard_preview.c -text whitespace=cr-at-eol
 tests/native_scratch.cpp -text
 
-# Preserve the metadata bytes used by the Anima package manifest.
+# Preserve exact published title metadata bytes.
 assets/sce_sys/param.json -text
 
-# Preserve inherited PowerShell CRLF checkouts with normalized Git blobs.
-scripts/Invoke-WaiReference.ps1 text eol=crlf
 
 # Preserve the byte-hashed MOSS host fixture used by the source freeze.
 tests/moss_operator_bounds.cpp -text

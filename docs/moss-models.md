@@ -1,13 +1,18 @@
 # MOSS-Image models and memory plan
 
-This project is prepared on Windows. PS5 model loading, generation, and the
-proposed 12 GiB Direct reservation are **not yet verified**.
+PS5 model loading, CPU text encoding, Vulkan DiT/VAE generation and the selected
+derived F32 LoRA have now been confirmed in bounded256/1024 image trials.
+The latest measured recipe uses10GiB Direct, Turbo4 plus bounded upload and a
+composed rank144 F32 adapter. The requested12GiB reservation remains unmet;
+ordinary unlimited operation and long-run stability are not established.
+See [current status](status.md) and [latest measured results](moss-turbo-memory-options-20261020.md).
 
 The requested configuration is **MOSS-Image-SFT plus the user-selected LoRA**.
 See [adapter selection and memory assessment](moss-requested-lora.md). The LoRA
-is an addition, not a replacement checkpoint. It is now connected in the native
-source and fresh cross-build through an exact F32 runtime adapter; PS5 application
-is still unverified. The base candidate is **MOSS-Image-SFT**, the curated-data fine-tune of Base.
+is an addition, not a replacement checkpoint. Its exact derived F32 runtime adapter was applied on PS5 with504 loaded,
+matched and used tensors, skipped0, in the measured rank16 baseline.
+The later Turbo4 recipe composes it with the pinned Turbo adapter as rank144;
+these are distinct configurations. The base candidate is **MOSS-Image-SFT**, the curated-data fine-tune of Base.
 This is the project's default for ordinary generation; upstream does not state
 that SFT is better for every task. Base remains an optional comparison/fine-tuning
 starting point. Both use a 5B DiT, Qwen3.5-9B text encoder, and FLUX.2 VAE.
@@ -39,15 +44,15 @@ tokenizer has different bytes, and SD.cpp explicitly requires an external file.
 ## Explicit download or verification
 
 The downloader uses Python 3.11 or later and only its standard library. Its
-default location is `D:\PS5-AI\models\moss-image-sft-v1`; model weights and the
+explicit `--output` location is required outside the checkout; model weights and the
 large tokenizer stay outside the repository. The default selection includes the
 raw required LoRA; `--base-only` deliberately omits it and is incomplete for the
 selected runtime. Neither command performs inference
 or contacts the PS5.
 
 ```powershell
-python tools/download_moss.py --verify
-python tools/download_moss.py --download
+python tools/download_moss.py --verify --output D:/models/moss-image-sft
+python tools/download_moss.py --download --output D:/models/moss-image-sft
 ```
 
 `--verify` checks existing files locally and writes nothing. `--download` is an
@@ -76,11 +81,12 @@ GGUF includes an output head that feature extraction may not need, while tensor
 conversion, graph scratch, activations, tokenizer objects, copies, alignment and
 drivers add memory. CPU and GPU also share physical console memory with the OS.
 
-Component lifetimes, bounded CPU encoding, LoRA intermediates and actual peaks
-must be measured. A larger pool or a disk-size subtraction does not establish
-stability or available GPU memory.
+Component lifetimes, CPU encoding, LoRA intermediates and actual peaks have
+been observed for the named bounded trials. They do not establish every prompt
+or size, long-run stability or a physical-memory total. A larger pool or a
+disk-size subtraction is not such evidence.
 
-### Confirmed single-allocation blocker
+### Historical single-allocation blocker and tested correction
 
 Bounded HTTP Range inspection of the selected GGUF's actual tensor metadata
 found `token_embd.weight`: shape `[4096, 248320]`, **Q4_K**, **572,129,280 bytes
@@ -96,11 +102,12 @@ gather/chunked-storage path or a separately reviewed allocation-policy change.
 The 12 GiB pool does not remove this per-allocation problem.
 
 The prepared source now addresses the **legacy** cap with 1 GiB Direct regions
-and bounds CPU weight claims by the actual owned region size. A 545.625 MiB
-embedding can therefore pass the new source-level size bound, subject to a
-sufficient contiguous free span. This is not a successful native allocation:
-the native cross-build has passed, while 1 GiB native mapping, embedding load
-and numerical/readback checks remain unverified. `runtime_admitted=0` prevents explicit AGC/pool setup.
+and bounds CPU weight claims by the actual owned region size. The545.625MiB embedding passed actual owned CPU parameter claims in the
+bounded10GiB configuration, and the model produced the documented images.
+Individual claims still require sufficient contiguous free span and checked
+ownership. This is not evidence that12GiB fits, that a low-total-free allocator
+always succeeds, or that every CPU/model operation is numerically proven.
+Default production runtime_admitted=0 remains separate from explicit trial admission.
 
 There is also a capacity admission issue separate from the embedding cap.
 Earlier records from this console reported 12 GiB before AGC and 11.4375 GiB in
@@ -119,9 +126,10 @@ operator. The prepared native source instead retains base
 `8cd731e7b4667eb8f40a153315b9a7125d09a58d` and applies a scoped backport from MOSS
 support commit `68285df319457e2d79310b48513e4ba1bf8ebe9a`; it is not a wholesale
 update to the research HEAD. Every reviewed native core member must be rebuilt
-against the actual backported headers before linking. CPU
-text-encoder output needs an independent numerical check; new Vulkan operators,
-DiT output, and VAE decoding need PS5 validation.
+against the actual backported headers before linking. The tested builds passed their fixed GPU numerical/readback gates and
+completed finite DiT outputs and VAE PNGs on PS5. This does not substitute for
+independent full-model numerical equivalence or validation of other operators
+and conditions.
 
 The selected small VAE's actual safetensors header contains 250 F32 tensors and
 one 8-byte I64 `bn.num_batches_tracked` training counter, with no BF16 tensors.
@@ -129,7 +137,7 @@ The largest decoder tensor is 5,308,416 bytes (`[384,384,3,3]`). The loader must
 ignore the training counter rather than submit it as floating-point GPU math;
 the header alone does not establish successful decoding.
 
-The source baseline is flow-matching Euler, **50 steps, CFG 3, shift 5**, with
+The historical rank16 baseline is flow-matching Euler, **50 steps, CFG3, shift5**, with
 negative-branch DiT layer **22** skipped (zero based). Width and height must be
 positive multiples of 16. Official examples use an empty negative prompt;
 explicit caller prompts should be retained. A low-step smoke test establishes
@@ -139,7 +147,7 @@ integration only. It cannot establish normal image quality or generation speed.
 Text-to-image does not require a Qwen vision `mmproj`, a chat server, or a 262K
 chat context. Prompt enhancement is excluded from the SD.cpp path. Layout JSON
 is text input and does not establish raster img2img, inpainting, ControlNet,
-IP-Adapter, or compatibility with WAI's SDXL LoRAs.
+IP-Adapter, or compatibility with unrelated SDXL LoRAs.
 
 ## Licenses
 
@@ -147,5 +155,4 @@ MOSS weights/tokenizer and Qwen3.5 use Apache-2.0. The **FLUX.2 autoencoder** is
 explicitly Apache-2.0; this does not apply the same license to the FLUX.2-dev DiT.
 Keep all original license text, applicable notices, attribution and modification
 records. See [model notices](../licenses/MOSS-models-NOTICE.txt) and the retained
-Apache license files. Native SDK/driver notices inherited from Anima remain
-separate obligations.
+Apache license files. Native SDK/driver notices remain separate obligations.

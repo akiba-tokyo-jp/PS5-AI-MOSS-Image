@@ -58,7 +58,7 @@ def main():
         return r.stdout
     common=[cc,'--target=x86_64-w64-mingw32','-std=gnu11','-O2','-Wall','-Wextra','-Werror','-Wno-unused-function']
     fixture=out/'moss-failure.c'
-    fixture.write_text((R/'tests/reference_engine_failure_v1.c').read_text().replace('/app0/models/waiIllustriousSDXL_v170.safetensors','/app0/models/MOSS-Image-SFT-Q4_K.gguf'),encoding='utf-8',newline='\n')
+    fixture.write_text((R/'tests/reference_engine_failure_v1.c').read_text(),encoding='utf-8',newline='\n')
     native_deps=[n/'reference_image.c',sha/'sha256.c',fixture]
     native_flags=['-I',n,'-I',sha,'-isystem',Path(cfg['SD'])/'thirdparty']
     run([*common,*native_flags,n/'server.c',*native_deps,'-lws2_32','-o',out/'native-failure.exe'])
@@ -119,7 +119,7 @@ int main(void){ps5_ai_request r;int url;char e[768],p[64],sig[65];
             unopened=out/('reserved-'+name+'-'+str(port))
             result=subprocess.run([str(out/(name+'.exe')),'--root',str(unopened),'--bind','127.0.0.1','--port',str(port)],
                                   env=env,capture_output=True,text=True,timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
-            check(result.returncode==1 and 'reserved for WAI' in result.stderr and not unopened.exists(),
+            check(result.returncode==1 and 'Ports8188-8191 are reserved' in result.stderr and not unopened.exists(),
                   name+' refuses foreign app port'+str(port)+' before files or listener')
     def request(port,method,path,body=None,auth=True,typ='application/json'):
         c=http.client.HTTPConnection('127.0.0.1',port,timeout=15)
@@ -157,11 +157,11 @@ int main(void){ps5_ai_request r;int url;char e[768],p[64],sig[65];
             check(request(port,'GET','/health',auth=False)[0]==401,name+' rejects missing Bearer')
         code,models=request(pp,'GET','/v1/models')
         check(code==200 and [m['id'] for m in models['data']]==['moss-image-sft'],'OpenAI discovery lists only MOSS Image')
-        check(request(pp,'GET','/v1/models/wai-illustrious-sdxl-v17.0')[0]==404,'WAI model discovery rejected')
+        check(request(pp,'GET','/v1/models/incompatible-image-model')[0]==404,'incompatible model discovery rejected')
         spec=json.loads((R/'docs/openapi.json').read_text())
         check(request(pp,'GET','/openapi.json')[1]==spec,'embedded OpenAPI equals docs JSON')
-        check(spec['components']['schemas']['ImageRequest']['properties']['cfg_scale']['default']==3 and spec['components']['schemas']['ImageRequest']['properties']['flow_shift']['default']==5,'OpenAPI CFG3 and shift5 defaults')
-        invalid=[{'model':'anima-turbo-v1.1'},{'flow_shift':0},{'flow_shift':-1},{'flow_shift':1e-50},{'flow_shift':1e40},{'flow_shift':'5'},{'model':'wai-illustrious-sdxl-v17.0'},{'model':'gpt-image-1'},{'manga_strength':1},{'manga_strength':.001},{'manga_monochrome':True},
+        check(spec['components']['schemas']['ImageRequest']['properties']['cfg_scale']['default']==1 and spec['components']['schemas']['ImageRequest']['properties']['flow_shift']['default']==5,'selected Turbo4 OpenAPI CFG1 and shift5 defaults')
+        invalid=[{'model':'incompatible-other-model'},{'flow_shift':0},{'flow_shift':-1},{'flow_shift':1e-50},{'flow_shift':1e40},{'flow_shift':'5'},{'model':'incompatible-image-model'},{'model':'gpt-image-1'},{'manga_strength':1},{'manga_strength':.001},{'manga_monochrome':True},
                  {'init_image_id':'a'*32},{'reference_image_id':'a'*32},{'mask_image_id':'a'*32},{'denoise_strength':.5},{'ip_adapter_strength':.7},
                  {'controlnet':'canny'},{'controlnet':'openpose'},{'control_image_id':'a'*32},{'control_strength':1},
                  {'init_image_id':None},{'reference_image_id':None},{'mask_image_id':None},{'controlnet':None}]
@@ -195,13 +195,13 @@ int main(void){ps5_ai_request r;int url;char e[768],p[64],sig[65];
             check(request(pp,'GET','/health')[0]==200,'health responsive during synchronous generation wait')
             check(request(pp,'POST','/v1/images/generations',{'prompt':'second'})[0]==429,'single synchronous request admission')
             code,error=future.result();check(code==500 and error['error']['type']=='server_error','failed fixture never becomes an image')
-        Upstream.model='/app0/models/waiIllustriousSDXL_v170.safetensors'
+        Upstream.model='/app0/models/incompatible-image-model.safetensors'
         code,h=request(fp,'GET','/health')
-        check(code==200 and not h['engine_available'] and not h['gpu_available'] and not h['model_loaded'],'gateway denies WAI native model even when native says GPU available')
+        check(code==200 and not h['engine_available'] and not h['gpu_available'] and not h['model_loaded'],'gateway denies incompatible native model even when native says GPU available')
         check(request(fp,'POST','/v1/images/generations',{'prompt':'fixture'})[0]==503 and not Upstream.posts,'model mismatch sends zero native POSTs')
-        Upstream.model='/app0/models/anima-turbo-v1.1-f16.safetensors'
-        check(request(fp,'POST','/v1/images/generations',{'prompt':'fixture'})[0]==503 and not Upstream.posts,'Anima backend rejected without POST')
-        Upstream.model='/app0/models/MOSS-Image-SFT-Q4_K.gguf';Upstream.model_id='anima-turbo-v1.1'
+        Upstream.model='/app0/models/incompatible-other-model-f16.safetensors'
+        check(request(fp,'POST','/v1/images/generations',{'prompt':'fixture'})[0]==503 and not Upstream.posts,'incompatible backend rejected without POST')
+        Upstream.model='/app0/models/MOSS-Image-SFT-Q4_K.gguf';Upstream.model_id='incompatible-other-model'
         check(request(fp,'POST','/v1/images/generations',{'prompt':'fixture'})[0]==503 and not Upstream.posts,'Wrong model_id rejected even with expected MOSS filename')
         Upstream.model_id='moss-image-sft'
         check(request(fp,'POST','/v1/images/generations',{'prompt':'fixture','model':'moss-image-sft','flow_shift':7.25,'size':'80x96'})[0]==500,'native failure forwarded truthfully')

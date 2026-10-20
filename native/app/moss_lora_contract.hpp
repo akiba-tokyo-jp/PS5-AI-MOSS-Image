@@ -10,7 +10,11 @@
 #if PS5_AI_MOSS_TURBO_TRIAL != 0 && PS5_AI_MOSS_TURBO_TRIAL != 1
 #error PS5_AI_MOSS_TURBO_TRIAL must be0or1
 #endif
-#if PS5_AI_MOSS_TURBO_TRIAL
+#include "moss_lora_f16_storage_trial.h"
+#if PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL
+#include "moss_lora_f16_storage_contract.hpp"
+namespace ps5_ai_moss_lora=ps5_ai_moss_lora_f16_storage;
+#elif PS5_AI_MOSS_TURBO_TRIAL
 #include "moss_turbo_lora_contract.hpp"
 namespace ps5_ai_moss_lora=ps5_ai_moss_turbo_lora;
 #else

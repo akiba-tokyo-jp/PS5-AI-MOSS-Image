@@ -1,67 +1,55 @@
 # PS5 AI MOSS Image
 
-MOSS-Image-SFTとユーザー指定LoRAをPS5本体で推論するネイティブアプリと、LAN用のOpenAI Images互換APIを開発しています。
+**MOSS-Image-SFTをPS5本体で動かすネイティブ画像生成アプリ**です。WindowsからOpenAI Images互換APIで要求し、同じPS5のGPUで生成したPNGを取得できます。Windowsは開発・APIクライアントとして使い、モデル推論はPS5内で行います。
 
-**Turbo4専用trialでは、256×256の初回読込込み71.564874秒、同processの256後1024×1024初回51.133430秒で生成し、OpenAI互換APIからPNGを取得しました。** 4-step Euler／CFG1とNSFW0.7＋Turbo1.0のrank144合成adapterによる別条件です。50-step基準1023.859406秒との1024の単回差は約95.01%ですが、同画質・同一PNGの比較ではありません。[Turbo4実測・メモリ・確認範囲](docs/moss-turbo4-results-20261020.md)、[固定weightsの再現手順](docs/moss-turbo4-reproduction.md)。
+最新の検証済み速度基準は **Turbo4＋bounded upload、F32 LoRA**です。256×256の初回モデル読込込みは **71.377746秒**、同じプロセスでの256後1024×1024初回は **51.092988秒**でした。4 Euler steps／CFG1、作者の専用sigma列、NSFW0.7＋Turbo1.0の合成rank144 adapterを使います。[最新の比較・メモリ・確認範囲](docs/moss-turbo-memory-options-20261020.md)、[固定weightsの再現手順](docs/moss-turbo4-reproduction.md)。
 
-**2026-10-20の追加実機試験では、同promptの256後1024初回が、50-step基準キャッシュ版1023.9秒に対し、30-step res_multistep/CFG4で617.4秒、50-step Euler/CFG3＋Spectrumで617.9秒でした。** 各条件1回のguarded trialで、前者はsampling条件変更、後者は20回のlatent予測を含み、同画質・同一PNG・通常既定値の比較ではありません。FP16データ＋FP32累積、PS5内CPU text encodingとVulkan DiT/VAE、OpenAI互換APIからのPNG取得を維持しています。[実測条件とメモリの範囲](docs/moss-sampler-spectrum-memory-20261020.md)。
+![PS5のTurbo4＋bounded uploadで生成した1024×1024画像](docs/images/moss-turbo4-upload-1024-20261020.png)
 
-| PS5生成時間、50steps | 計測入りFP32基準 | 提出調整＋限定fusion FP32 | FP16データ＋FP32累積 |
-|---|---:|---:|---:|
-| 256×256初回、model読込込み | 153.972336秒 | 152.631656秒 | **145.839851秒** |
-| 同processの256後、1024×1024初回 | 1219.096190秒 | 1214.444805秒 | **1064.248911秒** |
+## 生成時間
 
-FP32基準比で256は5.28%、1024は12.70%短縮しました。各構成1回の比較で、反復して安定する改善率は未確定です。新しい版の両PNGを開いて画質、LoRA適用、GPU完了と非有限値0を確認しました。nativeとOpenAI互換APIで取得したPNGは一致します。FP32版とのpixel一致は主張しません。[実装と実測の詳細](docs/moss-mixed-precision-20261020.md)、[以前の提出/fusion・FP16拒否の比較](docs/moss-performance-optimization-20261020.md)を参照してください。
+2026-10-20、各構成・各サイズ1回のPS5内計測です。右列は同promptの256生成後の1024で、1024単独cold／2回目の1024ではありません。
 
-追加最適化では二つのkernel候補に全体短縮が見られず、基準GPU経路へ戻しました。同promptの解像度変更でCPU text encodingを再利用するMOSS限定キャッシュ版は、256初回146.016289秒、同processの256後1024初回**1023.859406秒**でした。上表の混合精度基準1064.248911秒に対し40.389505秒（3.7951%）短縮し、両PNGは対応する基準と全バイト一致・目視正常でした。各1回の比較で、新promptやDiT自体の高速化を示すものではありません。完全な現行ログで256のcache hit 0件／1024の2件を確認し、native・gatewayの通常終了後、別の新規observerでGPU titleなし・既存サービス継続を確認しました。[追加調査と検証範囲](docs/moss-additional-optimization-20261020.md)。
+| 構成 | 256初回、読込込み | 同じプロセスでの256後1024初回 |
+|---|---:|---:|
+| 50-step Euler／CFG3、F32累積＋text cache | 146.016289秒 | 1023.859406秒 |
+| 30-step res_multistep／CFG4 | 113.804763秒 | 617.365825秒 |
+| 50-step Euler／CFG3＋Spectrum latent予測 | 114.148733秒 | 617.938351秒 |
+| **Turbo4＋bounded upload、F32 LoRA** | **71.377746秒** | **51.092988秒** |
+| 上記＋FFN chunk2048 | 71.294669秒 | 55.195208秒 |
+| F16 LoRA storage＋専用F32 shared演算、FFN分割OFF | 68.897951秒 | 51.884730秒 |
 
-別の50-step読み込み試験では、GPU重み転送用host stagingを**workerあたり最大8MiB**へ制限し、必要量まで増やす版を確認しました。256初回は146.016289→145.680067秒でほぼ同等、PNGは全バイト一致でした。初回生成のheap mapping高水位とRSS高水位は低下しましたが、物理RAM・VRAM削減量の証明ではありません。[読み込みとメモリの実測範囲](docs/moss-bounded-weight-upload-20261020.md)。
+samplingやadapterが異なるため同画質比較ではありません。温度・clockは統制せず、平均・分散・長時間安定性は未確定です。FFN分割は読込済み1024が約8%遅くなったため通常の速度基準ではOFF。F16 storageはowned Direct使用量を637.875MiB下げましたが、読込済み1024の高速化は確認できず、任意prompt向け標準経路にしていません。[前段のsampling比較](docs/moss-sampler-spectrum-memory-20261020.md)。
 
-**Privateの実験版です。** 上記50-step基準は同prompt・seed20261020・LoRA0.7・CFG3・flow shift5・Eulerを固定し、各要求1POST、自動再送0で測定しました。実験profileは最大4試行で失敗も消費し、production admission0を維持します。10GiB poolで12GiB目標は未達、平均／分散・長時間連続運用・最小必要stepsは未検証です。速度改善の余地をすべて調べ終えたものではありません。
+**現在公開しているのは検証用アプリです。** 採用候補のTurbo4プロファイルは固定prompt・seed・256／1024、1プロセス最大4試行に制限しています。任意promptの連続運用版は公開対象に含めません。[確認済み機能と制約](docs/status.md)を先に確認してください。
 
-前回の1024単独cold/warmは初回読込込み1242.706350秒／同process2回目1177.725365秒でした。今回は256後の新shape1024なので、前回のwarmと直接同条件ではありません。OS disk cacheはflushしておらず、warmでもweight転送ゼロとは扱いません。[前回の実測範囲](docs/moss-1024-cold-warm-20261020.md)は履歴として保持します。
+## PS5内の処理
 
-![PS5のTurbo4専用trialで生成した1024×1024・4stepsのMOSS画像](docs/assets/moss-turbo4-1024-20261020.png)
+![MOSS専用の処理構成](docs/images/architecture.svg)
 
-基準rank16 LoRAだけで行った以前の256×256比較では4stepsの色縞が50stepsで解消しました。今回のTurbo4は追加のdistilled adapterと専用sigmasを使う別profileで、通常の50-step API既定値は変更していません。[256×256の原因比較](docs/moss-native-small-trial-20261019.md)を履歴として保持します。
+- OpenAI互換gateway：PS5の8193、model `moss-image-sft`。
+- 非同期native engine：同じPS5の8192。gatewayはジョブを1件だけ渡します。
+- Qwen3.5-9B Q4_K_Mのtext encoding：PS5 CPU。
+- MOSS-Image-SFT Q4_KのDiTとFLUX.2 small VAE：PS5 Vulkan、RADV NAVI21。
+- FP16データ経路と明示的FP32累積、選定LoRAの数値・有限値・GPU完了確認を維持します。
+- text-to-image対応。ControlNet、IP-Adapter、img2img、マスク編集、inpaintingはこのMOSS APIでは未対応です。
 
-```mermaid
-flowchart LR
-  PC[Windows API client] -->|LAN / Bearer / 8193| GW[PS5 MOSS gateway]
-  GW -->|one job / 8192| API[PS5 native engine]
-  API --> TE[Qwen3.5-9B / PS5 CPU]
-  TE --> DIT[MOSS-Image-SFT DiT / Vulkan]
-  LORA[Selected F32 adapter: rank16 or composed rank144] -->|profile scale 0.7 or 1.0| DIT
-  DIT --> VAE[FLUX.2 small VAE / Vulkan]
-  VAE --> PNG[PS5 PNG output]
-  PNG --> PC
-```
+## 動作・メモリの境界
 
-Windowsは開発・APIクライアントに使います。モデル推論をPCやクラウドへ移しません。WAI・Anima・MOSSは同時起動しません。
+アプリはPPSA99190として登録・実機起動を確認しました。APIはBearer認証と同じprivate IPv4 /24内の接続に制限し、生成要求を直列処理します。タイムアウト時は既存jobとhealthを確認し、自動再送しません。GPUアプリは同時起動しません。
 
-| 項目 | 現在の構成 |
-|---|---|
-| アプリ / Title ID | PS5 AI MOSS Image / PPSA99190（登録・実機起動確認） |
-| 配置 | `/data/ai/native-moss-image-sft/PPSA99190` |
-| Native / OpenAI gateway | 8192 / 8193、model `moss-image-sft` |
-| モデル | SFT Q4_K + Qwen3.5-9B Q4_K_M + FLUX.2 small VAE + 外部tokenizer + 選定rank16 LoRA（Turbo4専用trialは合成rank144） |
-| Direct予約目標 / 実測trial | **12GiBは未達** / 承認済み実験10GiB、1GiB regions |
-| 推論予算 | production例11.5GiB / 実験9.5GiB、pool外working reserve 1GiB |
-| 基準キャッシュ版の単回実測 | キャッシュ版の256初回146.016289秒／同processの256後1024初回1023.859406秒。基準1064.248911秒比3.7951%短縮、両サイズ基準と同一PNG。50steps、Euler、CFG3、shift5、LoRA0.7 |
+検証済み速度基準のDirect予約は10GiB、推論予算9.5GiB、pool外reserve1GiBです。CPU/GPUは物理メモリを共有し、APIの`peak_gpu_bytes`は専用VRAMの実使用量ではありません。12GiB予約目標は現native quotaでは未達です。workspaceやstorageの使用量低下と、予約領域をOSへ返すことを区別します。
 
-12GiBはGPU専用の独立VRAMではなく、CPU/GPU共有のDirect領域の目標です。今回のnative contextの総量報告は11.4375GiBで、pool12GiB + reserve1GiBの容量判定を通りません。仮想アドレスの区切り変更では物理メモリ枠は増えません。今回までの生成成功から、12GiB確保や他条件・長時間運用の安全性は推定しません。APIの`peak_gpu_bytes`もCPU text weightsを含む共有Direct poolとdriver arenaのピークから得た上界で、純粋なVRAM実使用量ではありません。
+bounded uploadは同形式のGPU重み転送用host stagingをworkerあたり最大8MiBへ制限します。これは全推論RAMを8MiBにする機能やMoE expert cacheではありません。モデルはdenseです。既存14数値ゲート、Turbo用3ゲート、upload用ゲートを実機で確認し、画像ごとに4つの有限DiT出力、672 Q4 F32記録、LoRA504 tensorsの適用とPNGを確認しています。確認済み条件以外の安全性・同画質を保証するものではありません。
 
-Qwenのembeddingは実GGUFヘッダーで545.625MiBと確認しました。旧512MiB単体割当上限を超えるため、MOSS側のregionを1GiBへ拡張しています。今回の実機ではCPU text encoding、BF16を含む限定GPU読み戻しとDiT/VAE完了を確認しましたが、全演算の数値正しさと画質を証明するものではありません。SDXL用LoRA、ControlNet、IP-Adapter、img2img/inpaintingはMOSSへ流用せず、APIで拒否します。
+## 利用・ビルド
 
-- [現在の検証範囲](docs/status.md)
-- [固定モデル・ハッシュ・メモリ・ライセンス](docs/moss-models.md)
-- [指定LoRAの実ヘッダー・メモリ・互換対応](docs/moss-requested-lora.md)
-- [APIとOpenAPI](docs/api.md)
-- [設定例](config/moss-native.json.example)
-- [ビルド](docs/build.md) / [配置計画](docs/deployment.md)
+- [APIとOpenAPI](docs/api.md) / [PowerShellクライアント](scripts/Invoke-MossOpenAI.ps1)
+- [モデル・ハッシュ・ライセンス](docs/moss-models.md) / [Turbo4合成adapterの再現](docs/moss-turbo4-reproduction.md)
+- [ビルド](docs/build.md) / [配置と終了](docs/deployment.md)
+- [現在の検証範囲](docs/status.md) / [最新の比較](docs/moss-turbo-memory-options-20261020.md)
+- [公開前の確認](docs/publication-checks-20261020.md) / [実機検証データ](docs/verification.json)
 
-[OpenMOSS公式](https://github.com/OpenMOSS/MOSS-Image)と[SD.cppのMOSS対応](https://github.com/leejet/stable-diffusion.cpp/blob/b13a48219d5cdf408edcb93da6cd69b612ed03d3/docs/moss_image.md)を参照しています。実装は既存PS5向けSD.cppへMOSS対応commitを範囲限定で移植し、選定LoRAを含むcore全75オブジェクトを新規再構築しました。最新upstream全体への置換ではありません。
+既定のproduction admissionはOFFです。各実験は明示的profileで区別し、対応するソース・設定・compiled poolを一致させます。SDK・生成済みshader・reviewed依存が別途必要で、clone直後のワンコマンド完全構築ではありません。モデルweights、token、個人ログ、ビルド済みbinaryはGitに含めません。掲載PNGは検証済みの正常出力です。
 
-このリポジトリは[PS5 AI WAI](https://github.com/akiba-tokyo-jp/PS5-AI-WAI)とPS5 AI Animaの履歴を継承します。`docs/`に残るWAI/Animaの成功画像・ベンチマーク・検証結果はMOSSの結果ではありません。[Anima元README](ANIMA-BASE-README.md)、[WAI元README](WAI-BASE-README.md)、著作権・[第三者通知](THIRD_PARTY_NOTICES.md)を保持します。ホームアイコンは継承した仮アセットです。
-
-重み・token・個人ログ・ビルド済みバイナリはGitへ含めません。正常な検証出力PNGだけを同梱し、今回の同一画像は1枚だけ保存しています。アプリのGPL等と各モデルのApache-2.0条件は別に扱います。公開の別指示まではprivateを維持します。
+[OpenMOSS](https://github.com/OpenMOSS/MOSS-Image)、[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)、PS5向けVulkan／Mesa／SDK等を接続しています。アプリのライセンスと各モデルの利用条件は別です。[第三者通知](THIRD_PARTY_NOTICES.md)とファイルごとのlicense・copyrightを保持してください。

@@ -1,5 +1,7 @@
 # MOSS性能改善の実装と比較検証（2026-10-20）
 
+> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+
 > 後続の実装・実機結果は[FP16データ＋FP32累積の比較](moss-mixed-precision-20261020.md)を参照してください。1024は1219.096190→1064.248911秒へ短縮しました。以下は初期3構成の保存記録で、FP16未生成やvariant2を残すという記述は当時の状態です。
 
 **3点の実装と比較検証を完了しました。FP32基準・提出/fusion構成の256/1024生成は成功し、対応するPNGは完全一致しました。FP16候補は起動時の数値ゲートで拒否され、生成していません。** 提出/fusionのFP32実験profileを残しますが、単回比較の差は256で約0.87%、1024で約0.38%と小さく、大幅高速化は達成していません。安定した改善率や最速構成の証明ではありません。リポジトリはPRIVATE、production admissionは`0`を維持します。
@@ -70,7 +72,7 @@ clientが256のPNG、数値、実機完了、目視確認、running/queued=0を�
 
 **256初回の後の1024は、新しいshapeの初回であって、model未読込のcold1024ではありません。** 比較対象は同じ計測入りFP32構成の同じ256→1024順です。過去のfresh-process cold/warm pairとは分離します。`generation_seconds`、API roundtrip、Windows wallは別々に報告します。共有poolの累積high-waterを含むCPU/GPU-labelled memory peakを加算したり、pure VRAMと表示したりしません。
 
-各試験後は正常終了とowner不在・独立idle確認を行ってから次のGPU titleへ進みます。WAI、Anima、MOSSの同時起動、system領域・firmware変更を行う試験ではありません。
+各試験後は正常終了とowner不在・独立idle確認を行ってから次のGPU titleへ進みます。GPUアプリの同時起動、system領域・firmware変更は行いません。
 
 ## 確認済みのホスト検証とクロスビルド
 
@@ -101,7 +103,7 @@ clientが256のPNG、数値、実機完了、目視確認、running/queued=0を�
 484391514834f4788b5bceb8c9b5d0ba26ce023f0fa861a51b1a3d6bd2b28f27
 ```
 
-今回の1024後は正常終了を確認し、独立observer009でidleを確認しました。256→1024ではconditioning cacheのsize条件が変わり、過去の1024→1024 warmとは同じ条件ではありません。旧warmとの差をそのまま計測追加の減速や純粋なmodel読込時間と解釈しません。保存TAILに明示的なcache-hit行はなく、観測されていないhit数を補いません。
+今回の1024後は正常終了を確認し、独立observerでidleを確認しました。256→1024ではconditioning cacheのsize条件が変わり、過去の1024→1024 warmとは同じ条件ではありません。旧warmとの差をそのまま計測追加の減速や純粋なmodel読込時間と解釈しません。保存TAILに明示的なcache-hit行はなく、観測されていないhit数を補いません。
 
 1024の主なCPU wall内訳は次のとおりです。**親子項目を足さないでください。**
 
@@ -124,7 +126,7 @@ APIの`peak_gpu_bytes`は8,403,091,456Bでしたが、CPU text weightsも借り�
 
 Q4_KゲートのCPU正解値は、保存した量子化重みを復号した値から計算しており、元の非量子化重みとの差を混ぜていません。ソースと実リンクshaderには、FP16有効・quantized DEFAULT precision時のhalf蓄積、half stagingに伴う追加丸めの経路があります。今回の差の説明候補ですが、各要因の寄与やruntime pipeline IDは実測で分離できていません。すべてのFP16用途が不可能、driver実装の欠陥確定、という結論ではありません。
 
-FP16演算＋F32蓄積の別候補はソース上可能ですが、まだ実装・実機検証していません。閾値を緩めて合格にしたり、fixtureだけ変更してmodelも検証済みと扱ったりしません。今回の候補は正常OS終了要求が受理され、PID不在と独立observer010のidleを確認しました。
+FP16演算＋F32蓄積の別候補はソース上可能ですが、まだ実装・実機検証していません。閾値を緩めて合格にしたり、fixtureだけ変更してmodelも検証済みと扱ったりしません。今回の候補は正常OS終了要求が受理され、PID不在と独立observerのidleを確認しました。
 
 ### 提出/fusion構成の256比較
 
@@ -175,8 +177,8 @@ driver fence waitは1164.567069→1159.916232秒、submit CPU wallは1.094833→
 
 インストール済みの実験profileは**variant2、FP32＋提出単位調整＋限定fusion**を維持します。FP16候補は現行しきい値を通らないため採用しません。これは別のmixed-precision候補が将来成立しないという判断ではありません。
 
-最後のnative569/gateway572は通常API終了202を受理し、両PID不在と独立observer011のidleを確認しました。現在は停止しています。今回の許可された比較は完了し、追加の1024やwarm繰り返しは行っていません。max4/production0/privateを維持し、失敗時のclaim返却、自動POST再送、driver・モデル・poolの追加変更は行いません。
+最後のnative/gatewayは通常API終了202を受理し、両PID不在と独立observerのidleを確認しました。現在は停止しています。今回の許可された比較は完了し、追加の1024やwarm繰り返しは行っていません。この試験ではmax4/production0を維持し、失敗時のclaim返却、自動POST再送、driver・モデル・poolの追加変更は行いません。
 
-長期連続運用、平均・分散、熱・clock統制、他prompt、FP16での画像品質、最小steps、提出変更とfusion単体それぞれの寄与は未検証です。既存のWAI向け`precision.md`や`unet-profiling.md`の速度・CFG batch結果をMOSS実測として流用しません。
+長期連続運用、平均・分散、熱・clock統制、他prompt、FP16での画像品質、最小steps、提出変更とfusion単体それぞれの寄与は未検証です。異なるmodelの速度・CFG batch結果をMOSS実測として流用しません。
 
-client結果と解析は`D:/PS5-AI/moss/optimization-20261020/`内の各`result.private.json`、`analysis-tools/baseline-large-v1`、`variant2-small-v1`、`variant2-large-v1`、`final-fp32-comparison-v1/final-evaluation.private.json`に保存しています。ビルドの根拠は`D:/PS5-AI/moss/build/optimization-v2/verified-handoff.private.json`、終了の独立根拠は`D:/PS5-AI/moss/native-observer/v1/`の`extracted-009`、`extracted-010`、`extracted-011`です。raw logs、これらのprivate diagnostic JSON、credentials、model weightsをGitへ追加しません。
+対応するclient結果、比較解析、ビルド入力、通常終了と独立idleの記録は非公開の検証資料へ保存しています。元ログ、private diagnostic JSON、credentials、model weightsはGitへ追加しません。

@@ -52,7 +52,7 @@ def prepare(models_root, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--models-root", type=Path, default=Path("D:/PS5-AI/models/moss-image-sft-v1"))
+    parser.add_argument("--models-root", type=Path, required=True, help="Explicit verified model root outside the repository")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     print(json.dumps(prepare(args.models_root, args.output), indent=2))

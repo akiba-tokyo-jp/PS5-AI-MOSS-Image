@@ -85,7 +85,7 @@ struct LoraModel : public GGMLRunner {
             if (sources.size() != ps5_ai_moss_lora::tensor_count)
                 throw std::runtime_error("MOSS LoRA source must contain exactly504 tensors");
             for (const auto& [name, source] : sources)
-                ps5_ai_moss_lora::validate_tensor(name, source.type == GGML_TYPE_F32,
+                ps5_ai_moss_lora::validate_tensor(name, source.type == (PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL?GGML_TYPE_F16:GGML_TYPE_F32),
                     source.n_dims, source.ne[0], source.ne[1]);
         }
         std::map<std::string, ggml_tensor*> tensors;
@@ -163,7 +163,7 @@ struct LoraModel : public GGMLRunner {
             skipped_incompatible_lora_tensors.clear();
             strict_moss_matched = 0;
             for (const auto& [name, tensor] : lora_tensors) {
-                ps5_ai_moss_lora::validate_tensor(name, tensor->type == GGML_TYPE_F32,
+                ps5_ai_moss_lora::validate_tensor(name, tensor->type == (PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL?GGML_TYPE_F16:GGML_TYPE_F32),
                     ggml_n_dims(tensor), tensor->ne[0], tensor->ne[1]);
                 const auto& shape = ps5_ai_moss_lora::expected().at(name);
                 if (!model_tensor_names.count(shape.model_weight))

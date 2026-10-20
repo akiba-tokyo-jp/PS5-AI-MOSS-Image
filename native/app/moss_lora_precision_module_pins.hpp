@@ -1,0 +1,6 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later -- existing module float-control patch pins. */
+#pragma once
+static constexpr const char* moss_lora_precision_actual_module_sha256[2][4]={
+    {"9f875beba3c839333f3bcfdddf6c5d444e0c61f73a103f286146002bbb68d2f1","f5386663c29c44b42714f9f15ba98a465673d6452d7ffbfa8a29e37fc621de0e","22e6d072c31db0c0384fa74e13726ef0087119cf93c9e2d49bd4a53053719f65","2500e68ecbc6f6383864f07ac7748cd850836def9894d35c2f94ee631c84d071"},
+    {"1fdb392b957fac72c5512aa1334cbe872dd7460e922811ccf9df1086b8ed3c2c","38cc8f802cf28cd001cf719b564f615f168f9a9b4825ec54071846814f6891fb","f03ee2a321a258479c91c8f71a01ef781e2f4ccd21dd702dfbb420a2c12ee602","1179bcdc2ae97c877060233c085ce98281ad62b6347dbb1ee9d30e41351f2670"},
+};

@@ -1,0 +1,29 @@
+{
+  "engine": {
+    "model": "/app0/models/MOSS-Image-SFT-Q4_K.gguf",
+    "llm": "/app0/models/Qwen3.5-9B-Q4_K_M.gguf",
+    "vae": "/app0/models/flux2-vae_small.safetensors",
+    "backend": "cpu,unet=Vulkan0,vae=Vulkan0",
+    "params_backend": "cpu,unet=Vulkan0,te=disk,vae=Vulkan0",
+    "max_vram_gib": "Vulkan0=9.5",
+    "gpu_pool_bytes": 10737418240,
+    "working_reserve_bytes": 1073741824,
+    "cpu_threads": 3,
+    "flash_attn_mode": "auto,unet=on",
+    "batched_cfg": false,
+    "conditioning_cache_size": 2,
+    "vae_tiling": true,
+    "vae_tile_size": 256,
+    "vae_tile_overlap": 0.5,
+    "mmap": false,
+    "disable_prefetch": true,
+    "eager_load": false,
+    "auto_fit": true,
+    "tae_preview_only": false,
+    "log": "/app0/ai-runtime/logs/engine.jsonl",
+    "tokenizer": "/app0/models/tokenizer_qwen3.5.json",
+    "moss_lora_path": "/app0/models/moss-nsfw07-turbo4-r144-f32.safetensors",
+    "moss_lora_strength": 1.0,
+    "moss_lora_sha256": "126fed9dd5268fe20ab0085525a4b7b7f8ff767a28aea907df2089c33360d4d3"
+  }
+}

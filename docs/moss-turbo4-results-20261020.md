@@ -1,5 +1,9 @@
 # MOSS Turbo4の実機結果（2026-10-20）
 
+> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+
+このページはbounded uploadを使わない先行Turbo4単独試験です。後続の[併用版・FFN分割・F16 storage比較](moss-turbo-memory-options-20261020.md)は別の実測として記録しています。
+
 PS5上の専用trialで、MOSS-Image-SFT Q4_KとNSFW0.7＋Turbo1.0の合成rank144 F32 adapterを使い、256／1024画像を生成してOpenAI Images互換APIから取得しました。WindowsはAPIクライアントです。text encodingはPS5 CPU、DiT・Flash Attention・VAEはPS5 Vulkanで処理します。
 
 | PS5内の生成時間 | 50-step基準キャッシュ版 | Turbo4専用trial |
@@ -18,7 +22,7 @@ PS5上の専用trialで、MOSS-Image-SFT Q4_KとNSFW0.7＋Turbo1.0の合成rank1
 
 1024のDiT graph処理は4回・44.542630秒、他runnerは49回・5.987196秒でした。これはnested CPU wallで、純GPU timestampや加算可能な内訳ではありません。完全な現行ログの対応区間で、256のcache hitは0件、1024ではpositive conditioningのcache hitを1件確認しました。CFG1のためnegative forwardはありません。
 
-![PS5実機のTurbo4専用trialで生成した1024×1024・4stepsの画像](assets/moss-turbo4-1024-20261020.png)
+![PS5実機のTurbo4専用trialで生成した1024×1024・4stepsの画像](images/moss-turbo4-upload-1024-20261020.png)
 
 生成後にnativeとgatewayを通常APIで終了し、別のprocess観測で両方の不在を確認しました。さらに独立した新規observerで、同boot・既存サービス／syscore／shellcore、GPU titleなし、3タイトルの登録と選択5モデルのmetadata維持を確認しました。強制signalと手動GPU解放は0です。
 
@@ -32,4 +36,4 @@ PS5上の専用trialで、MOSS-Image-SFT Q4_KとNSFW0.7＋Turbo1.0の合成rank1
 
 BF16重みのGPU読み戻しゲートは合格しており、backendの`bf16: 0`表示だけでBF16不可とは判断しません。一方、現行BF16 matrix経路のRHS丸めと、rank144合成係数がすべてBF16-exactではない点は残ります。現在のF32契約を変更するには別の数値・画像比較が必要です。
 
-前段の[30-step sampler／Spectrum](moss-sampler-spectrum-memory-20261020.md)、[text cache](moss-additional-optimization-20261020.md)の結果は保存しています。今回もprivateのguarded trialでproduction admission0、12GiB予約目標は未達です。
+前段の[30-step sampler／Spectrum](moss-sampler-spectrum-memory-20261020.md)、[text cache](moss-additional-optimization-20261020.md)の結果は保存しています。今回も開発時のguarded trialでproduction admission0、12GiB予約目標は未達です。

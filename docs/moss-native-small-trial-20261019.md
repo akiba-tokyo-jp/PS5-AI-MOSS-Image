@@ -1,8 +1,10 @@
 # MOSS実機の小画像試験と画質原因の比較（2026-10-19 JST）
 
+> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+
 **PS5でMOSS＋指定LoRAの256×256・50steps画像を正常な画質で生成し、WindowsがOpenAI Images互換APIから取得しました。PS5生成時間は初回モデル読込を含み148.133782秒です。**
 
-最初の4steps画像にあった強い色縞は、同一SELF・同一設定でstepsだけ50へ増やした比較で解消しました。この条件では**4stepsのsampling不足が原因**と判断します。全prompt・解像度の品質保証や最小必要stepsの特定ではありません。privateの実験版を維持し、production runtime admissionは0のままです。
+最初の4steps画像にあった強い色縞は、同一SELF・同一設定でstepsだけ50へ増やした比較で解消しました。この条件では**4stepsのsampling不足が原因**と判断します。全prompt・解像度の品質保証や最小必要stepsの特定ではありません。当時は明示的な個別実験としてproduction runtime admission0を維持しました。
 
 ## 原因を特定した比較
 
@@ -36,7 +38,7 @@
 | PNG SHA256 | `8e14a3df612932dcef0bbdef38eb3a7cbafd964b87329e8c5a6c7bf55bc07a65` |
 | LoRA適用 | loaded/matched/used各504、skipped0、`application_verified=true` |
 
-![PS5 MOSS 256×256・50stepsの正常出力](assets/moss-256-50step-20261019.png)
+![PS5 MOSS 256×256・50stepsの正常出力](images/moss-256-50step-20261019.png)
 
 warm生成、1024画像、連続生成、最小必要stepsは測定していません。148.1秒をモデル読込済みの時間として扱いません。
 
@@ -70,18 +72,8 @@ corrected初回4stepsは68.704665秒でGPU PNG/APIの技術的成功を確認し
 
 品質比較SELFのSHA256は`cf61a7190e4e0f79b7aedb12038fdeb1d529dd90cf92a5a26185ce73cf3cabe5`です。core archiveは`c9809e6bbb04ef3a09044d7c5036e113004c37bc616541ca5d808d4c53acaab4`を維持しました。新しい品質契約と数値ゲートはnative側だけの変更で、全75 compiler dependency記録を監査し、coreの消費入力が変わらないことを別receiptで確認しています。旧core manifestのhashを書き換えていません。
 
-50steps後、native PID432／gateway PID435を通常のidle API終了で閉じました。受理202だけを証拠にせず、別process取得で両PID不在、独立observer005でGPU titleなしを確認しました。追加生成や録画はしていません。
+50steps後、native／gatewayを通常のidle API終了で閉じました。受理202だけを証拠にせず、別process取得で両PID不在、独立observerでGPU titleなしを確認しました。追加生成や録画はしていません。
 
-## ローカル証拠
+## 記録の範囲
 
-重み・秘密・生ログ・失敗画像はGitへ含めません。上の正常50steps出力PNGだけをユーザーの許可範囲で同梱しています。以下は非公開Dドライブ上の所在です。録画やログのクラウド投稿は行っていません。
-
-- 同一条件比較: `D:/PS5-AI/moss/diagnostics/quality-pair-20261019/comparison.private.json`
-- 4steps再現: `D:/PS5-AI/moss/quality-trial-v1/baseline4-actual-001/`
-- 50steps結果／PNG／応答: `D:/PS5-AI/moss/quality-trial-v1/steps50-actual-001/`
-- 現在のengine/startup等ログ: `D:/PS5-AI/moss/native-logcopy/v4/execution-001/`
-- 通常終了／PID不在: `D:/PS5-AI/moss/diagnostics/quality50-normal-exit-v3/`
-- 独立idle確認: `D:/PS5-AI/moss/native-observer/v1/extracted-005/session.private.json`
-- core: `D:/PS5-AI/moss/build/core-v4-bf16-scratch/manifest.private.json`
-- 品質比較native: `D:/PS5-AI/moss/build/native-v5-quality50/verified-handoff.private.json`
-- 初期corrected4steps履歴: `D:/PS5-AI/moss/smoke-corrected-v2/actual-001/`
+元ログ、private diagnostic receipts、重み、秘密、失敗画像はGitへ含めません。公開するのは条件・集約値と正常50-step出力PNGです。実際のsource／build／request／通常終了／独立idle証拠は開発時の非公開記録へ保存しています。

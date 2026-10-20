@@ -1,105 +1,48 @@
-# MOSS Imageの状態
+# MOSS Imageの検証状態
 
-最新のTurbo4専用trialは、256初回読込込み**71.564874秒**、同processの256後1024初回**51.133430秒**でした。4-step Euler／CFG1、NSFW0.7＋Turbo1.0合成rank144、明示的なauthor sigmasを使います。両PNGはAPIとnative GETで一致し、目視で大きな破綻がないことを確認しました。各1回で、50-step基準との同画質比較や1024単独cold/warmではありません。[Turbo4の検証範囲](moss-turbo4-results-20261020.md)。
+2026-10-20。最新の検証済み速度基準は**Turbo4＋bounded upload、F32 LoRA**です。256初回モデル読込込み71.377746秒、同じプロセスでの256後1024初回51.092988秒でした。両PNGは先行Turbo4版と全バイト一致し、PNGを目視確認しました。各1回の観測で、統計的な速度差・長期安定性や全promptの品質を証明しません。
 
-生成後にnativeとgatewayを通常APIで終了し、別のprocess観測で両方の不在を確認しました。さらに独立した新規observerで、同boot・既存サービス／syscore／shellcore、GPU titleなし、3タイトルの登録と選択5モデルのmetadata維持を確認しました。強制signalと手動GPU解放は0です。
+## 採用判断と任意実験
 
-以下は前段のsampling・Spectrum・読み込み試験を含む保存履歴です。
+| 経路 | 現在の扱い | 実機で確認した範囲 |
+|---|---|---|
+| F32 Turbo4＋bounded upload | 最新の速度比較基準 | 256→1024各1枚、4 DiT／672 Q4 F32／LoRA504、既存14＋Turbo3＋uploadゲート |
+| FFN chunk2048 | 速度基準ではOFF | 1024が55.195208秒、基準より約8%増。workspace高水位は低下 |
+| F16 LoRA storage＋専用F32 shared演算 | default-OFFの任意試験 | 68.897951／51.884730秒、専用8ゲート、LoRA private記録2016。owned Direct使用量637.875MiB低下、warm高速化は未確認 |
+| 任意promptの通常運用版 | 公開対象から除外 | 8GiB起動時の物理確保は確認したが、初回要求が保存領域チェックのHTTP507でジョブ登録前に拒否。画像生成は未実施 |
+| 30-step res_multistep／Spectrum | 別のsampling試験 | 256→1024各1枚。sampling／forecast変更を含み、Turbo4や基準と同画質比較ではない |
 
-2026-10-20 JST。**追加guarded trialの256／同processの256後1024は、30-step res_multistep/CFG4が113.804763／617.365825秒、50-step Euler/CFG3＋Spectrumが114.148733／617.938351秒でした。** 基準キャッシュ版146.016289／1023.859406秒と各1回ずつの比較で、同画質・同一PNGや最速構成の証明ではありません。FP16データ＋FP32累積、private、production admission0、最大4試行、10GiB poolを維持します。SpectrumはGPU DiTを100→60回に減らし、1024では最大14MiBのhost payloadを追加します。[sampling変更とメモリの実測範囲](moss-sampler-spectrum-memory-20261020.md)、[前段のキャッシュ最適化](moss-additional-optimization-20261020.md)。
+最新の全比較表とメモリの定義は[Turbo4メモリ比較](moss-turbo-memory-options-20261020.md)にまとめています。公開版は確認済みの限定trialを対象とし、通常運用の完成や長時間安定性は主張しません。通常運用試作はファイル所有者情報・ディスク空き容量・相対path処理のnative互換性に不整合が見つかったため、検証済みの構成から分離しました。既存画像は削除せず、試作アプリとgatewayは通常APIで終了し、別の確認でprocess不在と既存サービス維持を確かめました。
 
-| 今回の比較 | 計測入りFP32基準 | 提出調整＋限定fusion FP32 | FP16データ＋FP32累積 |
-|---|---:|---:|---:|
-| 256初回、model読込込み | 153.972336秒 | 152.631656秒 | 145.839851秒 |
-| 同processの256後1024初回 | 1219.096190秒 | 1214.444805秒 | 1064.248911秒 |
-| PNG | 目視正常 | 基準と全バイト・RGB一致 | 目視正常、GPU/finite/LoRA504確認 |
+## 実装上の境界
 
-FP32基準比の単回差は256で5.28%、1024で12.70%です。初期のFP16候補はQ4_K N9数値ゲート41/153 mismatchで拒否されましたが、現在の混合精度版はMOSSとruntime LoRAの累積をFP32へ明示し、同じ許容値で合格して両サイズを生成しました。新たなmedium64タイル案は実機で既に既定動作と判明したため採用しません。schema2のdriver計測はlookupを含むnested CPU wallで、GPU timestampや除去可能な待ち時間ではありません。[以前の比較の詳細](moss-performance-optimization-20261020.md)。
+- MOSS-Image-SFT Q4_K、Qwen3.5-9B Q4_K_M、FLUX.2 small VAE、外部tokenizerと選定adapterを使います。Windows側のlearned-model推論はありません。
+- Turbo4はNSFW0.7＋Turbo1.0をrank144 F32へ合成し、runtime倍率1.0、4 Euler steps／CFG1、author sigmas `[1.0,0.910,0.717,0.024,0.0]` を使用します。flow shiftを二重適用しません。
+- production admissionは既定0。明示的なTurbo4 trialは固定prompt・seed20261020、256／1024、1プロセス最大4試行です。失敗した要求も試行数に含め、自動再送しません。任意promptの連続運用は未対応です。
+- 数値ゲート、全出力有限値、実scratch／容量、GPU完了、所有権、通常終了を弱めません。不確かなGPU資源を手動で解放しません。
+- APIは認証・private /24・n=1・PNG・非streaming。未対応の画像編集等は拒否します。モデルpathや秘密をクライアント指定で置換しません。
 
-追加調査ではGPU timestampでFFN-upを測定し、WG256候補Aの単体時間差は改善を示さず、BK64候補Bも実画像で256が147.548952秒、1024が1083.242504秒となったため不採用としました。各1回の対応比較で、温度・clockを統制した統計的評価ではありません。
+## メモリと容量
 
-前段の基準GPU経路にMOSS純text条件の解像度間キャッシュを加えた版で、256初回146.016289秒、同processの256後1024初回1023.859406秒を確認しました。対応する基準1064.248911秒比で40.389505秒（3.7951%）短縮し、両PNGは基準と全バイト一致・目視正常です。fresh core全75 object・依存・RTTIリンク、14起動ゲート、両生成のF32累積16600／F16累積0／nonfinite0／LoRA504使用を確認しました。1024のDiT100回は1016.603640→1016.443356秒でほぼ同じですが、他runnerは51→49回、46.183293→5.997303秒へ減りました。nested CPU wallであり加算しません。完全な現行engineログの連続区間で、256要求のcache hit 0件と1024要求のINFO cache hit 2件を確認しました。native・gatewayを通常API終了し、両PID不在を別確認しました。新規observer023でも同boot・同じ既存サービス／syscore／shellcore、GPU titleなし（BigApp −1、native eboot 0）、3タイトル登録維持を確認済みです。同promptの解像度変更に対する単回結果で、new promptやGPU演算そのものの高速化とは扱いません。[追加調査の詳細](moss-additional-optimization-20261020.md)。
+速度基準の物理Direct予約は10GiB、予算9.5GiB、pool外reserve1GiBです。API GPU-labelled値、process RSS高水位、heap mapping、owned Direct使用量は別の重複する量で、足して全物理RAM／専用VRAMにはできません。
 
-## 別試験：GPU重み転送のhost staging制限
+物理8GiB予約の起動確認は、8GiBでのモデル読込・推論成功を意味しません。予約を小さくすると新prompt時のGPU重みの退避・再読込が必要になり得るため、速度向上の根拠にはしません。
 
-50-step Euler／CFG3の256初回を、基準キャッシュ版と同じ要求で1回比較しました。grow-to-fitの上限は**workerあたり8MiB**です。3worker時の24MiBはstagingの可能な同時上限で、process全体や実測同時使用量ではありません。
+bounded uploadはworkerあたり8MiBの一時host stagingを制限します。F16 storageやFFN分割のDirect使用量低下とは異なり、物理予約の縮小を証明しません。
 
-| 項目 | 基準キャッシュ版 | 転送制限版 |
-|---|---:|---:|
-| 初回生成、読込込み | 146.016289秒 | 145.680067秒 |
-| PNG | 比較基準 | 全バイト一致 |
-| 生成後heap mapped capacity | 480MiB | 400MiB |
-| process lifetime heap peak-mapped capacity | 777.3125MiB | 545.125MiB |
-| API `ru_maxrss × 1024`高水位 | 11,787,255,808B | 11,560,042,496B |
-| 物理Direct予約 | 10GiB | 10GiB、変更なし |
+## 終了と記録
 
-既存14数値ゲートと追加9MiB+68Bの転送／SCALE／GPU読み戻しゲートが合格し、100回の有限DiT出力、F32累積16600、F16累積0、invalid0、LoRA504使用を確認しました。対象の完了loadは3回、793tensor upload／1070chunkで、最大の元tensorは108MiB、実測最大Scratchは8MiBでした。RSS差は−216.6875MiBですが、累積高水位であり、heap容量差やDirect値と加算できません。全processの物理RAM／VRAM削減、1024やSpectrumとの併用、反復速度改善はこの試験から主張しません。[詳細と対象外経路](moss-bounded-weight-upload-20261020.md)。
+前段のTurbo4、bounded upload、FFN、F16試験では通常API終了後のprocess不在と独立したidle観測を確認しました。同boot・既存サービス・タイトル登録・モデルmetadataを保持しています。通常運用試作も未生成のまま通常終了し、process不在を確認しました。
 
-## 前回の1024 cold/warm（履歴）
+公開するのは集約した条件・秒数・正常PNG・ソースです。token、個人path／PID、元ログ全文、モデルweights、実行binaryは含めません。
 
-2026-10-20 JST。**privateの実験版です。PS5でMOSS＋指定LoRAの1024×1024・50stepsを2回生成し、WindowsからOpenAI互換APIで取得しました。両画像は正常な画質、同一PNGを確認しています。**
+## 保存したMOSS検証資料
 
-| 確認項目 | 現在の結果 |
-|---|---|
-| 実機構成 | FW12.40、PPSA99190、MOSS-Image-SFT Q4_K＋Qwen3.5-9B Q4_K_M＋FLUX.2 small VAE＋指定rank16 LoRA |
-| GPU / CPU | RADV NAVI21でDiT/Flash Attention/VAE完了を観測、text encodingはPS5 CPU。VAE tile256/overlap0.5、49tile |
-| 条件 | 1024×1024、50steps、Euler、CFG3、shift5、seed20261020、LoRA0.7。同prompt・同native/gateway/SELF |
-| PS5生成時間 | 初回読込込み1242.706350秒／同process2回目1177.725365秒。差64.980985秒は純load時間ではない |
-| API往復 / Windows全検証 | 初回1243.907秒／1249.407秒、2回目1178.875秒／1184.609秒 |
-| 画像 / LoRA | RGB1024×1024 PNG2,496,997B、両回同一SHA、native GETとAPI返却bytes一致。LoRA各504/504/504、skip0 |
-| 検証scope | 各phase1POST・自動再送0。coldはOS disk cache未flush、warmでもweight再転送ゼロとは主張しない |
-| メモリ | trial10GiB pool、reserve1GiB。API CPU/GPU peaksは両回11,790,876,672B／4,868,833,280Bの累積上界。純VRAM値／各画像増分／加算可能値ではない |
-| 終了 | native/gatewayを通常API終了後に両PID不在を別確認。独立observer007でGPU titleなし |
-| 継続する制限 | production admission0／private。要求12GiB＋reserve1GiBは未達。平均／分散、長時間連続、最小steps、他promptは未検証 |
+- [最新Turbo4／メモリ比較](moss-turbo-memory-options-20261020.md)
+- [先行Turbo4単独試験](moss-turbo4-results-20261020.md)
+- [sampling／Spectrum](moss-sampler-spectrum-memory-20261020.md)
+- [bounded upload](moss-bounded-weight-upload-20261020.md)
+- [混合精度](moss-mixed-precision-20261020.md) / [追加GPU候補とtext cache](moss-additional-optimization-20261020.md)
+- [50-step単独cold／warm](moss-1024-cold-warm-20261020.md)
 
-[1024 cold/warmの詳細](moss-1024-cold-warm-20261020.md)。正常PNGは同一なので1枚だけ同梱し、生ログ・失敗画像・重み・秘密はGitに含めません。以前の[256×256・4対50steps比較](moss-native-small-trial-20261019.md)ではsampling不足による色縞を切り分けました。
-
-<details>
-<summary>初期ホスト構築時点の記録（実機試験前の履歴）</summary>
-
-以下の未配備・未検証という記述とbuild hashは、初期host/native-v2の保存履歴です。上記のcorrected trial結果で更新された現在の実機状態とは区別してください。
-
-2026-10-19 JST。**private開発版、指定構成はMOSS-Image-SFT＋axiomofmindのrank16 LoRAです。**
-モデル取得・LoRA変換/接続・ホスト試験・fresh cross buildまで完了しました。
-**MOSSのPS5配備・モデル読込・GPU推論・PNG生成は未実施です。**
-
-| 段階 | 現在の証拠 |
-|---|---|
-| 正規モデル取得 | base4 component計9,277,433,929 bytesとraw LoRA74,377,208 bytesをDへ取得。全ファイルのSHA256読み戻し一致 |
-| LoRA変換 | 全504 tensor・37,158,912値をexact F32化し、全値読み戻しと全体SHA256一致 |
-| 実モデルとの接続 | 実GGUF headerの168 weightsに全504 shape一致、独立q/k/v順一致 |
-| Source/API設定 | 固定F32パス・strength0.7・at_runtimeを接続。任意パスやSDXL漫画LoRAへ置換しない |
-| ホスト試験 | 変換/数値6 tests、C++504受理/1013拒否、実upstream名前変換504、adapter構文、設定例110 checks。download制御18 testsもPASS |
-| Full core | 75 sourceを全て新規compile、旧object流用0、4,135 header等と入力の前後hash一致 |
-| lifecycle host試験 | 状態/ABI/first-failure境界47 checks＋HTTP mock19 checksがPASS。ready fixtureはhost mockで、実機終了成功ではない |
-| Native SELF | integrity正常、strip前後loaded bytes一致、6動的依存、24 initializer slots、入力前後hash一致 |
-| 実機 | 12GiB容量、Qwen CPU数値、LoRA適用、DiT/VAE GPU完了/有限値、実PNG、生成時間は未検証 |
-
-新core archiveのSHA256は
-`2184d88babd47ab8826b03c58f473de7e98adb19a79ab47798e97d576e2f56bc`、
-native SELFは
-`50131fb15447eec767e3f976ed19255870d2de1068512a81f86772128fdac30b`です。
-coreの18 objectの警告は旧buildと対象が同じで、新規warning objectはありません。
-LoRA receipt hook/snapshotは各1個のstrong定義を確認し、選定LoRAのApache-2.0をnative packageへ同梱しています。
-
-## 実機へ進むための残件
-
-- Title ID候補PPSA99190、native port8192、gateway port8193と専用namespaceを用意。WAI/Animaと同時起動しません。
-- Direct予約目標12GiB、1GiB regions、推論予算11.5GiB、pool外working reserve1GiBを維持しています。
-- 過去のDirect報告約11.44GiB/12GiBは12+1GiBの容量判定を通りません。物理枠が拡大できたとは扱わず、新しい実機条件での確認が必要です。
-- Qwen embedding545.625MiBは旧512MiB単体上限を超えるため、sourceでは1GiB regionへ対応済みです。実割当・モデルロード・resident peakを確認した意味ではありません。
-- 通常初期化はcompile-time admission0で明示的AGC/data pool初期化前に停止します。JSONで解除できません。ビルド成功だけで解除しません。
-- lifecycleは初期化工程/失敗/ready/retainedを区別します。ready前・失敗時の終了要求は409で、別途確認した通常OSタイトル終了が必要です。自動killや手動GPU解放へ切り替えません。
-- 受理済みPOSTはjob IDで追跡し、タイムアウトで再送しません。次の試験は前のジョブと所有者/通常終了を確認してからです。
-
-## 証拠の所在
-
-非公開の検証資料に、全値変換、lifecycle、full coreビルド、native handoffの入力ハッシュと結果を保存しています。
-core用181入力freezeの履歴と、その後のLICENSEコピーだけを分けたnative用213入力freezeを保存しました。
-native builder自体も3,793入力の前後一致を確認しています。
-
-[モデル/メモリ](moss-models.md)、[LoRA](moss-requested-lora.md)、[配置/lifecycle](deployment.md)、[ビルド](build.md)を参照してください。
-旧[検証JSON](moss-verification.json)は今回のLoRA接続前のホスト検証履歴です。
-継承したWAI/Animaの成功画像・ベンチマークはMOSSの実績ではありません。
-
-</details>
+各履歴ページに記載した当時の未確認事項や既定値は、その試験時点の範囲です。現在の採用状態はこのページと最新比較を優先します。

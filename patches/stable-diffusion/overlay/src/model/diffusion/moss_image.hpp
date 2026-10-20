@@ -17,6 +17,8 @@
 #error "PS5_AI_MOSS_F32_ACCUMULATION must be 0 or 1"
 #endif
 
+#include "model/diffusion/moss_ffn_token_chunk.hpp"
+
 namespace MOSSImage {
     // This MOSS-only policy changes accumulator precision, not weight dtype or
     // Vulkan's FP16 staging. Linear propagates it into runtime LoRA projections.
@@ -147,9 +149,12 @@ namespace MOSSImage {
             x            = ggml_add(c, x, y);
             y            = norm("norm2", x);
             y            = ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(4))), part(3));
-            auto up_gate = linear("proj.ffn_up_gate", y);
-            y            = situ(c, ggml_ext_slice(c, up_gate, 0, 0, config.ffn_dim), ggml_ext_slice(c, up_gate, 0, config.ffn_dim, 2 * config.ffn_dim));
-            y            = linear("proj.ffn_down", y);
+            auto full_ffn = [&](ggml_tensor* tokens) {
+                auto up_gate = linear("proj.ffn_up_gate", tokens);
+                auto hidden = situ(c, ggml_ext_slice(c, up_gate, 0, 0, config.ffn_dim), ggml_ext_slice(c, up_gate, 0, config.ffn_dim, 2 * config.ffn_dim));
+                return linear("proj.ffn_down", hidden);
+            };
+            y = moss_ffn_token_chunk::forward(c, y, full_ffn);
             y            = ggml_mul(c, y, part(5));
             return ggml_add(c, x, y);
         }

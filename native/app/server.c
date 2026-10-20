@@ -745,13 +745,13 @@ static void health(socket_t fd) {
         "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-image\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false,\"selected_moss_lora\":true},\"selected_moss_lora\":%s,\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
-        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s,\"lifecycle\":%s,\"model_initialization\":%s,\"moss_sampler_trial\":%s,\"moss_sampler_policy\":\"%s\",\"trial_sampler\":\"%s\",\"trial_scheduler\":\"%s\",\"trial_steps\":%d,\"trial_cfg_scale\":%.1f,\"moss_turbo_trial\":%s,\"moss_turbo_policy\":\"%s\",\"moss_turbo_adapter\":\"%s\",\"moss_turbo_rank\":%d,\"moss_turbo_runtime_multiplier\":%.1f}",
+        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s,\"lifecycle\":%s,\"model_initialization\":%s,\"moss_sampler_trial\":%s,\"moss_sampler_policy\":\"%s\",\"trial_sampler\":\"%s\",\"trial_scheduler\":\"%s\",\"trial_steps\":%d,\"trial_cfg_scale\":%.1f,\"moss_turbo_trial\":%s,\"moss_turbo_policy\":\"%s\",\"moss_turbo_adapter\":\"%s\",\"moss_turbo_rank\":%d,\"moss_turbo_runtime_multiplier\":%.1f,\"moss_turbo_bounded_upload_trial\":%s,\"moss_turbo_bounded_upload_policy\":\"%s\",\"moss_lora_fp32_shared_trial\":%s,\"moss_lora_f16_storage_trial\":%s,\"moss_lora_precision_policy\":\"%s\",\"moss_lora_precision_scope\":\"%s\"}",
         s.available && s.gpu_available ? "ready" : "degraded", lora_json, backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
         model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json,lifetime_json,s.model_initialization[0] ? s.model_initialization : "null",
         PS5_AI_MOSS_SAMPLER_TRIAL?"true":"false",PS5_AI_MOSS_SAMPLER_POLICY,PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER,PS5_AI_MOSS_REQUEST_SCHEDULER,PS5_AI_MOSS_DEFAULT_REQUEST_STEPS,PS5_AI_MOSS_DEFAULT_REQUEST_CFG,
-        PS5_AI_MOSS_TURBO_TRIAL?"true":"false",PS5_AI_MOSS_TURBO_POLICY,PS5_AI_MOSS_TURBO_TRIAL?PS5_AI_MOSS_TURBO_ADAPTER_BASENAME:"disabled",PS5_AI_MOSS_TURBO_TRIAL?144:0,PS5_AI_MOSS_TURBO_TRIAL?1.0:0.0);
+        PS5_AI_MOSS_TURBO_TRIAL?"true":"false",PS5_AI_MOSS_TURBO_POLICY,PS5_AI_MOSS_TURBO_TRIAL?PS5_AI_MOSS_TURBO_ADAPTER_BASENAME:"disabled",PS5_AI_MOSS_TURBO_TRIAL?144:0,PS5_AI_MOSS_TURBO_TRIAL?1.0:0.0,PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL?"true":"false",PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY,PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL?"true":"false",PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL?"true":"false",PS5_AI_MOSS_LORA_PRECISION_POLICY,PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL?"private_Vulkan_FP32_shared_LoRA_only":"disabled");
     send_json(fd, 200, body);
 }
 static void submit(socket_t fd, const char *body) {
@@ -1135,7 +1135,7 @@ int main(int argc, char **argv) {
     if (inet_pton(AF_INET, bind_ip, &bind_address) != 1 || !private_address(ntohl(bind_address.s_addr))) {
         fprintf(stderr, "Bind address must be a specific RFC1918 or loopback IPv4 address\n"); return 1;
     }
-    if(listen_port==8188 || listen_port==8189 || listen_port==8190 || listen_port==8191 || listen_port==8193){fprintf(stderr,"Ports8188/8189 are reserved for WAI;8190/8191 for Anima;8193 is the MOSS Image gateway\n");return 1;}
+    if(listen_port==8188 || listen_port==8189 || listen_port==8190 || listen_port==8191 || listen_port==8193){fprintf(stderr,"Ports8188-8191 are reserved;8193 is the MOSS Image gateway\n");return 1;}
     if (!setup_paths()) {STARTUP_STAGE("setup_paths_failed",0);return 1;}
     STARTUP_STAGE("setup_paths_passed",1);
     /* Windows uses EXCLUSIVEADDRUSE because its REUSEADDR can admit a second

@@ -1,7 +1,7 @@
 # Third-party notices
 
 This integration contains GPL-3.0-only files alongside GPL-3.0-or-later, MIT, BSD and other components. File-specific notices remain in force; a later-version option does not extend to GPL-3.0-only files.
-See [LICENSE](LICENSE), [licenses](licenses) and the copyright/SPDX notices in each source.
+See [LICENSE](LICENSE), [component provenance](docs/moss-optimization-provenance.json) and the copyright/SPDX notices in each source.
 This is a source publication, not a distribution of Sony SDKs, firmware, model weights or runtime binaries.
 
 | Component | Origin / role | License |
@@ -21,15 +21,13 @@ This is a source publication, not a distribution of Sony SDKs, firmware, model w
 | libc++ / libc++abi / libunwind / LLVM builtins | Native C++ runtime and compiler | Apache-2.0 WITH LLVM-exception |
 | Vulkan-Headers | Khronos headers | Apache-2.0 / MIT, file-specific |
 | stb_image_write / nlohmann json / oniguruma | Pulled through pinned stable-diffusion.cpp, not separate vendored copies here | MIT / public-domain option, MIT, BSD respectively; retain upstream files/notices when building |
-| WAI / Illustrious / TAESDXL | Separately obtained models | Separate model terms; see [models](docs/models.md) |
-| Anima Turbo v1.1 / Qwen3-0.6B / Qwen-Image VAE | Separately obtained Anima split weights | CircleStone Labs model terms and incorporated terms; see [Anima models](docs/anima-models.md) and [model license](licenses/Anima-model-LICENSE.md) |
 | NumPy | Optional Windows host weight-format conversion dependency, not vendored | Follow the license notices in the installed NumPy distribution |
 
 Pinned revisions are recorded in [dependencies.lock.json](dependencies.lock.json).
 The bridge, startup guards, ownership tracking, HTTP integration, bounded logging and UI adapt and connect these projects.
 Claims of authorship do not extend to their inference algorithms, model weights, driver or platform runtime.
 
-The current icon is the project owner's supplied character image, resized for the home screen and dashboard. See assets/sce_sys/icon-provenance.json. It is reused from the WAI base and is not an Anima output. Historical WAI sample images retain their original model attribution; they do not demonstrate Anima inference.
+The current icon is the project owner's supplied character image, resized for the home screen and dashboard. See assets/sce_sys/icon-provenance.json. It is an owner-supplied artwork asset, not a MOSS generation benchmark.
 Keep applicable artwork and model/output terms when reusing images. Private recording URLs and authentication credentials are excluded.
 
 Dashboard glyph masks retain OFL-1.1 separately from application code. Their derivative name is WAI Dashboard Glyphs.

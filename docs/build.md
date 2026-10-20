@@ -1,65 +1,42 @@
-# MOSS Imageのローカルビルド
+# MOSS Imageのビルド
 
-Windowsでのcross compileです。PS5への接続・転送・登録・推論は行いません。依存の詳細は[WAI由来のビルド資料](wai-base-build.md)を保持していますが、過去の実機結果はMOSSの結果ではありません。
+Windows x64からPS5向けにcross compileします。ビルドツールはPS5へ接続・配備・推論しません。モデル、SDK、libc.prx、生成済みshader、依存libraryはGitに含めず、固定revisionとhashを別途揃えます。clone直後に依存を含めて完成するワンコマンド構築ではありません。
 
-## 入力と完全core再構築
+## 入力とABI
 
-[dependencies.lock.json](../dependencies.lock.json)はPS5向けSD.cppの基準revision、GGML、MOSS追加commitとRADV等を固定します。[native profile](../build-profiles/native.json)は既存レビュー済み依存アーカイブ・shader headerを固定します。[設定例](../config/build.json.example)をDドライブ上の自分用設定へ複製してください。Cドライブの既存SDK/ツールを読み取り利用できますが、新しいbuild/vendor/tempはDへ置きます。
+[dependencies.lock.json](../dependencies.lock.json)、[native依存profile](../build-profiles/native.json)、[core profile](../build-profiles/moss-core.json)が固定入力です。[build設定例](../config/build.json.example)を自分用の非公開JSONへコピーし、SDK／LLVM／Vulkan-Headers／依存archive／upstream checkout／native packagerを指定します。新しいbuild、vendor、一時ファイルは十分な容量のある作業ドライブへ置きます。
 
-MOSSの型定義は広く参照されるため、旧75-member coreのうち7memberだけを差し替える経路は使用しません。`tools/build_moss_core.py`は固定baseへ範囲限定MOSS backportとPS5 overlayを適用し、C/C++の全75memberを新規コンパイルします。source/header hashの前後一致、archive member集合とSHAを記録します。`tools/build.py`はそのmanifestを必須にし、古いcore・変更後のヘッダー・不一致archiveを拒否します。
+| 入力 | 役割と境界 |
+|---|---|
+| native SDK／PS5_PayloadSDK | 固定headers、platform、thread／TLS／memory ABI。CPU gateway用SDKと混在させない |
+| PS5_Mesa／RADV | PS5 winsys、NIR／ACO、Vulkan runtime。host shader compilerとPS5 target libraryを分離 |
+| SD.cpp／GGML | 固定baseと限定MOSS backport、[公開overlay](../patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp)。75 core objectsをfresh compile |
+| Native CRT／SELF tools | 固定native tooling。loaded bytes、SELF integrity、initializer／runtime providerを確認 |
+| GLSL／SPIR-V header | reviewed shader metadata／hashと一致させる |
+| licenses | アプリ、SDK、driver、font、モデルの条件を分離して保持 |
 
-```powershell
-python -B tools/build_moss_core.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-core --source-freeze D:/ps5-dev/moss-source-freeze.json --jobs 2
-python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core/manifest.private.json --out D:/ps5-dev/build/moss-native --precision fp32
-python -B tools/build_gateway.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-gateway --native
-```
+PS5 targetはx86-64、16KiB page、emulated TLSです。`GGML_MAX_NAME=160`、tensor layout、exceptions／RTTI、constructor／importのABIを一致させます。設定だけの変更で物理quotaは増えません。
 
-[source-freeze例](../config/moss-source-freeze.json.example)をD側の個人用JSONへコピーし、`repository_root`と`private_vendor_root`の2パスを実際のcloneへ合わせます。例の古い21入力を現行LoRA/lifecycleの完全freezeとして使い回しません。ソース改修後はレビュー・host確認を行い、実際の全対象入力のsize/SHAを含む新しいfreezeを作成します。初期LoRA/lifecycle buildのcore用181入力freezeは履歴です。今回の性能試験は新しい132入力freezeを作成し、source/header/overlayの前後hashも別途確認しました。core builderの引数は同toolの`--help`を参照してください。SDK・shader生成物・レビュー済み依存アーカイブが別途必要で、クリーンPCからのワンコマンド依存構築ではありません。
+[source-freeze例](../config/moss-source-freeze.json.example)を基に、実際に消費する全source、header、profile、helperのsize／SHAを記録します。例はfrozen:falseの未設定テンプレートです。完全な入力一覧を生成して固定した後にfrozen:trueを設定してください。公開用source inventoryと、compile時に消費した依存closureの証拠は別です。core manifestには全75 compile、depfile、archive対応と前後hashが必要です。
 
-nativeは`title/PPSA99190/eboot.bin`、gatewayは`ps5-ai-moss-openai-gateway.elf`を出力します。SELF整合性・loaded bytes・動的依存・ソースhashを検証します。`fp32`は演算設定であり、GGUFのQ4保存形式とは別です。
+## 選択した速度基準のビルド
 
-## 2026-10-20の性能試験専用ビルド
-
-新しい3profileは`moss-performance-baseline-fp32.json`、`moss-performance-fp16.json`、`moss-performance-submit-fusion-fp32.json`です。次のように明示的な試験flagを指定します。
-
-```powershell
-python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core/manifest.private.json --out D:/ps5-dev/build/moss-performance-baseline --experimental-small-trial --trial-10g --performance-trial-variant 0 --precision fp32
-```
-
-variant0はFP32基準、1は`--precision fp16`、2は`--precision fp32`の提出単位調整＋限定fusionです。variant/precision不一致、固定契約の欠落・追加・値/型の不一致は拒否します。最大4試行、256/1024・50stepsなどの固定条件で、production admission0の通常ビルドを解除するflagではありません。
-
-今回の共通coreは全75memberをfresh compileし、3nativeへ同じarchiveを結合しました。各nativeのGGML providerを新規compileし、3構成のcore/GGML/RADV archiveとshader headerがbyte同一であること、initializer24/provider6、input前後一致を確認しました。性能試験を理由に既存coreのsource/header検査を緩めていません。
-
-初期比較のFP16は数値ゲートを通りませんでしたが、後続の明示的FP32累積版は同じ許容値でゲートと実生成に合格しました。[混合精度版の実測](moss-mixed-precision-20261020.md)を現在の結果とし、[初期比較](moss-performance-optimization-20261020.md)は履歴として保持します。
-
-## FP16データ経路＋FP32累積の試験ビルド
-
-`moss-performance-fp16-f32accum.json`を選ぶ明示的なopt-inです。coreとnativeの両方へ`--moss-f32-accumulation`が必要です。
+以下はTurbo4＋bounded upload、rank144 F32の**限定performance trial**です。Direct予約10GiB、推論予算9.5GiB、pool外reserve1GiBに一致する設定を使います。新しい出力先を指定し、既存の成功版を上書きしません。
 
 ```powershell
-python -B tools/build_moss_core.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-core-mixed --source-freeze D:/ps5-dev/moss-mixed-source-freeze.json --jobs 2 --moss-f32-accumulation
-python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core-mixed/manifest.private.json --out D:/ps5-dev/build/moss-native-mixed --experimental-small-trial --trial-10g --performance-trial-variant 1 --precision fp16 --moss-f32-accumulation
+python -B tools/build_moss_core.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-core-turbo-upload --source-freeze D:/ps5-dev/moss-source-freeze.json --jobs 2 --moss-f32-accumulation --moss-turbo-trial --moss-bounded-weight-upload-trial
+python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core-turbo-upload/manifest.private.json --out D:/ps5-dev/build/moss-native-turbo-upload --experimental-small-trial --trial-10g --performance-trial-variant 1 --precision fp16 --moss-f32-accumulation --moss-turbo-trial --moss-bounded-weight-upload-trial
+python -B tools/build_gateway.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-gateway-turbo --native --moss-turbo-trial
 ```
 
-今回の構築は134入力のfreezeで実施しました。core全75compile commandの単一macro定義とmember/source対応をnative側でも検査し、core/nativeの不一致を拒否します。従来profileは既定0のままです。重みをF32へ変換するflagではなく、MOSS Linearとruntime LoRAの累積精度を指定します。実機では無効化環境変数の不在、実pipeline記録、固定数値ゲート、GPU完了と画像を別々に確認します。
+これらのCLIは、公開基準へ戻した検証済みソースの引数です。nativeにpool sizeを任意指定する引数や、無制限の通常運用flagを追加しません。`--trial-10g`が選ぶcompiled placement、VA、設定、実機の確保結果を一致させます。12GiBの旧設定例をそのまま10GiB trialへ使わないでください。
 
-追加host試験は`tests/moss_accumulation_policy.py`、`tests/moss_f32_accumulation_build.py`、`tests/moss_quant_accumulation_selection.py`です。`--help`に従い個人用configとfresh D出力を指定します。selection試験は同梱したMITのpure関数fixtureと現在の実selection関数を比較し、モデルやVulkanを実行しません。
+nativeは`title/PPSA99190/eboot.bin`、gatewayはCPU用ELFを作ります。モデルやruntime全体を自動インストールするコマンドではありません。gatewayはHTTP転送だけを行い、GPU uploadの推論flagを有効にしません。core／nativeのTurbo、upload、F32累積のpolicyと入力hashを一致させます。
 
-## 実機未確認のまま起動しないための境界
+## 試行上限と任意実験の区別
 
-`native/app/moss_runtime_admission.h`の`PS5_AI_MOSS_RUNTIME_ADMITTED`は既定0です。JSONで解除できません。12GiBの実容量、Qwenのtensor residency/数値、同一context GPU読み戻しを確認する前に、通常アプリから新しいAGC/data pool初期化へ進めません。コンパイル成功はこの解除の根拠になりません。
+このperformance buildは1native process最大4回の有効な試行に制限します。失敗も回数を消費し、5回目を拒否します。公開する成功条件は[APIのcanonical request](api.md)の固定prompt／negative prompt、seed20261020、4 Euler steps、CFG1、shift5、256または1024の正方形です。256成功・画像確認・空queue確認後に1024へ進みます。production runtime admissionは無効です。
 
-1GiB region、12GiB data VAと244GiB driver VAはアドレス範囲の準備です。物理quotaの拡大を実装したものではありません。既存の実容量・working reserve・所有権・ログ・GPU完了確認は維持します。
+FFN2048分割とF16 LoRA storage／専用F32 shared演算は別の明示実験で、速度基準ではOFFです。比較結果は[最新資料](moss-turbo-memory-options-20261020.md)へ分けています。8GiBや任意prompt／seedの無制限operating版は、この公開版の成功機能として含めません。
 
-## モデルとホスト試験
-
-モデルは[固定lock](../config/models.lock.json)と[専用ダウンローダー](../tools/download_moss.py)でDへ配置します。取得だけではPS5へ反映しません。MOSSの現行host試験は`tests/moss_*`です。HTTP fixture、pool mock、source guard試験はPS5推論成功として扱いません。継承したWAI/Anima試験は別モデルの履歴です。
-
-
-## 2026-10-19の選定LoRA対応ビルド
-
-LoRA/lifecycle接続後のfull coreは75 objectsをfresh compile、旧object流用0で完了しました。75 sourceと4,135 header等の前後hashが一致し、archive SHA256は`2184d88babd47ab8826b03c58f473de7e98adb19a79ab47798e97d576e2f56bc`です。
-
-その完了後、native packagerへ選定LoRAのLICENSEコピー1行だけを追加しました。core用181入力freezeの履歴を書き換えず、C/C++・header・overlay・core builder/profileが変わっていないことと、native側213入力freezeを分けて記録しました。native builderはさらに3,793入力の前後一致を検査しました。SELF SHA256は`50131fb15447eec767e3f976ed19255870d2de1068512a81f86772128fdac30b`、integrity正常、動的依存6、initializer24です。これらはguard0のホスト成果物で、PS5実機起動・推論成功ではありません。
-
-LoRAの再現可能なhost checksは`tests/moss_lora_checks.py --llvm <LLVM/bin> --sd <private-SD> --out <fresh-D-output>`です。数値/shape/実upstream name conversionを検査し、モデル推論やPS5接続は行いません。詳しい検証範囲は[status](status.md)と[LoRA](moss-requested-lora.md)を参照してください。
+ホストpolicy／HTTP／graph／fixture検査はモデル推論を行いません。fresh75 core、native recipes、strong provider、SELFと依存検査が通っても、PS5の数値ゲート、実pool確保、生成画像、正常終了を代替しません。[配置手順](deployment.md)、[モデル再現](moss-turbo4-reproduction.md)、[第三者通知](../THIRD_PARTY_NOTICES.md)も確認してください。

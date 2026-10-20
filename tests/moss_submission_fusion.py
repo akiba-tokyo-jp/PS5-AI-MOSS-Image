@@ -5,12 +5,12 @@ import argparse,hashlib,json,os,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def main():
- p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--out',type=Path,required=True);p.add_argument('--llvm',type=Path,required=True,help='LLVM bin directory');p.add_argument('--sd',type=Path,required=True,help='Prepared pinned stable-diffusion.cpp source');p.add_argument('--metadata-objects',type=Path,required=True,help='ABI-matched GGML host metadata objects');a=p.parse_args()
  out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
  if (out/'receipt.private.json').exists():raise RuntimeError('Select a fresh output directory')
- llvm=Path('C:/Users/User/ps5-ai/toolchain/llvm-mingw-20261006-ucrt-x86_64/bin')
- sd=Path('D:/PS5-AI/moss/vendor/stable-diffusion.cpp')
- objects=Path('D:/PS5-AI/moss/diagnostics/bf16-scratch-v2/actual-graph-host-v4')
+ llvm=a.llvm.resolve();sd=a.sd.resolve();objects=a.metadata_objects.resolve()
+ for folder in (llvm,sd,objects):
+  if not folder.is_dir():raise RuntimeError('Prepared LLVM/source/metadata object directory required')
  files=[ROOT/'tests/moss_submission_fusion.cpp',ROOT/'tests/moss_submission_fusion.py']
  files += [ROOT/'patches/stable-diffusion/overlay/ggml/src/ggml-vulkan'/n for n in ('ggml-vulkan.cpp','ggml-vulkan-types.h','ggml-vulkan-ps5-profile.h')]
  files += [ROOT/'patches/stable-diffusion/overlay/src/core'/n for n in ('vulkan_scratch_bounds.hpp','runner_admission.hpp')]

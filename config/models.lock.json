@@ -1,6 +1,6 @@
 {
   "schema": "ps5-ai-moss-image-model-lock-v1",
-  "state": "HOST_LOCKED_COMPONENTS_AND_SELECTED_LORA_VERIFIED_PS5_UNVERIFIED",
+  "state": "PINNED_COMPONENTS_AND_DERIVED_F32_LORA_PS5_BOUNDED_TRIAL_VERIFIED",
   "selected_variant": "MOSS-Image-SFT",
   "selection_basis": "User-selected MOSS-Image-SFT plus the fixed axiomofmind rank16 adapter; SFT is the adapter author preferred inference parent",
   "upstream": {
@@ -300,11 +300,12 @@
     "PS5_admitted": false,
     "quantized_base_apply_strategy_candidate": "at_runtime; avoid full checkpoint dequantization",
     "blocking_work": [
-      "Fresh full core and native crossbuild of current source; runtime guard remains0",
-      "PS5 Direct capacity plus actual full selected LoRA GPU application/finite readback/PNG remain unverified"
+      "Unrestricted production admission and long-run stability are not established"
     ],
-    "PS5_execution_verified": false,
-    "host_integration_only": true
+    "PS5_execution_verified": true,
+    "host_integration_only": false,
+    "PS5_bounded_trial_verified": true,
+    "PS5_execution_scope": "Exact derived F32 adapter, not the raw BF16 input; limited tested conditions only"
   },
   "requested_adapters": [
     {
@@ -346,7 +347,10 @@
       "base_checkpoint_merged": false,
       "converter": "tools/models/convert_moss_lora_bf16_f32.py",
       "license": "Apache-2.0",
-      "PS5_execution_verified": false
+      "PS5_execution_verified": true,
+      "PS5_verification_scope": "Selected F32 rank16 bounded image trials; not arbitrary conditions or production"
     }
-  ]
+  ],
+  "verification_scope": "Selected derived F32 rank16 adapter used in actual PS5 bounded trials; production admission remains OFF; raw BF16 adapter not executed directly. Latest composed Turbo4 recipe and limited F16 storage trial are separate.",
+  "verification_document": "docs/moss-turbo-memory-options-20261020.md"
 }

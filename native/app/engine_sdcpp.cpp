@@ -27,6 +27,8 @@
 #include "moss_gpu_profile.h"
 #include "moss_q4_bk64.h"
 #include "moss_bounded_weight_upload.h"
+#include "moss_ffn_chunk_trial.h"
+#include "moss_ffn_chunk_observation.hpp"
 #include "moss_lora_contract.hpp"
 #include "moss_lora_receipt.h"
 #include "v3_shutdown.h"
@@ -87,7 +89,9 @@ static std::atomic<bool> moss_turbo_small_image_completed{false};
 #endif
 static nlohmann::json moss_effective_lora_identity() {
 #if PS5_AI_MOSS_TURBO_TRIAL
-    return {{"schema",PS5_AI_MOSS_TURBO_ADAPTER_SCHEMA},{"adapter","NSFW0.7+Turbo1.0 composed F32"},
+    return {{"schema",PS5_AI_MOSS_TURBO_ADAPTER_SCHEMA},{"adapter",PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL?"NSFW0.7+Turbo1.0 lossy F16 storage":"NSFW0.7+Turbo1.0 composed F32"},
+        {"lossy_storage",bool(PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL)},
+        {"source_composed_F32_sha256",PS5_AI_MOSS_LORA_F16_STORAGE_SOURCE_SHA256},
         {"path",engine_config.moss_lora_path},{"sha256",engine_config.moss_lora_sha256},{"rank",144},
         {"sha256_observation","configured whole-file identity; external preparation/staging rehash required, not a native runtime rehash"},
         {"runtime_multiplier",1.0},{"base_merged",false},
@@ -523,6 +527,9 @@ static void verify_native_hardware() {
 }
 
 struct InferenceObservation {
+#if PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL
+    moss_ffn_chunk_observation::State ffn_chunk;
+#endif
     ps5_ai_progress_cb progress;
     void* user;
     ps5_ai_stats* stats;
@@ -620,9 +627,27 @@ static bool is_gpu_math_tensor(const ggml_tensor* tensor) {
     }
 }
 
+static uint64_t moss_ffn_chunk_expected(const InferenceObservation& o) noexcept {
+#if PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL
+    return o.ffn_chunk.proof(moss_ffn_token_chunk::configured_tokens).expected_q4;
+#else
+    (void)o;return 672;
+#endif
+}
+
 static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
     auto* observation = static_cast<InferenceObservation*>(data);
     if (ask) {
+#if PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL
+        if(tensor&&tensor->op==GGML_OP_MUL_MAT&&tensor->src[0]&&tensor->src[1]&&tensor->src[0]->type==GGML_TYPE_Q4_K) {
+            const auto* w=tensor->src[0];const auto* x=tensor->src[1];
+            const bool precise=tensor->type==GGML_TYPE_F32&&x->type==GGML_TYPE_F32&&
+                w->ne[2]==1&&w->ne[3]==1&&x->ne[2]==1&&x->ne[3]==1&&
+                x->ne[0]==w->ne[0]&&tensor->ne[0]==w->ne[1]&&tensor->ne[1]==x->ne[1]&&
+                (ggml_prec)tensor->op_params[0]==GGML_PREC_F32;
+            observation->ffn_chunk.add(w->name,w->ne[0],w->ne[1],x->ne[1],precise);
+        }
+#endif
         if (!is_gpu_math_tensor(tensor)) return false;
         if(observation->wants_controlnet && !observation->gpu_controlnet_math_nodes && !observation->requested_controlnet && controlnet_weight_name(tensor)){
             observation->requested_controlnet=tensor;return true;
@@ -783,6 +808,13 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
                      {"moss_sampler_policy",PS5_AI_MOSS_SAMPLER_POLICY},
                      {"moss_turbo_trial",bool(PS5_AI_MOSS_TURBO_TRIAL)},
                      {"moss_turbo_policy",PS5_AI_MOSS_TURBO_POLICY},
+                     {"moss_lora_fp32_shared_trial",bool(PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL)},
+                     {"moss_lora_f16_storage_trial",bool(PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL)},
+                     {"moss_lora_precision_policy",PS5_AI_MOSS_LORA_PRECISION_POLICY},
+                     {"moss_turbo_bounded_upload_trial",bool(PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL)},
+                     {"moss_turbo_bounded_upload_policy",PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY},
+                     {"moss_ffn_token_chunk_trial",bool(PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL)},{"moss_ffn_chunk_tokens",PS5_AI_MOSS_FFN_CHUNK_TOKENS},
+                     {"moss_ffn_chunk_policy",PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL?PS5_AI_MOSS_FFN_CHUNK_POLICY:"disabled"},
                      {"effective_adapter",moss_effective_lora_identity()},
                      {"trial_sampler",PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER},{"trial_scheduler",PS5_AI_MOSS_REQUEST_SCHEDULER},
                      {"trial_steps",PS5_AI_MOSS_DEFAULT_REQUEST_STEPS},{"trial_cfg_scale",PS5_AI_MOSS_DEFAULT_REQUEST_CFG},
@@ -834,12 +866,15 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
 
 #include "precision_gate.inc"
 #include "precision_conv_gate.inc"
+#include "moss_lora_precision_receipt.inc"
 #if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
 #include "moss_precision_gate.inc"
 #include "moss_perf_gate.inc"
 #include "moss_q4_bk64_gate.inc"
 #if PS5_AI_MOSS_TURBO_TRIAL
 #include "moss_turbo_lora_gate.inc"
+#include "moss_lora_f16_storage_gate.inc"
+#include "moss_ffn_chunk_gate.inc"
 #endif
 #endif
 #include "moss_bounded_weight_upload_gate.inc"
@@ -956,6 +991,12 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
         moss_performance_readback_gate();
 #if PS5_AI_MOSS_TURBO_TRIAL
         moss_turbo_lora_readback_gate();
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+        moss_lora_f16_storage_readback_gate();
+#endif
+#if PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL
+        moss_ffn_chunk_readback_gate();
+#endif
 #endif
 #if PS5_AI_MOSS_Q4_BK64_RAW64
         const auto candidate_gate=moss_q4_bk64_readback_gate();
@@ -964,6 +1005,14 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
 #endif
 #if PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL
         moss_bounded_weight_upload_readback_gate();
+#endif
+#if PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL
+        if(!moss_turbo_lora_gate_admitted() || !ps5_ai_moss_bounded_weight_upload_enabled())
+            throw std::runtime_error("Combined Turbo/upload initialization requires both unchanged GPU gates");
+        write_event({{"event","native_moss_turbo_bounded_upload_gates"},
+                     {"policy",PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY},
+                     {"rank144_gate_admitted",true},{"bounded_upload_gate_admitted",true},
+                     {"model_loaded",false},{"GPU_inference_claimed",false}});
 #endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
@@ -1052,6 +1101,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     const uint64_t fused_before=perf_fused_selected.load(std::memory_order_relaxed);
     ps5_ai_moss_quant_receipt quant_before{};ps5_ai_moss_quant_snapshot(&quant_before);
     ps5_ai_moss_q4_bk64_report candidate_before{};ps5_ai_moss_q4_bk64_snapshot(&candidate_before);
+    ps5_ai_moss_lora_storage_receipt storage_before{};ps5_ai_moss_lora_storage_snapshot(&storage_before);
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;
     observation.requested_steps=request->steps;
@@ -1101,6 +1151,14 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
 #if PS5_AI_MOSS_TURBO_TRIAL
         if(!moss_turbo_lora_gate_admitted())
             throw std::runtime_error("Turbo model loading requires all rank144 F32 GPU numerical gates first");
+#endif
+#if PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL
+        if(!ps5_ai_moss_bounded_weight_upload_enabled())
+            throw std::runtime_error("Combined model loading requires the bounded upload GPU readback gate");
+#endif
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+        if(!moss_lora_f16_storage_gate_admitted())
+            throw std::runtime_error("F16 LoRA storage model loading requires all8 fixed F32/F16 private-math GPU numerical gates");
 #endif
         if (!model_context)
             ps5_ai_init_stage_call(PS5_AI_INIT_PREAMBLE, [&]() { ps5_ai_native_capacity_snapshot("before_moss_generation"); });
@@ -1192,7 +1250,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         write_event({{"event", "moss_selected_lora_request"}, {"path", engine_config.moss_lora_path},
                      {"strength", engine_config.moss_lora_strength}, {"required_tensors", 504},
                      {"rank", PS5_AI_MOSS_TURBO_TRIAL?144:16}, {"alpha", PS5_AI_MOSS_TURBO_TRIAL?144:16},
-                     {"source_storage", PS5_AI_MOSS_TURBO_TRIAL?"F32 independent rank16+128 coefficient composition":"F32 exact from BF16"},
+                     {"source_storage", PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL?"lossy F16 rounded independent rank16+128 composition":PS5_AI_MOSS_TURBO_TRIAL?"F32 independent rank16+128 coefficient composition":"F32 exact from BF16"},
                      {"effective_adapter",moss_effective_lora_identity()},
                      {"qkv_layout", "independent A/B pairs in ordered q,k,v output slices"}, {"base_merge", false}});
         sd_set_backend_eval_callback(observe_graph, &observation);
@@ -1208,6 +1266,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             moss_lora_used.load(), moss_lora_skipped.load(), true);
         if (moss_lora_invalid.load())
             throw std::runtime_error("Image rejected: selected MOSS LoRA application/strength receipt is invalid");
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+        ps5_ai_moss_lora_storage_receipt storage_completed{};ps5_ai_moss_lora_storage_snapshot(&storage_completed);
+        if(!moss_lora_f16_storage_gate_admitted()||!moss_lora_storage_generation_delta_valid(storage_before,storage_completed))
+            throw std::runtime_error("Image rejected: exact2016 canonical F16/F32acc LoRA pipeline recordings, four per504 tensors, required");
+#endif
         stats->gpu_used = observation.gpu_dit_math_nodes > 0 ? 1 : 0;
         if (!stats->gpu_used || (engine_config.requires_dit_flash_attention() && !observation.gpu_flash_attention_nodes)) {
             throw std::runtime_error("Image rejected: required completed native DiT/flash-attention witness is missing");
@@ -1246,11 +1309,24 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
            quant_completed.q4_f32acc-quant_before.q4_f32acc!=expected_q4)
             throw std::runtime_error("Image rejected: sampler trial requires exact60 completed DiT forwards and9960 F32 Q4 recordings");
 #endif
+#if PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL
+        const auto ffn_proof=observation.ffn_chunk.proof(moss_ffn_token_chunk::configured_tokens);
+        if(!moss_ffn_chunk_gate_admitted()||!ffn_proof.valid)
+            throw std::runtime_error("FFN image rejected: all42 layers/four positive evaluations/token partition metadata required");
+        write_event({{"event","moss_FFN_chunk_completed_metadata"},{"policy",PS5_AI_MOSS_FFN_CHUNK_POLICY},
+            {"chunk_tokens",moss_ffn_token_chunk::configured_tokens},{"actual_main_tokens",ffn_proof.main_tokens},
+            {"pieces_per_FFN",ffn_proof.pieces},{"layers",42},{"positive_evaluations",4},
+            {"expected_Q4_F32_recordings",ffn_proof.expected_q4},{"metadata_is_not_GPU_completion_proof",true}});
+#endif
 #if PS5_AI_MOSS_TURBO_TRIAL
         if(request->steps!=4 || stats->actual_steps!=4 || request->cfg_scale!=1.0 ||
-           precision_dit_outputs.load()!=4 || quant_completed.q4_f32acc-quant_before.q4_f32acc!=672 ||
+           precision_dit_outputs.load()!=4 || quant_completed.q4_f32acc-quant_before.q4_f32acc!=moss_ffn_chunk_expected(observation) ||
            !moss_turbo_lora_gate_admitted())
-            throw std::runtime_error("Image rejected: Turbo requires actual4 positive DiT outputs and672 F32 Q4 recordings");
+            throw std::runtime_error("Image rejected: Turbo requires actual4 positive DiT outputs and exact compiled/observed FFN F32 Q4 count");
+#endif
+#if PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL
+        if(!ps5_ai_moss_bounded_weight_upload_enabled())
+            throw std::runtime_error("Image rejected: combined bounded upload admission was lost");
 #endif
 #endif
 #if PS5_AI_MOSS_Q4_BK64_RAW64
@@ -1353,14 +1429,22 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"bounded_weight_upload_enabled",ps5_ai_moss_bounded_weight_upload_enabled()!=0},
                  {"moss_spectrum",moss_spectrum_json()},
                  {"moss_turbo_trial",bool(PS5_AI_MOSS_TURBO_TRIAL)},{"moss_turbo_policy",PS5_AI_MOSS_TURBO_POLICY},
+                     {"moss_lora_fp32_shared_trial",bool(PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL)},
+                     {"moss_lora_f16_storage_trial",bool(PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL)},
+                     {"moss_lora_precision_policy",PS5_AI_MOSS_LORA_PRECISION_POLICY},
+                     {"moss_turbo_bounded_upload_trial",bool(PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL)},
+                     {"moss_turbo_bounded_upload_policy",PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY},
+                     {"moss_ffn_token_chunk_trial",bool(PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL)},{"moss_ffn_chunk_tokens",PS5_AI_MOSS_FFN_CHUNK_TOKENS},
+                     {"moss_ffn_chunk_policy",PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL?PS5_AI_MOSS_FFN_CHUNK_POLICY:"disabled"},
                  {"effective_adapter",moss_effective_lora_identity()},
+                 {"moss_lora_storage_pipeline_receipt",moss_lora_storage_generation_json(storage_before)},
                  {"custom_sigmas",PS5_AI_MOSS_TURBO_TRIAL?nlohmann::json::array({1.0,.910,.717,.024,0.0}):nlohmann::json(nullptr)},
                  {"custom_sigmas_second_flow_shift",false},
                  {"negative_cfg_skip_layers",{22}},
                  {"negative_cfg_skip_scope",PS5_AI_MOSS_TURBO_TRIAL?"no_negative_forward_CFG1":"all_negative_forwards_existing_MOSS_policy"},
                  {"negative_cfg_skip_applied",!bool(PS5_AI_MOSS_TURBO_TRIAL)},
                  {"expected_dit_forwards",PS5_AI_MOSS_TURBO_TRIAL?uint64_t(4):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(60):uint64_t(request->steps)*2},
-                 {"expected_q4_f32acc_recordings",PS5_AI_MOSS_TURBO_TRIAL?uint64_t(672):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(9960):uint64_t(request->steps)*(42+41)*4},
+                 {"expected_q4_f32acc_recordings",PS5_AI_MOSS_TURBO_TRIAL?moss_ffn_chunk_expected(observation):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(9960):uint64_t(request->steps)*(42+41)*4},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
                  {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},
                  {"mask_preserved_pixels",stats->mask_preserved_pixels},{"mask_changed_pixels",stats->mask_changed_pixels},

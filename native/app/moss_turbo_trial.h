@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT -- proposed, not enabled in a running build. */
+/* SPDX-License-Identifier: MIT -- explicit default-off Turbo trial contract. */
 #ifndef PS5_AI_MOSS_TURBO_TRIAL_H
 #define PS5_AI_MOSS_TURBO_TRIAL_H
 #include <stdint.h>
@@ -6,19 +6,44 @@
 #ifndef PS5_AI_MOSS_TURBO_TRIAL
 #define PS5_AI_MOSS_TURBO_TRIAL 0
 #endif
+#ifndef PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL
+#define PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL 0
+#endif
+#if PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL != 0 && PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL != 1
+#error PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL must be0or1
+#endif
 #if PS5_AI_MOSS_TURBO_TRIAL != 0 && PS5_AI_MOSS_TURBO_TRIAL != 1
 #error PS5_AI_MOSS_TURBO_TRIAL must be0or1
 #endif
-#if PS5_AI_MOSS_TURBO_TRIAL && (!PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL || !PS5_AI_MOSS_TRIAL_10G || !PS5_AI_MOSS_PERFORMANCE_TRIAL || PS5_AI_MOSS_PERF_VARIANT != 1 || !PS5_AI_MOSS_F32_ACCUMULATION || PS5_AI_MOSS_GPU_PROFILE || PS5_AI_MOSS_Q4_BK64_RAW64 || PS5_AI_MOSS_SAMPLER_TRIAL || PS5_AI_MOSS_SPECTRUM_TRIAL || PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL || PS5_AI_MOSS_RUNTIME_ADMITTED)
+#if PS5_AI_MOSS_TURBO_TRIAL && (!PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL || !PS5_AI_MOSS_TRIAL_10G || !PS5_AI_MOSS_PERFORMANCE_TRIAL || PS5_AI_MOSS_PERF_VARIANT != 1 || !PS5_AI_MOSS_F32_ACCUMULATION || PS5_AI_MOSS_GPU_PROFILE || PS5_AI_MOSS_Q4_BK64_RAW64 || PS5_AI_MOSS_SAMPLER_TRIAL || PS5_AI_MOSS_SPECTRUM_TRIAL || PS5_AI_MOSS_RUNTIME_ADMITTED)
 #error Turbo requires a separate F32acc small10GiB trial with sampler/B/profiling/production disabled
+#endif
+/* This mode is derived, never an independent knob: enabling both existing
+ * explicit flags is the only admitted combination. Both numerical gates remain
+ * mandatory, and the weight-loader hook stays false until its GPU gate passes. */
+#ifdef PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL
+#error Combined identity is derived from Turbo and bounded-upload flags
+#endif
+#if PS5_AI_MOSS_TURBO_TRIAL && PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL
+#define PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL 1
+#define PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY "turbo4_rank144_raw_same_format_GPU_weights_8MiB_per_worker_v1"
+#else
+#define PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL 0
+#define PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY "disabled"
 #endif
 #if PS5_AI_MOSS_TURBO_TRIAL
 #define PS5_AI_MOSS_TURBO_POLICY "euler_custom1000_910_717_24_cfg1_nsfw07_turbo1_rank144_v1"
 #else
 #define PS5_AI_MOSS_TURBO_POLICY "disabled"
 #endif
+#include "moss_lora_f16_storage_trial.h"
+#if PS5_AI_MOSS_LORA_F16_STORAGE_TRIAL
+#define PS5_AI_MOSS_TURBO_ADAPTER_BASENAME PS5_AI_MOSS_LORA_F16_STORAGE_BASENAME
+#define PS5_AI_MOSS_TURBO_ADAPTER_SCHEMA PS5_AI_MOSS_LORA_F16_STORAGE_SCHEMA
+#else
 #define PS5_AI_MOSS_TURBO_ADAPTER_BASENAME "moss-nsfw07-turbo4-r144-f32.safetensors"
 #define PS5_AI_MOSS_TURBO_ADAPTER_SCHEMA "ps5-ai-moss-nsfw07-turbo1-r144-f32-v1"
+#endif
 #define PS5_AI_MOSS_TURBO_NSFW_SHA256 "907c1e0220c8aa301595b4a369f7b09447001306ffebb53da1fc58f24542cdf9"
 #define PS5_AI_MOSS_TURBO_SOURCE_SHA256 "154c7f1455c3bf9925945c2f1ea2e4f09d0d0c67256081384a094b2b585f913f"
 enum { PS5_AI_MOSS_TURBO_STEPS=4, PS5_AI_MOSS_TURBO_SIGMA_COUNT=5,

@@ -11,8 +11,8 @@ int main(void){
  s.clock_unix_seconds=1792301633;s.phase=PS5_AI_STATUS_IDLE;s.cpu_rss_source=PS5_AI_STATUS_RSS_PEAK;s.cpu_rss_bytes=9098674176ULL;
  s.direct_reserved_bytes=6442450944ULL;s.direct_used_bytes=5141463040ULL;s.direct_peak_bytes=5372903424ULL;
  s.driver_reserved_bytes=33554432;s.driver_used_bytes=17219584;s.dispatches=137630;s.submits=29143;s.fences=29143;
- strcpy(s.model,"WAI-Illustrious-SDXL v17.0");
- strcpy(s.logs[0],"Generation completed / Vulkan UNet and TAESD");strcpy(s.logs[1],"Output PNG saved / ready for the next request");
+ strcpy(s.model,"MOSS-Image-SFT");
+ strcpy(s.logs[0],"Generation completed / Vulkan DiT and VAE");strcpy(s.logs[1],"Output PNG saved / ready for the next request");
  strcpy(s.logs[2],"Native API healthy / model remains loaded");strcpy(s.logs[3],"Authorization: Bearer SECRET_DO_NOT_DRAW");
  assert(ps5_ai_dashboard_draw(frame,&s,1,1));
  FILE *f=fopen("dashboard-idle.ppm","wb");assert(f);fprintf(f,"P6\n1920 1080\n255\n");

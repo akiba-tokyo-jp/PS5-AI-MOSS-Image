@@ -1,7 +1,7 @@
 {
   "schema": "ps5-ai-moss-requested-adapter-plan-v1",
   "runtime_configuration": false,
-  "status": "HOST_INTEGRATED_AND_EXACT_CONVERTED_PS5_UNVERIFIED",
+  "status": "PINNED_COMPONENTS_AND_DERIVED_F32_LORA_PS5_BOUNDED_TRIAL_VERIFIED",
   "requested_adapter": {
     "role": "lora",
     "repository": "axiomofmind/Moss-image-nsfw-uncensored-lora",
@@ -40,11 +40,12 @@
     "PS5_admitted": false,
     "quantized_base_apply_strategy_candidate": "at_runtime; avoid full checkpoint dequantization",
     "blocking_work": [
-      "Fresh full core and native crossbuild of current source; runtime guard remains0",
-      "PS5 Direct capacity plus actual full selected LoRA GPU application/finite readback/PNG remain unverified"
+      "Unrestricted production admission and long-run stability are not established"
     ],
-    "PS5_execution_verified": false,
-    "host_integration_only": true
+    "PS5_execution_verified": true,
+    "host_integration_only": false,
+    "PS5_bounded_trial_verified": true,
+    "PS5_execution_scope": "Exact derived F32 adapter, not the raw BF16 input; limited tested conditions only"
   },
   "base_engine_config": "moss-native.json.example",
   "direct_target_bytes": 12884901888,
@@ -69,7 +70,8 @@
     "base_checkpoint_merged": false,
     "converter": "tools/models/convert_moss_lora_bf16_f32.py",
     "license": "Apache-2.0",
-    "PS5_execution_verified": false
+    "PS5_execution_verified": true,
+    "PS5_verification_scope": "Selected F32 rank16 bounded image trials; not arbitrary conditions or production"
   },
   "host_checks": {
     "all504_expected_names_shapes_F32": true,
@@ -78,5 +80,7 @@
     "full_values_BF16_to_F32_bit_exact_reread": true,
     "GPU_execution": false,
     "PNG_generated": false
-  }
+  },
+  "verification_scope": "Selected derived F32 rank16 adapter used in actual PS5 bounded trials; production admission remains OFF; raw BF16 adapter not executed directly. Latest composed Turbo4 recipe and limited F16 storage trial are separate.",
+  "verification_document": "docs/moss-turbo-memory-options-20261020.md"
 }

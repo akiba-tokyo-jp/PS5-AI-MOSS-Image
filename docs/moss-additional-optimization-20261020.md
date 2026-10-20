@@ -1,6 +1,8 @@
 # Additional MOSS optimization investigation (2026-10-20)
 
-The reviewed cache version completed matched PS5 256×256 and 1024×1024 generations with baseline-identical PNG files and normal visual review. The same-prompt 1024 request after 256 was 40.389505 s faster in this single observation. The recovered uninterrupted current engine log confirms the expected cache hits, and normal exit plus an independent fresh idle check passed. The repository remains private and experimental.
+> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+
+The reviewed cache version completed matched PS5 256×256 and 1024×1024 generations with baseline-identical PNG files and normal visual review. The same-prompt 1024 request after 256 was 40.389505 s faster in this single observation. The recovered uninterrupted current engine log confirms the expected cache hits, and normal exit plus an independent fresh idle check passed. This was an experimental development run; current release status is in status.md.
 
 ## Preserved conditions
 
@@ -90,9 +92,9 @@ The full current engine log was recovered after the initially bounded capture le
 | Both actual generations and PNG/visual comparison | Passed |
 | Observed same-prompt resolution-change total-time reduction | 40.389505 s (3.7951%) in one matched 1024 request |
 | Exact request-scoped INFO cache hits | Passed; initial 256: 0, following 1024: exactly 2 in the uninterrupted current interval |
-| Normal app/gateway exit and independent fresh idle confirmation | Passed; normal API exit, both PIDs absent, new observer023 reports no native GPU title |
+| Normal app/gateway exit and independent fresh idle confirmation | Passed; normal API exit, both PIDs absent, new observer reports no native GPU title |
 
-After both requests, the native app and gateway exited through their normal APIs. A separate process-list check confirmed both owners absent. A newly built and executed read-only observer023 then confirmed the same boot and existing service/syscore/shellcore identities, no running GPU title (BigApp −1 and zero native eboot processes), and all three app registrations retained. This is an observed clean lifecycle for this run, not proof of long-duration stability.
+After both requests, the native app and gateway exited through their normal APIs. A separate process-list check confirmed both owners absent. A newly built and executed read-only observer then confirmed the same boot and existing service/syscore/shellcore identities, no running GPU title (BigApp −1 and zero native eboot processes), and all three app registrations retained. This is an observed clean lifecycle for this run, not proof of long-duration stability.
 
 This improvement applies to reuse of the same text condition across a resolution change. It is not a demonstrated faster DiT kernel or a benefit for an unseen prompt. API CPU/GPU-labelled peaks include shared allocations and must not be added as physical RAM or interpreted as pure VRAM. No memory quota or 12 GiB achievement is claimed.
 

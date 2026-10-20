@@ -9,9 +9,16 @@ Sources: [model card](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncenso
 [adapter config](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/adapter_config.json),
 [license](https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/LICENSE).
 
-**The full local download, exact conversion, source hookup and fresh cross-build
-have passed. No MOSS model/LoRA loading, GPU inference or PNG generation has been
-verified on PS5. Runtime admission remains 0 and the repository remains private.**
+**The selected derived F32 rank16 adapter has now loaded and applied on PS5:
+504 loaded/matched/used tensors, skipped0, finite GPU output and normal PNGs
+were confirmed in the bounded50-step baseline trials.** This page retains the
+2026-10-19 selection/conversion facts. The newer Turbo4 recipe composes this
+adapter with a pinned rank128 Turbo LoRA as rank144 F32, and has separate
+sampling, capacity and image evidence. See [current status](status.md),
+[latest comparisons](moss-turbo-memory-options-20261020.md) and
+[exact Turbo composition](moss-turbo4-reproduction.md).
+Production admission remains OFF; these results do not establish every prompt,
+ordinary continuous operation, equal quality or long-run stability.
 
 ## Fixed files and exact conversion
 
@@ -55,7 +62,7 @@ The existing SD.cpp runtime adapter computes each low-rank update separately and
 concatenates its output slices. It does not reuse q's A matrix for k or v.
 Other targets retain their corresponding o/ffn names. Native configuration passes
 exactly this required adapter through `sd_lora_t`, with
-`LORA_APPLY_AT_RUNTIME`; WAI's manga fields are not reused. See
+`LORA_APPLY_AT_RUNTIME`; incompatible manga-extension fields are not reused. See
 [configuration and staging](deployment.md).
 
 The MOSS-only adapter contract rejects unexpected names, dtype, rank, shape or

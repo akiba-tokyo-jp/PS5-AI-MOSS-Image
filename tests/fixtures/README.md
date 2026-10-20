@@ -9,7 +9,7 @@ The baseline scratch header is reconstructed by the runner from pinned repositor
 With the prepared source/dependency paths from [build instructions](../../docs/build.md), run from the repository root:
 
 ```powershell
-python -B tests/moss_actual_graph_scratch.py --config D:/PS5-AI/moss/build/build-config.private.json --out D:/PS5-AI/moss/host-tests/actual-graph-repro-001
+python -B tests/moss_actual_graph_scratch.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/host-tests/actual-graph-repro-001
 ```
 
 Only the config's `LLVM` and `SD` paths are used. The fresh output directory must be outside the repository on D:. The runner opens no model file and makes no network/PS5 connection. It compiles fresh host metadata/quantization objects and copies four exact helper bodies from the prepared source into the temporary build; no CPU graph backend or Vulkan library is linked.

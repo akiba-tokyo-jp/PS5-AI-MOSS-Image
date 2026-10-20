@@ -77,7 +77,7 @@ struct PS5AIEngineConfig {
     static void validate_selected_lora(const nlohmann::json& object) {
         const std::string path = object.value("moss_lora_path", selected_moss_lora_path());
         if (path != selected_moss_lora_path())
-            throw std::runtime_error("MOSS selected adapter requires its exact canonical F32 path; empty/base-only or other adapters are not selected");
+            throw std::runtime_error("MOSS selected adapter requires its exact canonical selected storage path; empty/base-only or other adapters are not selected");
         if (object.contains("moss_lora_strength") && !object.at("moss_lora_strength").is_number())
             throw std::runtime_error("engine.moss_lora_strength must be numeric");
         const double strength = object.value("moss_lora_strength", PS5_AI_MOSS_TURBO_TRIAL?1.0:0.7);
@@ -87,6 +87,10 @@ struct PS5AIEngineConfig {
         const std::string sha=object.at("moss_lora_sha256").get<std::string>();
         if(sha.size()!=64 || sha.find_first_not_of("0123456789abcdef")!=std::string::npos || sha==std::string(64,'0'))
             throw std::runtime_error("Turbo adapter SHA256 must bind an actual completed composition, not a placeholder");
+#if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
+        if(sha!=PS5_AI_MOSS_LORA_SELECTED_SHA256)
+            throw std::runtime_error("Private LoRA precision configuration requires the exact selected converted whole-file SHA256");
+#endif
 #endif
         if (!std::isfinite(strength) || strength <= 0.0 || strength > 1.5 ||
             !std::isfinite(static_cast<float>(strength)) || static_cast<float>(strength) <= 0.f)

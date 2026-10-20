@@ -1,3 +1,4 @@
+from moss_lora_precision_policy import flags as lora_precision_flags, fields as lora_precision_fields, contract as lora_precision_contract, validate as validate_lora_precision, validate_core as validate_core_lora_precision
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Windows local native rebuild from exported sources + reviewed dependencies.
 
@@ -7,7 +8,8 @@ See docs/build.md for the explicit dependency-build limitation.
 import argparse, hashlib, json, os, re, shutil, struct, subprocess
 from pathlib import Path
 from moss_feature_policy import (feature_compile_flags, validate_feature_modes,
-    feature_manifest_fields, feature_contract_updates, validate_core_features)
+    feature_manifest_fields, feature_contract_updates, validate_core_features,
+    ffn_compile_flags,ffn_manifest_fields,validate_ffn_parent,ffn_contract_updates,validate_core_ffn)
 from build_input_snapshot import collect as collect_inputs, require_unchanged
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -40,7 +42,7 @@ def validate_moss_sampler_mode(enabled,accumulation,gpu_profile,q4_candidate,var
                     type(variant) is not int or variant!=1 or precision!='fp16' or experimental is not True or trial_10g is not True):
         raise RuntimeError('Sampler trial requires the distinct FP16/F32 small10GiB performance build with GPU profiling/Q4 candidates disabled')
 
-def moss_performance_contract(variant,moss_f32_accumulation=False,moss_gpu_profile=False,moss_q4_bk64_raw64=False,moss_sampler_trial=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False):
+def moss_performance_contract(variant,moss_f32_accumulation=False,moss_gpu_profile=False,moss_q4_bk64_raw64=False,moss_sampler_trial=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False,moss_ffn_token_chunk_trial=False,moss_ffn_chunk_tokens=0,moss_lora_storage=None):
     if type(variant) is not int or variant not in MOSS_PERFORMANCE_VARIANTS:
         raise RuntimeError('Performance variant must be explicit integer0,1,or2')
     if type(moss_f32_accumulation) is not bool or (moss_f32_accumulation and variant!=1):
@@ -69,6 +71,15 @@ def moss_performance_contract(variant,moss_f32_accumulation=False,moss_gpu_profi
         'steps':30,'cfg_scale':4.0,'sampler':'res_multistep','scheduler':'simple',
         'expected_dit_forwards':60,'expected_q4_f32acc_recordings':9960,
         'negative_cfg_skip_scope':'all_negative_forwards_existing_MOSS_policy'})
+    validate_ffn_parent(moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens,spectrum=moss_spectrum_trial,bounded_upload=moss_bounded_weight_upload_trial,turbo=moss_turbo_trial,accumulation=moss_f32_accumulation)
+    if moss_ffn_token_chunk_trial:
+        contract.pop('expected_q4_f32acc_recordings',None)
+        contract.update(ffn_contract_updates(moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens))
+    validate_lora_precision(moss_lora_storage,turbo=moss_turbo_trial,upload=moss_bounded_weight_upload_trial,
+        spectrum=moss_spectrum_trial,ffn=moss_ffn_token_chunk_trial,accumulation=moss_f32_accumulation,
+        gpu_profile=moss_gpu_profile,q4=moss_q4_bk64_raw64,sampler=moss_sampler_trial,
+        variant=variant,precision=precision,experimental=True,trial_10g=True)
+    contract.update(lora_precision_contract(moss_lora_storage))
     return contract
 
 def validate_moss_performance_precision(variant,precision):
@@ -165,10 +176,11 @@ def same_typed_contract_value(actual,expected):
         len(actual)==len(expected) and all(same_typed_contract_value(a,e) for a,e in zip(actual,expected))
         if isinstance(expected,list) else actual==expected)
 
-def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None,moss_f32_accumulation=False,moss_gpu_profile=False,moss_q4_bk64_raw64=False,moss_sampler_trial=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False):
+def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None,moss_f32_accumulation=False,moss_gpu_profile=False,moss_q4_bk64_raw64=False,moss_sampler_trial=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False,moss_ffn_token_chunk_trial=False,moss_ffn_chunk_tokens=0,moss_lora_storage=None):
     """A trial is permission to RUN verification, never prior GPU admission."""
     if any(type(value) is not bool for value in (enabled,trial_10g,quality_comparison,benchmark_1024,moss_sampler_trial)):
         raise RuntimeError('MOSS trial switches must be explicit booleans')
+    validate_ffn_parent(moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens,spectrum=moss_spectrum_trial,bounded_upload=moss_bounded_weight_upload_trial,turbo=moss_turbo_trial,accumulation=moss_f32_accumulation)
     moss_accumulation_compile_flags(moss_f32_accumulation)
     moss_gpu_profile_compile_flags(moss_gpu_profile)
     moss_q4_bk64_compile_flags(moss_q4_bk64_raw64)
@@ -183,12 +195,12 @@ def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,be
     validate_feature_modes(moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial,accumulation=moss_f32_accumulation,
         gpu_profile=moss_gpu_profile,q4=moss_q4_bk64_raw64,sampler=moss_sampler_trial,variant=performance_variant,
         precision=MOSS_PERFORMANCE_VARIANTS.get(performance_variant,('', 'fp32'))[1],experimental=enabled,trial_10g=trial_10g)
-    if performance_variant is not None:moss_performance_contract(performance_variant,moss_f32_accumulation,moss_gpu_profile,moss_q4_bk64_raw64,moss_sampler_trial,moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial)
+    if performance_variant is not None:moss_performance_contract(performance_variant,moss_f32_accumulation,moss_gpu_profile,moss_q4_bk64_raw64,moss_sampler_trial,moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial,moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens,moss_lora_storage)
     if sum((quality_comparison,benchmark_1024,performance_variant is not None))>1:raise RuntimeError('MOSS trial modes are mutually exclusive')
     if not enabled:
         if trial_10g or quality_comparison or benchmark_1024 or performance_variant is not None:raise RuntimeError('Trial switches require --experimental-small-trial')
         return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=0','-DPS5_AI_MOSS_TRIAL_10G=0']
-    expected_contract=moss_performance_contract(performance_variant,moss_f32_accumulation,moss_gpu_profile,moss_q4_bk64_raw64,moss_sampler_trial,moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
+    expected_contract=moss_performance_contract(performance_variant,moss_f32_accumulation,moss_gpu_profile,moss_q4_bk64_raw64,moss_sampler_trial,moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial,moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens,moss_lora_storage) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
     valid_contract=isinstance(contract,dict) and set(contract)==set(expected_contract) and all(
         same_typed_contract_value(contract[key],expected)
         for key,expected in expected_contract.items())
@@ -236,7 +248,7 @@ def validate_moss_benchmark_gateway_wait_change(source,original):
         raise RuntimeError('Gateway change exceeds the reviewed wait-only literal')
     return {'old_wait_ms':1800000,'new_wait_ms':7200000,'all_other_bytes_identical':True,
             'restored_original_sha256':original['sha256']}
-def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False,moss_f32_accumulation=False,moss_q4_bk64_raw64=False,moss_sampler_trial=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False):
+def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False,moss_f32_accumulation=False,moss_q4_bk64_raw64=False,moss_sampler_trial=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False,moss_ffn_token_chunk_trial=False,moss_ffn_chunk_tokens=0,moss_lora_storage=None):
     """Consume only a complete, immutable 75-member MOSS core rebuild."""
     moss_q4_bk64_compile_flags(moss_q4_bk64_raw64)
     if moss_q4_bk64_raw64 and (quality_native_only is not True or moss_f32_accumulation is not True or benchmark_gateway_only is not False):
@@ -256,6 +268,9 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
         raise RuntimeError('Expected a completed local MOSS full-core manifest')
     validate_moss_core_accumulation(manifest,moss_f32_accumulation)
     validate_core_features(manifest,moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial)
+    validate_core_lora_precision(manifest,moss_lora_storage)
+    validate_core_ffn(manifest,moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens)
+    if moss_ffn_token_chunk_trial and quality_native_only:raise RuntimeError('FFN requires a fresh75 compilation')
     if (moss_spectrum_trial or moss_bounded_weight_upload_trial or moss_turbo_trial) and quality_native_only:
         raise RuntimeError('Inference feature cores require fresh75; native-only carryforward is forbidden')
     pins=manifest.get('source_pins',{})
@@ -277,7 +292,7 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
         raise RuntimeError('MOSS core archive changed or is missing')
     if set(archive_members(path))!=set(members):
         raise RuntimeError('MOSS archive contents do not match manifest')
-    inputs=manifest.get('sources',[])+manifest.get('header_inputs',[])+manifest.get('overlay_inputs',[])+manifest.get('policy_inputs',[])+[manifest['profile'],manifest['builder']]
+    inputs=manifest.get('sources',[])+manifest.get('header_inputs',[])+manifest.get('overlay_inputs',[])+manifest.get('policy_inputs',[])+manifest.get('lora_precision_policy_inputs',[])+[manifest['profile'],manifest['builder']]
     if len(manifest.get('sources',[]))!=75 or not manifest.get('header_inputs'):
         raise RuntimeError('Missing full-core source/header provenance')
     changed=[]
@@ -350,7 +365,7 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
@@ -371,12 +386,22 @@ def main():
         gpu_profile=a.moss_gpu_profile,q4=a.moss_q4_bk64_raw64,sampler=a.moss_sampler_trial,
         variant=a.performance_trial_variant,precision=a.precision,experimental=a.experimental_small_trial,trial_10g=a.trial_10g)
     feature_flags=feature_compile_flags(a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial)
+    validate_lora_precision(a.moss_lora_storage,turbo=a.moss_turbo_trial,upload=a.moss_bounded_weight_upload_trial,
+        spectrum=a.moss_spectrum_trial,ffn=a.moss_ffn_token_chunk_trial,accumulation=a.moss_f32_accumulation,
+        gpu_profile=a.moss_gpu_profile,q4=a.moss_q4_bk64_raw64,sampler=a.moss_sampler_trial,
+        variant=a.performance_trial_variant,precision=a.precision,experimental=a.experimental_small_trial,trial_10g=a.trial_10g)
+    lora_flags=lora_precision_flags(a.moss_lora_storage)
+    for recipe in [profile['platform_compile'],*profile['ggml_compile']]:
+        if any('PS5_AI_MOSS_LORA_' in arg for arg in recipe):raise RuntimeError('Native recipes cannot override private LoRA precision')
+    validate_ffn_parent(a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens,spectrum=a.moss_spectrum_trial,bounded_upload=a.moss_bounded_weight_upload_trial,turbo=a.moss_turbo_trial,accumulation=a.moss_f32_accumulation)
+    ffn_flags=ffn_compile_flags(a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens)
+    if any(any('PS5_AI_MOSS_FFN_'in arg for arg in recipe)for recipe in[profile['platform_compile'],*profile['ggml_compile']]):raise RuntimeError('Recipes cannot override FFN policy')
     for recipe in [profile['platform_compile'],*profile['ggml_compile']]:
         if any('PS5_AI_MOSS_SPECTRUM_TRIAL' in arg or 'PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL' in arg or 'PS5_AI_MOSS_TURBO_TRIAL' in arg for arg in recipe):
             raise RuntimeError('Native recipes cannot override inference feature policy')
-    trial_path=ROOT/('build-profiles/moss-performance-turbo-fp16-f32accum.json' if a.moss_turbo_trial else 'build-profiles/moss-performance-spectrum-fp16-f32accum.json' if a.moss_spectrum_trial else 'build-profiles/moss-performance-bounded-weight-upload-fp16-f32accum.json' if a.moss_bounded_weight_upload_trial else 'build-profiles/moss-performance-resmultistep-fp16-f32accum.json' if a.moss_sampler_trial else 'build-profiles/moss-performance-fp16-f32accum-q4-bk64-raw64.json' if a.moss_q4_bk64_raw64 else 'build-profiles/moss-performance-fp16-f32accum-gpu-profile.json' if a.moss_gpu_profile else 'build-profiles/moss-performance-fp16-f32accum.json' if a.moss_f32_accumulation else 'build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
+    trial_path=ROOT/(('build-profiles/moss-performance-combined-lora-'+a.moss_lora_storage+'-fp32shared.json') if a.moss_lora_storage is not None else 'build-profiles/moss-performance-turbo-bounded-upload-ffn2048-fp16-f32accum.json' if a.moss_ffn_token_chunk_trial else 'build-profiles/moss-performance-turbo-bounded-upload-fp16-f32accum.json' if a.moss_turbo_trial and a.moss_bounded_weight_upload_trial else 'build-profiles/moss-performance-turbo-fp16-f32accum.json' if a.moss_turbo_trial else 'build-profiles/moss-performance-spectrum-fp16-f32accum.json' if a.moss_spectrum_trial else 'build-profiles/moss-performance-bounded-weight-upload-fp16-f32accum.json' if a.moss_bounded_weight_upload_trial else 'build-profiles/moss-performance-resmultistep-fp16-f32accum.json' if a.moss_sampler_trial else 'build-profiles/moss-performance-fp16-f32accum-q4-bk64-raw64.json' if a.moss_q4_bk64_raw64 else 'build-profiles/moss-performance-fp16-f32accum-gpu-profile.json' if a.moss_gpu_profile else 'build-profiles/moss-performance-fp16-f32accum.json' if a.moss_f32_accumulation else 'build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
     trial_contract=json.loads(trial_path.read_text()) if a.experimental_small_trial else None
-    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant,a.moss_f32_accumulation,a.moss_gpu_profile,a.moss_q4_bk64_raw64,a.moss_sampler_trial,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial)
+    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant,a.moss_f32_accumulation,a.moss_gpu_profile,a.moss_q4_bk64_raw64,a.moss_sampler_trial,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial,a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens,a.moss_lora_storage)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -392,7 +417,7 @@ def main():
     baseline_core=archive_members(Path(c['DEPS'])/'libstable-diffusion.graph-admission-1024-v3.a')
     core_carryforward={}
     native_only_trial=a.quality_step_comparison_trial or a.benchmark_1024_cold_warm_trial or a.moss_q4_bk64_raw64 or a.moss_sampler_trial
-    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation,a.moss_q4_bk64_raw64,a.moss_sampler_trial,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial)
+    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation,a.moss_q4_bk64_raw64,a.moss_sampler_trial,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial,a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens,a.moss_lora_storage)
     batch_pair=profile.get('controlnet_batch_pair',0)
     if type(batch_pair)!=int or batch_pair not in (0,1):raise RuntimeError('ControlNet batch-pair profile must be 0 or 1')
     shader_header=profile['generated_shader_header'];shader_path=Path(expand(shader_header['path']))
@@ -416,7 +441,7 @@ def main():
             log.write(subprocess.list2cmdline(cmd)+'\n'+result.stdout+result.stderr+'\n');log.flush()
             if result.returncode:raise RuntimeError(result.stderr[-8000:])
             return result.stdout
-        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*sampler_flags,*feature_flags,
+        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*sampler_flags,*feature_flags,*ffn_flags,*lora_flags,
           '-fvisibility-nodllstorageclass=default','-isysroot','${SDK}',
           '-isystem','${SDK}/target/include/c++/v1','-isystem','${SDK}/target/include',
           '-I','${PLATFORM}/src','-I','${ROOT}/native/app','-I','${ROOT}/native/ui',
@@ -439,7 +464,7 @@ def main():
             if stem in ('engine_sdcpp','startup'):extra+=['-DPS5_AI_ENABLE_FP16='+str(int(a.precision=='fp16'))]
             print('Compiling '+source,flush=True)
             run(['${LLVM}/clang.exe',*common,*extra,'-c','${ROOT}/'+source,'-o','${OUT}/obj/'+name])
-        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*sampler_flags,*feature_flags,*profile['platform_compile'][1:]])
+        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*sampler_flags,*feature_flags,*ffn_flags,*lora_flags,*profile['platform_compile'][1:]])
         driver=out/'libvulkan_radeon.native-direct-data.a';shutil.copyfile(Path(c['DEPS'])/driver.name,driver)
         before=run(['${LLVM}/llvm-ar.exe','t',str(driver)]).splitlines()
         if len(before)!=704 or before.count('radv_ps5_platform_native.o')!=1:raise RuntimeError('Unexpected driver archive members')
@@ -448,7 +473,7 @@ def main():
         core_name='libstable-diffusion.graph-admission-1024-v3.a'
         baseline=archive_members(Path(c['DEPS'])/core_name)
         current_carryforward={}
-        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation,a.moss_q4_bk64_raw64,a.moss_sampler_trial,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial)
+        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation,a.moss_q4_bk64_raw64,a.moss_sampler_trial,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial,a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens,a.moss_lora_storage)
         if current_carryforward!=core_carryforward:raise RuntimeError('Core native-only carryforward evidence changed during build')
         core=out/'libstable-diffusion.moss.a';shutil.copyfile(core_source,core)
         core_changed=sorted(name for name,record in archive_members(core).items() if record!=baseline[name])
@@ -461,7 +486,7 @@ def main():
         if ggml_names!=['ggml-vulkan.cpp.o'] or ggml_names[0] not in ggml_before:
             raise RuntimeError('Unexpected GGML provider recipe/archive member')
         for recipe in ggml_recipes:
-            run([recipe[0],*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*sampler_flags,*feature_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
+            run([recipe[0],*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*sampler_flags,*feature_flags,*ffn_flags,*lora_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
         run(['${LLVM}/llvm-ar.exe','r',str(ggml),*ggml_objects])
         ggml_changed=check_archive_update(ggml_before,archive_members(ggml),ggml_names)
         substitutions={driver.name:driver,core_name:core,ggml_name:ggml}
@@ -487,6 +512,7 @@ def main():
 
         required_local=['ps5_ai_cpu_clip_shared_direct_live_bytes','ps5_ai_ggml_release_idle_scratch',
                         'ps5_ai_flex_largest_free_span_bytes']
+        if a.moss_lora_storage is not None:required_local += ['ps5_ai_moss_lora_storage_snapshot','ps5_ai_vk_lora_storage_compile','ps5_ai_vk_lora_storage_record','ps5_ai_moss_lora_precision_backend_admission']
         for name in required_local:
             if len(re.findall(r'\b'+re.escape(name)+r'$',definitions,re.M))!=1 or re.search(r'\b'+re.escape(name)+r'$',undefined,re.M):
                 raise RuntimeError('Missing/duplicate native optimization provider: '+name)
@@ -518,6 +544,10 @@ def main():
             'core_native_only_carryforward':core_carryforward,
             'trial_compile_flags':trial_flags,'trial_contract':trial_contract,
             **feature_manifest_fields(a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial),
+            **ffn_manifest_fields(a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens),
+            'core_ffn_policy_proof':validate_core_ffn(core_manifest,a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens),
+            **lora_precision_fields(a.moss_lora_storage),
+            'core_lora_precision_proof':validate_core_lora_precision(core_manifest,a.moss_lora_storage),
             'core_inference_feature_proof':validate_core_features(core_manifest,a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial),
             'moss_sampler_trial':a.moss_sampler_trial,
             'moss_sampler_policy':'res_multistep_simple_30_cfg4_v1' if a.moss_sampler_trial else 'disabled',

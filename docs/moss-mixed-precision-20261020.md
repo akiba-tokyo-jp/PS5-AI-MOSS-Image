@@ -1,5 +1,7 @@
 # MOSSのFP16データ経路とFP32累積による短縮
 
+> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+
 2026-10-20 JST。PS5本体で同条件の256×256と1024×1024を生成し、WindowsからOpenAI互換APIでPNGを取得しました。FP16データ経路と明示的FP32累積を組み合わせた版では、1024のPS5内生成時間が1219.096190秒から1064.248911秒へ短縮しました。各構成1回の測定で、熱・クロック・OSキャッシュを統制した反復試験ではありません。
 
 ## 比較条件と結果
@@ -41,20 +43,20 @@ FP32基準比で256は8.132485秒（5.28%）、1024は154.847279秒（12.70%）�
 
 1024 PNGのSHA256は`97ff9462ebd81b772bb313a8d8bbc71212b83b0c4d34b655ba8393b81f7b9aab`、2,496,438 bytesです。APIのCPU peakは11,787,223,040B、GPU-labelled peakは8,403,091,456Bでした。後者はCPUテキスト重みも含む共有Direct poolの生涯peakとdriver arenaからなる上界です。両peakを足して物理使用量やGPU専用VRAMと扱いません。Direct peak8,369,520,640B、生成後used3,559,440,384B、CPUテキストDirect live0、fault retainedなしを確認しました。
 
-native605/gateway608は通常APIで終了し、両PID不在と独立observer013のidleを確認しました。private、production admission0、実験契約の最大4試行を維持しています。12GiB確保、長期安定性、他prompt、最小steps、再現性は今回の成功だけでは確定しません。
+native/gatewayは通常APIで終了し、両PID不在と独立observerのidleを確認しました。この試験ではproduction admission0と最大4試行の実験契約を維持しました。12GiB確保、長期安定性、他prompt、最小steps、再現性は今回の成功だけでは確定しません。
 
-![今回の混合精度版でPS5が生成した1024画像](assets/moss-mixed-1024-20261020.png)
+![今回の混合精度版でPS5が生成した1024画像](images/moss-mixed-1024-20261020.png)
 
 ## 追加候補の調査で分かったこと
 
 FFN upgateを既存のmedium64タイルへ変更する案も実装して独立GPUゲートまで試しました。実機の数値結果はmismatch0、非有限値0でしたが、明示選択の確認は拒否され、画像POSTは0でした。
 
-原因は実機NAVI21の非coopmat構成ではlarge候補が除外され、small/mediumの2候補になるのに、追加selectorが3候補を仮定していたことです。さらに既存selectorは今回のFFNサイズで既に同じmedium64を選びます。したがって候補数判定だけを直しても実行タイルは変わらず、高速化にはなりません。この案は採用せず、速度結果を捏造しません。native640はGPUのquietと空のpoolを確認して通常OS終了し、独立observer014でidleを確認しました。
+原因は実機NAVI21の非coopmat構成ではlarge候補が除外され、small/mediumの2候補になるのに、追加selectorが3候補を仮定していたことです。さらに既存selectorは今回のFFNサイズで既に同じmedium64を選びます。したがって候補数判定だけを直しても実行タイルは変わらず、高速化にはなりません。この案は採用せず、速度結果を捏造しません。nativeはGPUのquietと空のpoolを確認して通常OS終了し、独立observerでidleを確認しました。
 
-その後、成功した上記の混合精度版と同じSELFへ戻し、全文読み戻しで一致を確認しました。再起動したnative672とgateway675がreadyとなり、必須14起動ゲート、6 MOSSゲート、4性能ゲートを元の許容値で再確認しました。この復元確認で画像POSTは追加していません。両APIを通常終了して両PID不在を確認し、独立observer015でもGPUタイトル不在・idleを確認しました。現在は改善版を配置済みで停止しています。FW・システム領域・WAI/Animaへの変更はありません。
+その後、成功した上記の混合精度版と同じSELFへ戻し、全文読み戻しで一致を確認しました。再起動したnativeとgatewayがreadyとなり、必須14起動ゲート、6 MOSSゲート、4性能ゲートを元の許容値で再確認しました。この復元確認で画像POSTは追加していません。両APIを通常終了して両PID不在を確認し、独立observerでもGPUタイトル不在・idleを確認しました。現在は改善版を配置済みで停止しています。FW・システム領域・既存タイトルへの変更はありません。
 
 ## 証拠の所在
 
 残る候補には、F32を維持したruntime LoRAのscale/add融合、MOSS固有のCFG batch化、実shapeに限定したattention調整があります。現在のログはQ4行列・attention・LoRAのGPU時間を分離していないため、その寄与や短縮率は未確定です。submit API自体は約1.09秒であり、ここだけを減らして大幅短縮とは見積もりません。大きなkernel改修前には、対応が確認できた方法で演算単位の計測と小さな数値・時間比較が必要です。
 
-非公開の実測記録は`D:/PS5-AI/moss/optimization-fp16-f32accum-20261020/`の`small-001`、`large-001`、`startup-review.private.json`、`small-precision-review.private.json`、`small/large-visual-review.private.json`、`final-v3-mixed-comparison-v1`です。追加案のログは`D:/PS5-AI/moss/optimization-fp16-f32accum-medium-20261020/startup-logcopy-001/`に保存しています。生ログ・モデル・認証情報・private診断JSONはGitへ含めません。
+元の実測・source／artifact照合・数値・終了確認の記録は非公開の検証資料へ保存しています。生ログ、モデル、認証情報、private diagnostic JSONはGitへ含めません。

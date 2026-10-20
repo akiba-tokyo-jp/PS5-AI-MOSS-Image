@@ -1,6 +1,6 @@
 # PS5 AI MOSS Image API
 
-privateの実験版です。最新の性能比較ではMOSS＋指定LoRAをPS5で生成し、OpenAI互換APIから256/1024 PNGを取得しました。FP32提出単位調整＋限定fusionの実験profileを残し、production runtime admission0／privateを維持します。最後のnative/gatewayは正常終了し、PID不在と独立idleを確認しています。[今回の性能比較](moss-performance-optimization-20261020.md)、[以前の1024 cold/warm](moss-1024-cold-warm-20261020.md)を参照してください。別のホスト用プロトコル検査は失敗専用の代替処理で、モデル推論や画像生成を行いません。
+画像生成はPS5ネイティブアプリが行います。OpenAI Images互換gatewayは同じ本体のnative APIへ1件だけ要求を転送します。WindowsはHTTPクライアントであり、モデル推論を行いません。[最新の実測比較](moss-turbo-memory-options-20261020.md)と[現在の状態](status.md)を参照してください。
 
 | 用途 | 接続先・識別子 |
 |---|---|
@@ -8,16 +8,30 @@ privateの実験版です。最新の性能比較ではMOSS＋指定LoRAをPS5�
 | native非同期API | `http://<PS5_IP>:8192` |
 | model | `moss-image-sft` |
 | アプリ | `PS5 AI MOSS Image` / `PPSA99190` |
-| 専用配置先 | `/data/ai/native-moss-image-sft/PPSA99190` |
-| ゲートウェイ専用領域 | `/data/ai/moss-openai-gateway` |
+| native配置先 | `/data/ai/native-moss-image-sft/PPSA99190` |
+| gateway専用領域 | `/data/ai/moss-openai-gateway` |
 
-WAIは8188／8189、Animaは8190／8191を維持します。WAI・Anima・MOSSは同時に実行せず、停止を確認して切り替える設計です。MOSSのサーバーは他のアプリ用ポートを指定した起動を拒否します。
+両APIはBearer認証を要求し、接続元を同じprivate IPv4 /24内に制限します。nativeとgatewayには同じトークンを各process専用ファイルで渡します。起動後にそのファイルを削除し、プロセス内に保持します。トークンをソース、ログ、URLへ入れないでください。
 
-両APIは専用ファイルから読み込むBearer認証を要求します。同じMOSSアプリのnativeとgatewayには同じトークン値を各起動ファイルへ渡します。gatewayはその値でnativeを認証するためです。WAI・Animaのトークンとは分離します。トークンは各プロセスが起動後にファイルから削除してメモリに保持し、ソースやURLには入れません。接続元は同じprivate IPv4 /24内に制限します。ゲートウェイは推論を行わず、同じPS5上の8192番へ1件だけ転送します。Windowsでの代替推論や自動再送はありません。
+## 公開する検証profile
 
-## OpenAIクライアント
+現在の速度基準は **Turbo4＋bounded upload、rank144 F32 LoRA、10GiB Direct予約**です。通常の無制限運用サーバーではありません。nativeのproduction runtime admissionは無効で、明示的performance trialが1process最大4回の有効な試行だけを許可します。失敗も回数を消費し、5回目は拒否します。不正な数値要求はclaimを消費しません。
 
-`POST /v1/images/generations`の例です。50ステップ・CFG 3・Euler・`flow_shift: 5`が既定です。
+| 項目 | 検証済みの固定条件 |
+|---|---|
+| 入力 | 下記のcanonical text-to-image request |
+| 出力 | PNG、1要求1枚、`256x256`または`1024x1024`の正方形 |
+| sampling | Euler、4 steps、CFG1、`flow_shift: 5`、seed20261020 |
+| sigma | `[1, 0.910, 0.717, 0.024, 0]`をアプリ内で固定。二重にflow shiftを適用しません |
+| LoRA | NSFW0.7＋Turbo1.0を合成したrank144 F32。runtime multiplierは1 |
+| メモリ | Direct予約10GiB、内側の推論予算9.5GiB、pool外reserve1GiB |
+| 順序 | 最初の256の成功・画像確認・空queue確認後、同processで1024へ進む |
+
+任意prompt／任意seedの通常運用や8GiB運用の成功は公開結果に含めません。別のF16 storage／FFN分割試験は[比較資料](moss-turbo-memory-options-20261020.md)へ分けて記録し、速度基準へ暗黙に混ぜません。`GET /health`で実際のモデル、process、trialの数値・policyを確認してください。readyは、モデル読込済み・画像GPU検証済みという意味ではありません。
+
+## OpenAI Images互換クライアント
+
+`POST /v1/images/generations`の固定requestです。最初は`size`だけを`256x256`にし、確認後に1024へ進めます。
 
 ```json
 {
@@ -27,40 +41,46 @@ WAIは8188／8189、Animaは8190／8191を維持します。WAI・Anima・MOSS�
   "size": "1024x1024",
   "n": 1,
   "response_format": "b64_json",
-  "steps": 50,
-  "cfg_scale": 3.0,
-  "flow_shift": 5.0,
+  "steps": 4,
+  "cfg_scale": 1,
+  "flow_shift": 5,
   "seed": 20261020,
   "sampler": "euler"
 }
 ```
 
-`steps`・`cfg_scale`・`flow_shift`・`seed`・`sampler`・`negative_prompt`はこのサーバー独自の拡張です。OpenAI Images API全体の実装を意味しません。応答形式はbase64 PNGまたは期限付きの画像専用署名URLです。`GET /v1/models`、`GET /health`、`GET /openapi.json`で識別と仕様を確認できます。[OpenAPI仕様](openapi.json)。JSON仕様と実機ビルドの埋込schemaは一致を維持しており、infoの`host-prepared`／実機未検証という説明文は初期ホスト構築時の履歴です。今回の結果は本資料で更新し、説明文だけのための再ビルドはしていません。
+`model`、`prompt`、`size`、`n`、`response_format`はOpenAI Images形式の一部に合わせています。`steps`、`cfg_scale`、`flow_shift`、`seed`、`sampler`、`negative_prompt`は独自拡張です。OpenAI Images API全体を実装した意味ではありません。[OpenAPI仕様](openapi.json)。
 
-通常のnative／gateway／PowerShellクライアントの既定stepsは元から50です。4stepsは初回smoke限定値でした。上のJSONは実測したrequestと同じです。現在の性能試験用SELFは256/1024の正方形・50steps、CFG3、shift5、Euler、seed20261020、LoRA0.7に限定し、1process最大4試行で失敗も消費、5回目は拒否します。不正requestはclaimを消費しません。clientは256の成功・目視・空queueを確認してから1024へ進みます。HTTPからprecision/fusion/モデルを任意に切り替えるAPIではありません。
+成功応答は`created`と1件の`data`を持ち、`data[0].b64_json`にPNGを返します。`x-request-id`はgateway、`X-PS5-Native-Job-ID`はnativeのジョブIDです。native IDを認証付き`GET /api/jobs/{job_id}`と`GET /api/images/{job_id}`で照合できます。
 
-旧1024 benchmark用SELFの最大2試行、旧256専用SELFの最大1試行は別契約として保持します。gateway待機は2時間、検証clientは7800秒で、timeout後もPOSTを再送しません。今回の許可された比較は完了し、結果や残りclaimから追加実行を自動で許可しません。
+`GET /v1/models`、`GET /v1/models/moss-image-sft`、`GET /health`、`GET /openapi.json`を実装しています。`response_format: "url"`による最大1時間の画像専用HMAC署名URLも実装していますが、base64／native画像を照合した実測と、署名URLの別経路の検証を混同しません。署名URL自体が画像へのアクセス権を含みます。Bearer tokenをURLへ入れません。
 
-幅・高さはプロトコル上64〜1024の整数で、それぞれ16の倍数を指定します。`80x96`などもプロトコル上の寸法ですが、現在の試験SELFが許可するのは256/1024の正方形だけです。今回の限定条件以外のサイズや最大能力を実証した意味ではありません。
+`quality: "auto"`／`"standard"`は別モデルに切り替えません。出力はPNGのみ、streamingは非対応です。`user`／`safety_identifier`は互換メタデータとして受け取るだけで、モデレーション処理を意味しません。
 
-`flow_shift`はfloatへ変換しても正かつ有限である数を指定します。0・負数・NaN・無限大・floatで0に丸められる極小値を拒否します。省略またはOpenAI側の`null`では5を使用します。`quality: "auto"`／`"standard"`は受け付けますが、別の品質モデルへ切り替える指定ではありません。
+PowerShellでは[`Invoke-MossOpenAI.ps1`](../scripts/Invoke-MossOpenAI.ps1)を使います。この公開検証clientはcanonical prompt／negative prompt／seedを固定し、生成POSTを1回だけ送ります。
 
-PowerShellクライアントは[`Invoke-MossOpenAI.ps1`](../scripts/Invoke-MossOpenAI.ps1)です。認証ファイルを指定して使用し、トークンを表示しません。
+```powershell
+./scripts/Invoke-MossOpenAI.ps1 -BaseUrl http://<PS5_IP>:8193/v1 -TokenFile <private-token-file> -Width 256 -Height 256
+```
 
-## native非同期API
+## 受理条件と非対応機能
 
-`POST /api/generate`は`prompt`、`negative_prompt`、`width`、`height`、`steps`、`cfg_scale`、`flow_shift`、`seed`、`sampler`、省略可能な`model`を受け付けます。`GET /api/jobs/{job_id}`で状態・生成時間・メモリ使用量・`flow_shift`・画像URLを返し、`GET /api/images/{image_id}`でPNGを取得する設計です。
+数値条件はコンパイル済みprofileが検査します。別seed、別sampler、別steps／CFG／flow shift、非対応寸法を指定しても、任意の通常運用modeへ切り替わりません。`scheduler`と`custom_sigmas`はJSONキーではなく、アプリ内policyです。未知のパラメータは拒否します。
 
-初期対応はtext-to-imageのみです。SDXL漫画LoRA、ControlNet、IP-Adapter、img2img、マスク、inpaintingの有効な要求は400で拒否します。画像入力のキーは`null`でも拒否します。継承クライアント向けの`manga_strength: 0`と`manga_monochrome: false`だけは無効値として受け付け、プロンプトへ白黒指定を追加しません。Anima・WAIなど異なるモデルIDも拒否します。
+promptの構文上限は空でない4096 UTF-8 bytes以下、negative promptは4096 UTF-8 bytes以下です。構文としての文字列受理と、任意promptでの生成品質・通常運用の実証は別です。公開の成功例は上記canonical requestです。CFG1ではnegative側のDiT forwardを行いません。
 
-ゲートウェイはnative healthのモデルIDと予定モデルパスの両方を検証し、不一致なら生成を転送しません。実機の完了ジョブでGPU使用を確認できた場合だけ画像を成功として返す設計です。
+MOSSはtext-to-imageのみです。参照画像、img2img、IP-Adapter、ControlNet、マスク、inpainting、画像編集は非対応です。画像入力キーは`null`でも拒否します。継承ABIの無効値として`manga_strength: 0`と`manga_monochrome: false`だけを受け付けますが、漫画LoRAや自動白黒化を有効にする機能ではありません。HTTPから任意のモデルパスやLoRAをupload・選択する機能もありません。
 
-タイムアウトしても生成POSTを自動で再送しません。実機検証時にはhealthの`running_jobs`／`queued_jobs`と既存ジョブを確認してから、次の要求を送ります。
+## native非同期APIと再送
 
-## モデル構成の設定例
+`POST /api/generate`では、同じ固定条件を`width`／`height`と他の数値・textフィールドで渡します。`GET /api/jobs/{job_id}`は状態、`generation_seconds`、`actual_steps`、`gpu_used`、ピーク指標、画像URLなどを返します。生成時間はPS5内の計測です。
 
-[`config/moss-native.json.example`](../config/moss-native.json.example)はモデル本体・Qwen3.5エンコーダー・Flux2 VAE・外部Qwen3.5 tokenizerの配置予定を示します。ファイルは同梱していません。モデル名・必要な量子化形式・バックエンド互換性・メモリ設定は、別途のソース監査と実機検証が必要です。既存Anima用の重みやtokenizerへ代替する動作は設けません。
+タイムアウト後も本体で処理が続く場合があります。POSTを自動再送せず、`/health`の`running_jobs`／`queued_jobs`と既存ジョブを確認してください。gatewayは同じ本体8192のモデルID・モデルパスを検証し、native GPU完了を確認してから画像を返します。
 
-選定LoRAはアプリ設定の`moss_lora_path`と`moss_lora_strength`で指定し、HTTP要求から任意のモデルパスを渡す機能はありません。未知のengine設定キー、選定外のLoRAパス、0以下・1.5超・floatで有限正値にならない強度は、明示的GPU初期化前のmemory-plan検査で拒否します。構成上の対応とPS5での生成成功は分けて扱います。
+CPU/GPUは物理メモリを共有します。Direct予約、プロセスRSS、APIのGPUラベル付きピークを足し合わせて全物理RAMにしません。モデル・precision・メモリ設定の変更はHTTP requestではなく、明示したprofileと検証手順で行います。
 
-設定例のDirect予約目標は12GiB（12,884,901,888 bytes）、その内側のVulkan推論予算は11.5GiBです。`working_reserve_bytes`は1GiBを維持します。native総量報告11.4375GiBのため12GiB＋reserve1GiBは未達です。人が別途許可した試験では10GiB pool・予算9.5GiB・reserve1GiBを使用しました。通常設定の12GiB確保や任意条件・長時間運用が実証された意味ではありません。
+## ソースの仕様説明と実行中プロセス
+
+OpenAPI JSONと[`native/gateway/openapi_schema.inc`](../native/gateway/openapi_schema.inc)は同じ内容を保持します。今回の変更は仕様説明・schema・公開clientの更新であり、実行中のgatewayを再ビルド・差し替えたという主張ではありません。以前のプロセスの`/openapi.json`には古い説明文が残る場合があります。実際の受理条件は`/health`のコンパイル済みtrial policyと照合してください。
+
+モデル重み、認証情報、raw診断ログ、ビルド済みバイナリはリポジトリに含みません。
