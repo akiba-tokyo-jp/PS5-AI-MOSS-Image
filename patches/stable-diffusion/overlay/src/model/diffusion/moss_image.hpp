@@ -18,6 +18,7 @@
 #endif
 
 #include "model/diffusion/moss_ffn_token_chunk.hpp"
+#include "model/diffusion/moss_dit_ops.hpp"
 
 namespace MOSSImage {
     // This MOSS-only policy changes accumulator precision, not weight dtype or
@@ -69,11 +70,26 @@ namespace MOSSImage {
         }
     };
 
-    inline ggml_tensor* situ(ggml_context* c, ggml_tensor* hidden, ggml_tensor* gate) {
+    inline ggml_tensor* situ(ggml_context* c, ggml_tensor* hidden, ggml_tensor* gate, ggml_backend_t backend=nullptr) {
+        if(moss_dit_opt::enabled(2))return moss_dit_opt::make(c,moss_dit_opt::SITU,hidden,gate,gate,nullptr,backend);
         auto a = ggml_scale(c, ggml_tanh(c, ggml_scale(c, gate, 0.25f)), 4.f);
         a      = ggml_mul(c, a, ggml_sigmoid(c, gate));
         auto b = ggml_scale(c, ggml_tanh(c, ggml_scale(c, hidden, 1.f / 25.f)), 25.f);
         return ggml_mul(c, a, b);
+    }
+
+    inline ggml_tensor* fused_norm_mod(GGMLRunnerContext* ctx,ggml_tensor* weighted,ggml_tensor* mod,unsigned offset) {
+        if(weighted->op!=GGML_OP_MUL || weighted->src[0]->op!=GGML_OP_RMS_NORM)throw std::runtime_error("MOSS norm decomposition differs");
+        return moss_dit_opt::make(ctx->ggml_ctx,offset?moss_dit_opt::NORM_MOD3:moss_dit_opt::NORM_MOD0,weighted->src[0],weighted->src[1],mod,nullptr,ctx->backend);
+    }
+    inline ggml_tensor* attention(GGMLRunnerContext* ctx,ggml_tensor* q,ggml_tensor* k,ggml_tensor* v,ggml_tensor* pe) {
+        if(!moss_dit_opt::enabled(4))return Rope::attention(ctx,q,k,v,pe,nullptr,1.f,false);
+        const auto heads=q->ne[1];
+        auto fused=[&](ggml_tensor* t){
+            if(t->op!=GGML_OP_MUL || t->src[0]->op!=GGML_OP_RMS_NORM)throw std::runtime_error("MOSS QK norm decomposition differs");
+            return moss_dit_opt::make(ctx->ggml_ctx,moss_dit_opt::QK_WEIGHT_ROPE,t->src[0],t->src[1],pe,nullptr,ctx->backend);
+        };
+        return ggml_ext_attention_ext(ctx,fused(q),fused(k),v,heads,nullptr,true,ctx->flash_attn_enabled,1.f);
     }
 
     struct TextBlock : public GGMLBlock {
@@ -104,11 +120,11 @@ namespace MOSSImage {
             auto q = norm("q_norm", split(0));
             auto k = norm("k_norm", split(1));
             auto v = split(2);
-            y      = Rope::attention(ctx, q, k, v, pe, nullptr, 1.f, false);
+            y      = attention(ctx, q, k, v, pe);
             y      = linear("proj", y);
             x      = ggml_add(c, x, y);
             y      = norm("norm2", x);
-            y      = situ(c, linear("ffn_up", y), linear("ffn_gate", y));
+            y      = situ(c, linear("ffn_up", y), linear("ffn_gate", y),ctx->backend);
             y      = linear("ffn_down", y);
             return ggml_add(c, x, y);
         }
@@ -135,7 +151,7 @@ namespace MOSSImage {
             auto norm   = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<RMSNorm>(blocks[name])->forward(ctx, h); };
             auto part   = [&](int i) { return ggml_ext_slice(c, mod, 0, i * config.dim, (i + 1) * config.dim); };
             auto y      = norm("norm1", x);
-            y           = ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(1))), part(0));
+            y           = moss_dit_opt::enabled(4)?fused_norm_mod(ctx,y,mod,0):ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(1))), part(0));
             auto qkv    = linear("proj.qkv", y);
             auto split  = [&](int i) {
                 return ggml_reshape_4d(c, ggml_ext_slice(c, qkv, 0, i * config.dim, (i + 1) * config.dim), config.head_dim, config.dim / config.head_dim, x->ne[1], x->ne[2]);
@@ -143,20 +159,18 @@ namespace MOSSImage {
             auto q       = norm("q_norm", split(0));
             auto k       = norm("k_norm", split(1));
             auto v       = split(2);
-            y            = Rope::attention(ctx, q, k, v, pe, nullptr, 1.f, false);
+            y            = attention(ctx, q, k, v, pe);
             y            = linear("proj.o", y);
-            y            = ggml_mul(c, y, part(2));
-            x            = ggml_add(c, x, y);
+            x            = moss_dit_opt::enabled(4)?moss_dit_opt::make(c,moss_dit_opt::GATED_RESIDUAL,x,y,part(2),nullptr,ctx->backend):ggml_add(c,x,ggml_mul(c,y,part(2)));
             y            = norm("norm2", x);
-            y            = ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(4))), part(3));
+            y            = moss_dit_opt::enabled(4)?fused_norm_mod(ctx,y,mod,3):ggml_add(c, ggml_add(c, y, ggml_mul(c, y, part(4))), part(3));
             auto full_ffn = [&](ggml_tensor* tokens) {
                 auto up_gate = linear("proj.ffn_up_gate", tokens);
-                auto hidden = situ(c, ggml_ext_slice(c, up_gate, 0, 0, config.ffn_dim), ggml_ext_slice(c, up_gate, 0, config.ffn_dim, 2 * config.ffn_dim));
+                auto hidden = situ(c, ggml_ext_slice(c, up_gate, 0, 0, config.ffn_dim), ggml_ext_slice(c, up_gate, 0, config.ffn_dim, 2 * config.ffn_dim),ctx->backend);
                 return linear("proj.ffn_down", hidden);
             };
             y = moss_ffn_token_chunk::forward(c, y, full_ffn);
-            y            = ggml_mul(c, y, part(5));
-            return ggml_add(c, x, y);
+            return moss_dit_opt::enabled(4)?moss_dit_opt::make(c,moss_dit_opt::GATED_RESIDUAL,x,y,part(5),nullptr,ctx->backend):ggml_add(c,x,ggml_mul(c,y,part(5)));
         }
     };
 
@@ -181,15 +195,16 @@ namespace MOSSImage {
             blocks["final_linear_video"] = make_linear(config.dim, config.channels, false);
         }
 
-        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* image, ggml_tensor* time, ggml_tensor* text, ggml_tensor* pe, const std::vector<int>& skip) {
+        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* image, ggml_tensor* time, ggml_tensor* text, ggml_tensor* pe, const std::vector<int>& skip, bool refined_text=false) {
             auto c            = ctx->ggml_ctx;
             auto linear       = [&](const char* name, ggml_tensor* h) { return std::dynamic_pointer_cast<Linear>(blocks[name])->forward(ctx, h); };
             int64_t image_len = image->ne[0] * image->ne[1];
             auto x            = linear("video_embedder", DiT::patchify(c, image, 1, 1));
-            text              = linear("text_embedder.proj", text);
-            auto text_pe      = ggml_ext_slice(c, pe, 3, image_len, image_len + text->ne[1]);
-            for (int i = 0; i < 2; ++i) {
-                text = std::dynamic_pointer_cast<TextBlock>(blocks["text_embedder.blocks." + std::to_string(i)])->forward(ctx, text, text_pe);
+            if(!refined_text){
+                text = linear("text_embedder.proj",text);
+                auto text_pe=ggml_ext_slice(c,pe,3,image_len,image_len+text->ne[1]);
+                for(int i=0;i<2;++i)text=std::dynamic_pointer_cast<TextBlock>(blocks["text_embedder.blocks."+std::to_string(i)])->forward(ctx,text,text_pe);
+                if(moss_dit_opt::enabled(1))ctx->persist_cache_tensor("moss_internal_refined_text",text);
             }
             time      = linear("time_embedding.2", ggml_silu(c, linear("time_embedding.0", time)));
             auto mod  = linear("shared_block_modulation", time);
@@ -215,10 +230,17 @@ namespace MOSSImage {
         MOSSImageConfig config;
         Model model;
         std::vector<float> pe_data, time_data;
+        std::vector<float> cache_text_key;
+        int64_t cache_h=0,cache_w=0,cache_nt=0;
+        void clear_dit_cache(){free_cache_ctx_and_buffer();cache_text_key.clear();cache_h=cache_w=cache_nt=0;}
+        ~MOSSImageRunner(){moss_dit_opt::unregister_cache(this);}
 
         MOSSImageRunner(ggml_backend_t backend, const String2TensorStorage& weights, const std::string& prefix, std::shared_ptr<RunnerWeightManager> weight_manager = nullptr)
             : DiffusionModelRunner(backend, prefix, weight_manager), config(MOSSImageConfig::detect_from_weights(weights, prefix)), model(config) {
             model.init(params_ctx, weights, prefix);
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+            moss_dit_opt::register_cache(this,[](void* p){static_cast<MOSSImageRunner*>(p)->clear_dit_cache();});
+#endif
         }
 
         std::string get_desc() override { return "MOSS-Image"; }
@@ -243,6 +265,21 @@ namespace MOSSImage {
                 auto text = make_input(*inputs.context);
                 GGML_ASSERT(x->ne[3] == 1 && x->ne[2] == config.channels && text->ne[0] == config.text_dim);
                 int64_t h = x->ne[1], w = x->ne[0], nt = text->ne[1];
+                auto cached_pe=moss_dit_opt::enabled(1)?get_cache_tensor_by_name("moss_internal_pe"):nullptr;
+                auto cached_text=moss_dit_opt::enabled(1)?get_cache_tensor_by_name("moss_internal_refined_text"):nullptr;
+                const bool hit=cached_pe&&cached_text;
+                if(moss_dit_opt::enabled(1)){
+                    const auto& key=inputs.context->values();
+                    if(hit){
+                        if(cache_h!=h||cache_w!=w||cache_nt!=nt||cache_text_key.size()!=key.size()||std::memcmp(cache_text_key.data(),key.data(),key.size()*sizeof(float)))throw std::runtime_error("MOSS per-generation invariant cache key changed");
+                        ++moss_dit_opt::cache_hits;
+                    }else{
+                        if(cached_pe||cached_text)throw std::runtime_error("Partial MOSS invariant cache");
+                        cache_h=h;cache_w=w;cache_nt=nt;cache_text_key.assign(key.begin(),key.end());++moss_dit_opt::cache_misses;
+                    }
+                }
+                if(!hit){
+                ++moss_dit_opt::rope_builds;
                 Rope::Embedding embedding;
                 embedding.positions.append_image(static_cast<int>(h), static_cast<int>(w));
                 embedding.positions.images.back().height_axis = 2;
@@ -259,18 +296,20 @@ namespace MOSSImage {
                 }
                 embedding.values = Rope::embed_nd(embedding.ids, 1, 10000.f, std::vector<int>(4, static_cast<int>(config.head_dim / 4)), embedding.layout, &embedding.frequencies);
                 pe_data          = finish_rope_pe(std::move(embedding));
+                }
                 time_data.resize(config.freq_dim);
                 for (int64_t i = 0; i < config.freq_dim / 2; ++i) {
                     double angle                       = inputs.timesteps->values()[0] * std::pow(10000.0, -double(i) / double(config.freq_dim / 2));
                     time_data[i]                       = float(std::cos(angle));
                     time_data[i + config.freq_dim / 2] = float(std::sin(angle));
                 }
-                auto pe   = ggml_new_tensor_4d(compute_ctx, GGML_TYPE_F32, 2, 2, config.head_dim / 2, h * w + nt);
+                auto pe   = hit?cached_pe:ggml_new_tensor_4d(compute_ctx, GGML_TYPE_F32, 2, 2, config.head_dim / 2, h * w + nt);
                 auto time = ggml_new_tensor_3d(compute_ctx, GGML_TYPE_F32, config.freq_dim, 1, 1);
-                set_backend_tensor_data(pe, pe_data.data());
+                if(!hit)set_backend_tensor_data(pe, pe_data.data());
                 set_backend_tensor_data(time, time_data.data());
-                auto ctx = get_context();
-                ggml_build_forward_expand(gf, model.forward(&ctx, x, time, text, pe, skip));
+                auto ctx = get_context(gf);
+                if(moss_dit_opt::enabled(1)&&!hit)ctx.persist_cache_tensor("moss_internal_pe",pe);
+                ggml_build_forward_expand(gf, model.forward(&ctx, x, time, hit?cached_text:text, pe, skip,hit));
                 return gf;
             };
             return restore_trailing_singleton_dims(GGMLRunner::compute(graph, n_threads, false), inputs.x->dim());

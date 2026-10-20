@@ -40,3 +40,9 @@ nativeは`title/PPSA99190/eboot.bin`、gatewayはCPU用ELFを作ります。モ�
 FFN2048分割とF16 LoRA storage／専用F32 shared演算は別の明示実験で、速度基準ではOFFです。比較結果は[最新資料](moss-turbo-memory-options-20261020.md)へ分けています。8GiBや任意prompt／seedの無制限operating版は、この公開版の成功機能として含めません。
 
 ホストpolicy／HTTP／graph／fixture検査はモデル推論を行いません。fresh75 core、native recipes、strong provider、SELFと依存検査が通っても、PS5の数値ゲート、実pool確保、生成画像、正常終了を代替しません。[配置手順](deployment.md)、[モデル再現](moss-turbo4-reproduction.md)、[第三者通知](../THIRD_PARTY_NOTICES.md)も確認してください。
+
+## 追加DiT最適化の限定trial
+
+[実機比較](moss-dit-fusion-20261020.md)の4項目を有効にする場合、上のcoreコマンドに --moss-dit-optimizations、nativeコマンドに --moss-dit-optimization-mask 15 を追加します。新しいoutを使い、source-freezeにも tools/moss_dit_policy.py のfields(True)に対応するpolicy・compile flag・全sourceの実hashを固定します。coreは全75コマンドでcapability1、nativeも同じcapabilityを必要とします。mask0は同じcoreの対照版で、1／3／7は累積した限定比較用です。flags未指定はOFFです。
+
+F32積算・Turbo4・bounded uploadを必須とし、FFN分割・private LoRA precision・Spectrum・別のsampling／GPU profile候補との混在を拒否します。一般fusion、試行上限、production admission、容量・数値・完了・所有権の条件は維持します。gatewayのAPIと設定は変更しません。生成ソースを更新するgateway build等はsource-freeze前に済ませ、core／native build中にソースを変更しないでください。

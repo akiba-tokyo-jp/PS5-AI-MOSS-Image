@@ -13,7 +13,7 @@ SNAPSHOT='docs/source-snapshot.json'
 VERIFICATION='docs/verification.json'
 FORBIDDEN_PARTS={'.local','secrets','vendor','toolchain','logs','__pycache__','.venv','node_modules'}
 FORBIDDEN_SUFFIXES={'.safetensors','.gguf','.prx','.elf','.bin','.a','.so','.o','.obj','.dll','.lib','.log','.jsonl','.zip','.7z','.tar','.gz'}
-TEXT_SUFFIXES={'.md','.json','.example','.py','.c','.cpp','.h','.hpp','.inc','.ps1','.svg','.patch','.txt','.toml','.yml','.yaml','.sh','.map','.ld'}
+TEXT_SUFFIXES={'.md','.json','.example','.py','.c','.cpp','.h','.hpp','.inc','.ps1','.svg','.patch','.txt','.toml','.yml','.yaml','.sh','.map','.ld','.comp'}
 PRIVATE_TEXT=re.compile(r'https?://[^/\s]+\.sharepoint\.com|[A-Za-z]:[/\\]+Users[/\\]+|'+'codex-'+'remote-attachments',re.I)
 SECRET_TEXT=re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bBearer[ \t]+[A-Za-z0-9._~+/-]{24,}={0,2}|\b(?:api[_-]?token|password)[ \t]*[:=][ \t]*[\"\x27][A-Za-z0-9._~+/-]{32,}[\"\x27]',re.I)
 LEGACY_NAME=re.compile(r'(?<![A-Za-z0-9_])(?:WAI|Anima)(?![A-Za-z0-9_])',re.I)

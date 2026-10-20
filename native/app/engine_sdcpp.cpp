@@ -739,6 +739,11 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
     return ps5_ai_v12_read_memory_plan(config_path, nullptr, error, error_size);
 #endif
     try {
+        // Preserve the bounded GGML assertion reason before the existing abort
+        // boundary retains GPU resources. This callback never unwinds or frees.
+        ggml_set_abort_callback([](const char* message) {
+            ps5_ai_ggml_report("GGML_ABORT_DIAGNOSTIC message=%.1800s", message ? message : "unavailable");
+        });
         current_status = {};
         hardware_verified = false;
         gpu_device = nullptr;
@@ -878,6 +883,7 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
 #endif
 #endif
 #include "moss_bounded_weight_upload_gate.inc"
+#include "moss_dit_gate.inc"
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
 extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexcept {
@@ -1013,6 +1019,9 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
                      {"policy",PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_POLICY},
                      {"rank144_gate_admitted",true},{"bounded_upload_gate_admitted",true},
                      {"model_loaded",false},{"GPU_inference_claimed",false}});
+#endif
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+        moss_dit_readback_gate();
 #endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
@@ -1259,6 +1268,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             progress(0.05, user);
         }
         ps5_ai_native_ui_phase(PS5_AI_STATUS_GENERATING);
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+        if(!moss_dit_gate_passed)throw std::runtime_error("DiT optimization startup admission lost");
+        moss_dit_opt::begin(PS5_AI_MOSS_DIT_OPT_MASK);
+#endif
         if (!generate_image(model_context, &params, &images, &image_count) || image_count != 1 || !images || !images[0].data) {
             throw std::runtime_error("MOSS-Image image generation failed; see engine.jsonl");
         }
@@ -1352,6 +1365,18 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                candidate_completed.baseline_token_calls[token]!=candidate_before.baseline_token_calls[token])
                 throw std::runtime_error("Image rejected: MOSS Q4 BK64/raw64 candidate B actual negative/positive input-token receipts differ");
         }
+#endif
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+        if(!ps5_ai_ggml_wait_backend("dit_generation_completed",1))ps5_ai_ggml_retain("dit_generation_completion_unknown");
+        nlohmann::json fused_receipts=nlohmann::json::array();
+        for(unsigned k=1;k<=8;++k)fused_receipts.push_back(moss_dit_opt::GPU_recordings[k].load());
+        const unsigned dit_mask=PS5_AI_MOSS_DIT_OPT_MASK;
+        if((dit_mask&1)&&(!moss_dit_opt::cache_hits.load()||!moss_dit_opt::cache_misses.load()))throw std::runtime_error("DiT invariant cache not used");
+        if((dit_mask&2)&&!moss_dit_opt::GPU_recordings[moss_dit_opt::SITU].load())throw std::runtime_error("SiTU GPU fusion not used");
+        if(dit_mask&4)for(unsigned k=2;k<=5;++k)if(!moss_dit_opt::GPU_recordings[k].load())throw std::runtime_error("Norm/residual/QK GPU fusion not used");
+        if((dit_mask&8)&&(!moss_dit_opt::scale_elisions.load()||!moss_dit_opt::GPU_recordings[8].load()))throw std::runtime_error("LoRA unit-scale/packed qkv fusion not used");
+        write_event({{"event","moss_dit_optimization_completed"},{"mask",dit_mask},{"cache_graph_hits",moss_dit_opt::cache_hits.load()},{"cache_graph_misses",moss_dit_opt::cache_misses.load()},{"rope_builds",moss_dit_opt::rope_builds.load()},{"scale_elisions",moss_dit_opt::scale_elisions.load()},{"GPU_recordings_kinds1_to8",fused_receipts},{"finite_DiT_outputs",precision_dit_outputs.load()},{"nonfinite",precision_nonfinite.load()}});
+        moss_dit_opt::end_completed();
 #endif
         // Collect already-completed sampled graphs before publishing any PNG.
 #if PS5_AI_MOSS_GPU_PROFILE

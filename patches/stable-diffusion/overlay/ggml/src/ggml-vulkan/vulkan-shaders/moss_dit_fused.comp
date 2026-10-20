@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: MIT
+// F32 pointwise fusion, preserving the existing PS5 port's operation order.
+#version 450
+layout(local_size_x=128) in;
+layout(binding=0) readonly buffer A {float a[];};
+layout(binding=1) readonly buffer B {float b[];};
+layout(binding=2) readonly buffer C {float c[];};
+layout(binding=3) readonly buffer E {float e[];};
+layout(binding=4) writeonly buffer D {float dst[];};
+layout(push_constant) uniform Params {
+ uint count; uint kind; uint dims[4]; uint stride[16]; uint offset[5]; uint bdim; uint cdim;
+} p;
+uint addr(uint slot,uvec4 j){return p.offset[slot]+(j.x*p.stride[slot*4]+j.y*p.stride[slot*4+1]+j.z*p.stride[slot*4+2]+j.w*p.stride[slot*4+3]);}
+float old_tanh(float x){precise float t=2.0*x;precise float d=exp(t)+1.0;precise float y=1.0-2.0/d;return y;}
+void main(){
+ uint i=gl_GlobalInvocationID.x+gl_NumWorkGroups.x*128*gl_GlobalInvocationID.y;if(i>=p.count)return;
+ uint j=i%p.dims[0],r=i/p.dims[0];uvec4 ix=uvec4(j,r%p.dims[1],(r/p.dims[1])%p.dims[2],r/(p.dims[1]*p.dims[2]));
+ precise float outv;
+ if(p.kind==5){
+  uint H=p.dims[0],T=p.dims[2],heads=p.dims[1],hdim=H/2;uint token=r%T,head=(r/T)%heads,batch=r/(T*heads),pair=j%hdim;
+  precise float av=a[addr(0,uvec4(pair,head,token,batch))]*b[addr(1,uvec4(pair,0,0,0))];
+  precise float bv=a[addr(0,uvec4(pair+hdim,head,token,batch))]*b[addr(1,uvec4(pair+hdim,0,0,0))];
+  float co=c[addr(2,uvec4(0,0,pair,token))],si=c[addr(2,uvec4(0,1,pair,token))];
+  precise float x0=av*co;precise float x1=bv*si;precise float y0=av*si;precise float y1=bv*co;
+  outv=j<hdim?x0-x1:y0+y1;
+ }else{
+  float av=a[addr(0,ix)];
+  if(p.kind==1){
+   float g=b[addr(1,ix)];precise float g0=g*.25;precise float ag=old_tanh(g0)*4.0;
+   precise float sigmoid=1.0/(1.0+exp(-g));precise float aa=ag*sigmoid;
+   precise float h0=av*(1.0/25.0);precise float bb=old_tanh(h0)*25.0;outv=aa*bb;
+  }else if(p.kind==2||p.kind==3){
+   uint off=p.kind==2?0:3;precise float v=av*b[addr(1,uvec4(j,0,0,0))];
+   precise float product=v*c[addr(2,uvec4(j+(off+1)*p.dims[0],0,0,0))];
+   precise float sum=v+product;outv=sum+c[addr(2,uvec4(j+off*p.dims[0],0,0,0))];
+  }else if(p.kind==4){precise float product=b[addr(1,ix)]*c[addr(2,uvec4(j,0,0,0))];outv=av+product;
+  }else if(p.kind==6){outv=av+b[addr(1,ix)];
+  }else{float delta;if(j<p.bdim){delta=b[addr(1,ix)];}else if(j<p.bdim+p.cdim){ix.x-=p.bdim;delta=c[addr(2,ix)];}else{ix.x-=p.bdim+p.cdim;delta=e[addr(3,ix)];}outv=av+delta;}
+ }
+ dst[p.offset[4]+i]=outv;
+}

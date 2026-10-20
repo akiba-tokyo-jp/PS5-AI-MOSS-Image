@@ -8,7 +8,7 @@
   "production_runtime_admitted": false,
   "maximum_trial_attempts_per_process": 4,
   "automatic_POST_retries": 0,
-  "latest_results_document": "docs/moss-turbo-memory-options-20261020.md",
+  "latest_results_document": "docs/moss-dit-fusion-20261020.md",
   "sampling": {
     "custom_sigmas": [
       1,
@@ -23,7 +23,12 @@
   "startup_numeric_gates": {
     "original": 14,
     "rank144_turbo": 3,
-    "bounded_upload": true
+    "bounded_upload": true,
+    "DiT_fused_cases": 16,
+    "DiT_fused_compared_values": 125436,
+    "DiT_fused_nonfinite": 0,
+    "DiT_fused_mismatches": 0,
+    "DiT_fused_max_absolute_error": 0
   },
   "tests": [
     {
@@ -83,6 +88,1222 @@
       "owned_Direct_after_generation_bytes": 4749066240,
       "API_peak_cpu_bytes": 11595284480,
       "API_peak_gpu_labelled_bytes": 5968183296
+    },
+    {
+      "id": "dit0-control-256",
+      "model_id": "moss-image-sft",
+      "size": "256x256",
+      "profile": "Turbo4 + bounded upload, F32 rank144, DiT mask0, 10GiB bounded trial",
+      "phase": "first256_including_lazy_load",
+      "observations": 1,
+      "native_generation_seconds": 71.354991,
+      "steps": 4,
+      "cfg_scale": 1,
+      "sampler": "euler",
+      "seed": 20261020,
+      "image": "docs/images/moss-turbo4-upload-256-20261020.png",
+      "PNG_bytes": 178213,
+      "PNG_sha256": "be9e6ebad5da8ee7a4e536a40e905307a2aa24bcced8e86b600af9fa0aaa2ad7",
+      "PNG_bytes_equal_control_and_optimized": true,
+      "PNG_visually_reviewed": true,
+      "GPU_complete_finite_DiT": 4,
+      "Q4_F32_recordings": 672,
+      "Q4_F16_accumulation_recordings": 0,
+      "nonfinite_values": 0,
+      "LoRA_loaded_and_applied_tensors": 504,
+      "physical_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 4858265600,
+      "owned_Direct_after_generation_bytes": 4725997568,
+      "API_peak_cpu_bytes": 11543412736,
+      "API_peak_gpu_labelled_bytes": 4890230784,
+      "DiT_optimization": {
+        "GPU_recordings_kinds1_to8": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "cache_graph_hits": 0,
+        "cache_graph_misses": 0,
+        "event": "moss_dit_optimization_completed",
+        "finite_DiT_outputs": 4,
+        "mask": 0,
+        "nonfinite": 0,
+        "rope_builds": 4,
+        "scale_elisions": 0
+      },
+      "CPU_wall_phase_metrics": {
+        "Direct_pool_log_fsync": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.01345391
+        },
+        "backend_idle_poll_without_logging": {
+          "bytes": 0,
+          "calls": 6149,
+          "invalid_clock_samples": 0,
+          "seconds": 0.005967024
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 6149,
+          "invalid_clock_samples": 0,
+          "seconds": 0.040565495
+        },
+        "controlnet_unused.activation_upload": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_total": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.output_capture_readback": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "dit.activation_upload": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002644195
+        },
+        "dit.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002450945
+        },
+        "dit.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000113299
+        },
+        "dit.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 9.034021391
+        },
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 26.553281729
+        },
+        "dit.output_capture_readback": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.00076144
+        },
+        "dit.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 6,
+          "invalid_clock_samples": 0,
+          "seconds": 9.026315652
+        },
+        "dit.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 13568,
+          "invalid_clock_samples": 0,
+          "seconds": 0.014157975
+        },
+        "dit.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 13568,
+          "invalid_clock_samples": 0,
+          "seconds": 0.017274132
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 2800,
+          "invalid_clock_samples": 0,
+          "seconds": 3.514316611
+        },
+        "dit.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 2800,
+          "invalid_clock_samples": 0,
+          "seconds": 0.048741492
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 17.439387239
+        },
+        "dit.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 12,
+          "invalid_clock_samples": 0,
+          "seconds": 0.009793286
+        },
+        "engine_structured_log": {
+          "bytes": 0,
+          "calls": 127,
+          "invalid_clock_samples": 0,
+          "seconds": 0.115956856
+        },
+        "other_runners.activation_upload": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0003201
+        },
+        "other_runners.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000466519
+        },
+        "other_runners.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 5.2522e-05
+        },
+        "other_runners.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 15.344913097
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 38.8286197
+        },
+        "other_runners.output_capture_readback": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000684063
+        },
+        "other_runners.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 26,
+          "invalid_clock_samples": 0,
+          "seconds": 0.692462129
+        },
+        "other_runners.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 392,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000452164
+        },
+        "other_runners.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 392,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000620156
+        },
+        "other_runners.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 195,
+          "invalid_clock_samples": 0,
+          "seconds": 0.12673866
+        },
+        "other_runners.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 195,
+          "invalid_clock_samples": 0,
+          "seconds": 0.00356977
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 23.467997638
+        },
+        "other_runners.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 6,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002398507
+        },
+        "startup_log_fsync": {
+          "bytes": 0,
+          "calls": 60,
+          "invalid_clock_samples": 0,
+          "seconds": 0.089586122
+        },
+        "startup_stderr_mirror": {
+          "bytes": 8729,
+          "calls": 57,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000193646
+        },
+        "weight_tensor_copy_set": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "weight_transfer_explicit_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        }
+      },
+      "actual_SELF_sha256": "b497b3edc69f615bc640810033926eb0b562d606267905aae61ce0c66b2f6bd7",
+      "actual_fresh75_core_sha256": "fe7c1f85a60d38d375c24d22064f00003fa99d266f84d1d29bd6a97317f2bad6"
+    },
+    {
+      "id": "dit0-control-1024",
+      "model_id": "moss-image-sft",
+      "size": "1024x1024",
+      "profile": "Turbo4 + bounded upload, F32 rank144, DiT mask0, 10GiB bounded trial",
+      "phase": "first1024_after_same_prompt256_same_process",
+      "observations": 1,
+      "native_generation_seconds": 51.146425,
+      "steps": 4,
+      "cfg_scale": 1,
+      "sampler": "euler",
+      "seed": 20261020,
+      "image": "docs/images/moss-turbo4-upload-1024-20261020.png",
+      "PNG_bytes": 2133928,
+      "PNG_sha256": "9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a",
+      "PNG_bytes_equal_control_and_optimized": true,
+      "PNG_visually_reviewed": true,
+      "GPU_complete_finite_DiT": 4,
+      "Q4_F32_recordings": 672,
+      "Q4_F16_accumulation_recordings": 0,
+      "nonfinite_values": 0,
+      "LoRA_loaded_and_applied_tensors": 504,
+      "physical_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 5934579712,
+      "owned_Direct_after_generation_bytes": 4749066240,
+      "API_peak_cpu_bytes": 11578556416,
+      "API_peak_gpu_labelled_bytes": 5968183296,
+      "DiT_optimization": {
+        "GPU_recordings_kinds1_to8": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "cache_graph_hits": 0,
+        "cache_graph_misses": 0,
+        "event": "moss_dit_optimization_completed",
+        "finite_DiT_outputs": 4,
+        "mask": 0,
+        "nonfinite": 0,
+        "rope_builds": 4,
+        "scale_elisions": 0
+      },
+      "CPU_wall_phase_metrics": {
+        "Direct_pool_log_fsync": {
+          "bytes": 0,
+          "calls": 5,
+          "invalid_clock_samples": 0,
+          "seconds": 0.007816314
+        },
+        "backend_idle_poll_without_logging": {
+          "bytes": 0,
+          "calls": 11456,
+          "invalid_clock_samples": 0,
+          "seconds": 0.011079038
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 11456,
+          "invalid_clock_samples": 0,
+          "seconds": 0.049030903
+        },
+        "controlnet_unused.activation_upload": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_total": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.output_capture_readback": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "dit.activation_upload": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.004115678
+        },
+        "dit.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002332353
+        },
+        "dit.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000186754
+        },
+        "dit.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 44.447537767
+        },
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 44.557450087
+        },
+        "dit.output_capture_readback": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002209509
+        },
+        "dit.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 6,
+          "invalid_clock_samples": 0,
+          "seconds": 44.438885919
+        },
+        "dit.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 12556,
+          "invalid_clock_samples": 0,
+          "seconds": 0.013142493
+        },
+        "dit.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 12556,
+          "invalid_clock_samples": 0,
+          "seconds": 0.01630558
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 2916,
+          "invalid_clock_samples": 0,
+          "seconds": 43.56786843
+        },
+        "dit.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 2916,
+          "invalid_clock_samples": 0,
+          "seconds": 0.051108932
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002426172
+        },
+        "dit.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 12,
+          "invalid_clock_samples": 0,
+          "seconds": 0.012133338
+        },
+        "engine_structured_log": {
+          "bytes": 0,
+          "calls": 234,
+          "invalid_clock_samples": 0,
+          "seconds": 0.246844403
+        },
+        "other_runners.activation_upload": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002489358
+        },
+        "other_runners.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 98,
+          "invalid_clock_samples": 0,
+          "seconds": 0.005331199
+        },
+        "other_runners.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 98,
+          "invalid_clock_samples": 0,
+          "seconds": 0.001721984
+        },
+        "other_runners.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 5.706390658
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 5.985294234
+        },
+        "other_runners.output_capture_readback": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.012137423
+        },
+        "other_runners.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 50,
+          "invalid_clock_samples": 0,
+          "seconds": 5.690403931
+        },
+        "other_runners.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 10976,
+          "invalid_clock_samples": 0,
+          "seconds": 0.011555346
+        },
+        "other_runners.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 10976,
+          "invalid_clock_samples": 0,
+          "seconds": 0.014695171
+        },
+        "other_runners.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 2655,
+          "invalid_clock_samples": 0,
+          "seconds": 5.549675808
+        },
+        "other_runners.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 2655,
+          "invalid_clock_samples": 0,
+          "seconds": 0.04533583
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.005022818
+        },
+        "other_runners.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 147,
+          "invalid_clock_samples": 0,
+          "seconds": 0.007633087
+        },
+        "startup_log_fsync": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.011146493
+        },
+        "startup_stderr_mirror": {
+          "bytes": 1320,
+          "calls": 7,
+          "invalid_clock_samples": 0,
+          "seconds": 2.5337e-05
+        },
+        "weight_tensor_copy_set": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "weight_transfer_explicit_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        }
+      },
+      "actual_SELF_sha256": "b497b3edc69f615bc640810033926eb0b562d606267905aae61ce0c66b2f6bd7",
+      "actual_fresh75_core_sha256": "fe7c1f85a60d38d375c24d22064f00003fa99d266f84d1d29bd6a97317f2bad6"
+    },
+    {
+      "id": "dit15-optimized-256",
+      "model_id": "moss-image-sft",
+      "size": "256x256",
+      "profile": "Turbo4 + bounded upload, F32 rank144, DiT mask15, 10GiB bounded trial",
+      "phase": "first256_including_lazy_load",
+      "observations": 1,
+      "native_generation_seconds": 69.275742,
+      "steps": 4,
+      "cfg_scale": 1,
+      "sampler": "euler",
+      "seed": 20261020,
+      "image": "docs/images/moss-turbo4-upload-256-20261020.png",
+      "PNG_bytes": 178213,
+      "PNG_sha256": "be9e6ebad5da8ee7a4e536a40e905307a2aa24bcced8e86b600af9fa0aaa2ad7",
+      "PNG_bytes_equal_control_and_optimized": true,
+      "PNG_visually_reviewed": true,
+      "GPU_complete_finite_DiT": 4,
+      "Q4_F32_recordings": 672,
+      "Q4_F16_accumulation_recordings": 0,
+      "nonfinite_values": 0,
+      "LoRA_loaded_and_applied_tensors": 504,
+      "physical_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 4858265600,
+      "owned_Direct_after_generation_bytes": 4725997568,
+      "API_peak_cpu_bytes": 11505483776,
+      "API_peak_gpu_labelled_bytes": 4885856256,
+      "DiT_optimization": {
+        "GPU_recordings_kinds1_to8": [
+          170,
+          168,
+          168,
+          336,
+          340,
+          504,
+          0,
+          168
+        ],
+        "cache_graph_hits": 3,
+        "cache_graph_misses": 1,
+        "event": "moss_dit_optimization_completed",
+        "finite_DiT_outputs": 4,
+        "mask": 15,
+        "nonfinite": 0,
+        "rope_builds": 1,
+        "scale_elisions": 1008
+      },
+      "CPU_wall_phase_metrics": {
+        "Direct_pool_log_fsync": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.016980546
+        },
+        "backend_idle_poll_without_logging": {
+          "bytes": 0,
+          "calls": 3987,
+          "invalid_clock_samples": 0,
+          "seconds": 0.00385887
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 3987,
+          "invalid_clock_samples": 0,
+          "seconds": 0.029643353
+        },
+        "controlnet_unused.activation_upload": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_total": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.output_capture_readback": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "dit.activation_upload": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.001332442
+        },
+        "dit.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.001752054
+        },
+        "dit.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000114746
+        },
+        "dit.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 6.948164297
+        },
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 24.484727042
+        },
+        "dit.output_capture_readback": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.016110934
+        },
+        "dit.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 6,
+          "invalid_clock_samples": 0,
+          "seconds": 6.941939582
+        },
+        "dit.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 8244,
+          "invalid_clock_samples": 0,
+          "seconds": 0.008670502
+        },
+        "dit.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 8244,
+          "invalid_clock_samples": 0,
+          "seconds": 0.010646939
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 1711,
+          "invalid_clock_samples": 0,
+          "seconds": 3.13018883
+        },
+        "dit.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 1711,
+          "invalid_clock_samples": 0,
+          "seconds": 0.03002022
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 17.449601017
+        },
+        "dit.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 12,
+          "invalid_clock_samples": 0,
+          "seconds": 0.009439746
+        },
+        "engine_structured_log": {
+          "bytes": 0,
+          "calls": 128,
+          "invalid_clock_samples": 0,
+          "seconds": 0.118818347
+        },
+        "other_runners.activation_upload": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000306308
+        },
+        "other_runners.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000434686
+        },
+        "other_runners.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 3.4479e-05
+        },
+        "other_runners.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 15.388714784
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 38.872705243
+        },
+        "other_runners.output_capture_readback": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000694727
+        },
+        "other_runners.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 26,
+          "invalid_clock_samples": 0,
+          "seconds": 0.686222018
+        },
+        "other_runners.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 392,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000451525
+        },
+        "other_runners.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 392,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000630978
+        },
+        "other_runners.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 197,
+          "invalid_clock_samples": 0,
+          "seconds": 0.128074236
+        },
+        "other_runners.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 197,
+          "invalid_clock_samples": 0,
+          "seconds": 0.003614516
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 23.46821943
+        },
+        "other_runners.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 6,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002394577
+        },
+        "startup_log_fsync": {
+          "bytes": 0,
+          "calls": 56,
+          "invalid_clock_samples": 0,
+          "seconds": 0.084408463
+        },
+        "startup_stderr_mirror": {
+          "bytes": 8143,
+          "calls": 53,
+          "invalid_clock_samples": 0,
+          "seconds": 0.00018138
+        },
+        "weight_tensor_copy_set": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "weight_transfer_explicit_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        }
+      },
+      "actual_SELF_sha256": "66015a326606bde03773b3db3e48a6d59cb9875516b1228b77dcd217bb943dd0",
+      "actual_fresh75_core_sha256": "fe7c1f85a60d38d375c24d22064f00003fa99d266f84d1d29bd6a97317f2bad6"
+    },
+    {
+      "id": "dit15-optimized-1024",
+      "model_id": "moss-image-sft",
+      "size": "1024x1024",
+      "profile": "Turbo4 + bounded upload, F32 rank144, DiT mask15, 10GiB bounded trial",
+      "phase": "first1024_after_same_prompt256_same_process",
+      "observations": 1,
+      "native_generation_seconds": 47.760891,
+      "steps": 4,
+      "cfg_scale": 1,
+      "sampler": "euler",
+      "seed": 20261020,
+      "image": "docs/images/moss-turbo4-upload-1024-20261020.png",
+      "PNG_bytes": 2133928,
+      "PNG_sha256": "9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a",
+      "PNG_bytes_equal_control_and_optimized": true,
+      "PNG_visually_reviewed": true,
+      "GPU_complete_finite_DiT": 4,
+      "Q4_F32_recordings": 672,
+      "Q4_F16_accumulation_recordings": 0,
+      "nonfinite_values": 0,
+      "LoRA_loaded_and_applied_tensors": 504,
+      "physical_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 6107971584,
+      "owned_Direct_after_generation_bytes": 4749066240,
+      "API_peak_cpu_bytes": 11540660224,
+      "API_peak_gpu_labelled_bytes": 6137233408,
+      "DiT_optimization": {
+        "GPU_recordings_kinds1_to8": [
+          170,
+          168,
+          168,
+          336,
+          340,
+          504,
+          0,
+          168
+        ],
+        "cache_graph_hits": 3,
+        "cache_graph_misses": 1,
+        "event": "moss_dit_optimization_completed",
+        "finite_DiT_outputs": 4,
+        "mask": 15,
+        "nonfinite": 0,
+        "rope_builds": 1,
+        "scale_elisions": 1008
+      },
+      "CPU_wall_phase_metrics": {
+        "Direct_pool_log_fsync": {
+          "bytes": 0,
+          "calls": 5,
+          "invalid_clock_samples": 0,
+          "seconds": 0.008172419
+        },
+        "backend_idle_poll_without_logging": {
+          "bytes": 0,
+          "calls": 9369,
+          "invalid_clock_samples": 0,
+          "seconds": 0.008998536
+        },
+        "backend_quiescence_call_including_logging": {
+          "bytes": 0,
+          "calls": 9369,
+          "invalid_clock_samples": 0,
+          "seconds": 0.040651242
+        },
+        "controlnet_unused.activation_upload": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.graph_total": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.output_capture_readback": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "controlnet_unused.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "dit.activation_upload": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002303245
+        },
+        "dit.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002691904
+        },
+        "dit.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.000126211
+        },
+        "dit.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 41.105778602
+        },
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 41.207966343
+        },
+        "dit.output_capture_readback": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.016635348
+        },
+        "dit.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 6,
+          "invalid_clock_samples": 0,
+          "seconds": 41.09928615
+        },
+        "dit.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 7232,
+          "invalid_clock_samples": 0,
+          "seconds": 0.007714922
+        },
+        "dit.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 7232,
+          "invalid_clock_samples": 0,
+          "seconds": 0.009699533
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 1867,
+          "invalid_clock_samples": 0,
+          "seconds": 40.322957294
+        },
+        "dit.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 1867,
+          "invalid_clock_samples": 0,
+          "seconds": 0.033346792
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002290817
+        },
+        "dit.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 12,
+          "invalid_clock_samples": 0,
+          "seconds": 0.01026951
+        },
+        "engine_structured_log": {
+          "bytes": 0,
+          "calls": 235,
+          "invalid_clock_samples": 0,
+          "seconds": 0.235857472
+        },
+        "other_runners.activation_upload": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002626395
+        },
+        "other_runners.cleanup_including_wait": {
+          "bytes": 0,
+          "calls": 98,
+          "invalid_clock_samples": 0,
+          "seconds": 0.016220065
+        },
+        "other_runners.explicit_workspace_wait": {
+          "bytes": 0,
+          "calls": 98,
+          "invalid_clock_samples": 0,
+          "seconds": 0.001284255
+        },
+        "other_runners.graph_call_including_internal_wait": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 5.717616137
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 5.99466719
+        },
+        "other_runners.output_capture_readback": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.012288499
+        },
+        "other_runners.vulkan_backend_graph_call": {
+          "bytes": 0,
+          "calls": 50,
+          "invalid_clock_samples": 0,
+          "seconds": 5.706282486
+        },
+        "other_runners.vulkan_bind_pipeline_record_call": {
+          "bytes": 0,
+          "calls": 10976,
+          "invalid_clock_samples": 0,
+          "seconds": 0.011588409
+        },
+        "other_runners.vulkan_dispatch_record_call": {
+          "bytes": 0,
+          "calls": 10976,
+          "invalid_clock_samples": 0,
+          "seconds": 0.014743351
+        },
+        "other_runners.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 2657,
+          "invalid_clock_samples": 0,
+          "seconds": 5.565748904
+        },
+        "other_runners.vulkan_submit_driver_call": {
+          "bytes": 0,
+          "calls": 2657,
+          "invalid_clock_samples": 0,
+          "seconds": 0.045072319
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.005122321
+        },
+        "other_runners.workspace_prepare_allocate": {
+          "bytes": 0,
+          "calls": 147,
+          "invalid_clock_samples": 0,
+          "seconds": 0.008317151
+        },
+        "startup_log_fsync": {
+          "bytes": 0,
+          "calls": 8,
+          "invalid_clock_samples": 0,
+          "seconds": 0.011229968
+        },
+        "startup_stderr_mirror": {
+          "bytes": 1320,
+          "calls": 7,
+          "invalid_clock_samples": 0,
+          "seconds": 2.4377e-05
+        },
+        "weight_tensor_copy_set": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        },
+        "weight_transfer_explicit_wait": {
+          "bytes": 0,
+          "calls": 0,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0
+        }
+      },
+      "actual_SELF_sha256": "66015a326606bde03773b3db3e48a6d59cb9875516b1228b77dcd217bb943dd0",
+      "actual_fresh75_core_sha256": "fe7c1f85a60d38d375c24d22064f00003fa99d266f84d1d29bd6a97317f2bad6"
     }
   ],
   "normal_API_shutdown_and_independent_idle_observation": true,
@@ -92,5 +1313,7 @@
     "Physical shared memory, process RSS, GPU-labelled API peaks and owned Direct live usage overlap; do not add them.",
     "Public documentation, schema and diagnostic wording were updated after the recorded executable builds; the source inventory is not an executable-build receipt.",
     "Arbitrary-prompt operating mode and8GiB inference are not validated or included."
-  ]
+  ],
+  "selected_DiT_optimization_mask": 15,
+  "DiT_comparison_scope": "Same core, each size/config once; exact canonical prompt/sampling/adapter; CPU wall phases overlap; temperature and clocks not controlled"
 }

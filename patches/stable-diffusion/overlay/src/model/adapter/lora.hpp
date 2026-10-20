@@ -12,6 +12,7 @@
 #include "model_loader.h"
 #include "model_manager.h"
 #include "moss_lora_contract.hpp"
+#include "model/diffusion/moss_dit_ops.hpp"
 
 /* The native application records graph binding separately from GPU-completion
  * witnesses. A missing receipt provider refuses this selected MOSS adapter. */
@@ -628,7 +629,10 @@ struct LoraModel : public GGMLRunner {
                               ggml_tensor* x,
                               ggml_tensor* model_weight,
                               WeightAdapter::ForwardParams forward_params,
-                              const std::string& model_tensor_name) {
+                              const std::string& model_tensor_name,ggml_tensor* base_output=nullptr,bool* fused_output=nullptr) {
+        if(fused_output)*fused_output=false;
+        std::vector<ggml_tensor*> independent_parts;
+        const bool fuse=moss_dit_opt::enabled(8)&&base_output&&fused_output&&forward_params.op_type==WeightAdapter::ForwardParams::op_type_t::OP_LINEAR&&forward_params.linear.force_prec_f32&&model_weight->type==GGML_TYPE_Q4_K;
         ggml_tensor* out_diff = nullptr;
         int index             = 0;
 
@@ -901,7 +905,12 @@ struct LoraModel : public GGMLRunner {
                                       forward_params.conv2d.scale);
             }
 
-            auto curr_out_diff = ggml_ext_scale(ctx, lx, scale_value, true);
+            ggml_tensor* curr_out_diff;
+            if(fuse&&scale_value==1.f){
+                curr_out_diff=(lx->nb[0]==ggml_type_size(lx->type)&&lx->nb[2]==lx->nb[1]*lx->ne[1]&&lx->nb[3]==lx->nb[2]*lx->ne[2])?lx:ggml_cont(ctx,lx);
+                ++moss_dit_opt::scale_elisions;
+            }else curr_out_diff=ggml_ext_scale(ctx,lx,scale_value,true);
+            independent_parts.push_back(curr_out_diff);
             if (out_diff == nullptr) {
                 out_diff = curr_out_diff;
             } else {
@@ -941,6 +950,16 @@ struct LoraModel : public GGMLRunner {
             applied_lora_tensors.insert(name);
         }
 
+        if(fuse&&!independent_parts.empty()&&independent_parts.size()<=3){
+            int64_t width=0;bool fits=base_output->type==GGML_TYPE_F32&&base_output->ne[2]==1&&base_output->ne[3]==1;
+            for(auto* t:independent_parts){width+=t->ne[0];fits=fits&&t->type==GGML_TYPE_F32&&t->ne[1]==base_output->ne[1]&&t->ne[2]==1&&t->ne[3]==1;}
+            fits=fits&&width==base_output->ne[0];
+            if(fits){
+                auto* a=independent_parts[0];auto* b=independent_parts.size()>1?independent_parts[1]:a;auto* c=independent_parts.size()>2?independent_parts[2]:nullptr;
+                auto* result=moss_dit_opt::make(ctx,unsigned(moss_dit_opt::LORA_ADD1)+unsigned(independent_parts.size())-1,base_output,a,b,c,backend);
+                *fused_output=true;return result;
+            }
+        }
         return out_diff;
     }
 
@@ -1111,11 +1130,12 @@ public:
                                    forward_params.conv2d.scale);
         }
         for (auto& lora_model : lora_models) {
-            ggml_tensor* out_diff = lora_model->get_out_diff(ctx, backend, x, w, forward_params, prefix + "weight");
+            bool fused=false;
+            ggml_tensor* out_diff = lora_model->get_out_diff(ctx, backend, x, w, forward_params, prefix + "weight",out,&fused);
             if (out_diff == nullptr) {
                 continue;
             }
-            out = ggml_add_inplace(ctx, out, out_diff);
+            out = fused?out_diff:ggml_add_inplace(ctx, out, out_diff);
         }
         return out;
     }
@@ -1140,9 +1160,10 @@ public:
                 output                = ggml_add_inplace(ctx, output, out_diff);
             }
 
-            ggml_tensor* out_diff = lora_model->get_out_diff(ctx, backend, x, w, forward_params, prefix + "weight");
+            bool fused=false;
+            ggml_tensor* out_diff = lora_model->get_out_diff(ctx, backend, x, w, forward_params, prefix + "weight",output,&fused);
             if (out_diff != nullptr) {
-                output = ggml_add_inplace(ctx, output, out_diff);
+                output = fused?out_diff:ggml_add_inplace(ctx, output, out_diff);
             }
         }
         return output;

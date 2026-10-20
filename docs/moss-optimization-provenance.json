@@ -52,5 +52,34 @@
     "implementation": "New callback-based raw same-format GGML upload helper, preserving existing ownership/cache/fence path",
     "CUDA_HIP_or_MoE_cache_code_imported": false,
     "notice": "licenses/Strata-MIT.txt"
+  },
+  "vLLM_Omni_MOSS_reference": {
+    "repository": "https://github.com/vllm-project/vllm-omni",
+    "revision": "942a5daa6c094615812ed89749ef07da96b8edab",
+    "license": "Apache-2.0",
+    "reference_files": [
+      "vllm_omni/diffusion/models/mossimage/ops.py",
+      "vllm_omni/diffusion/models/mossimage/mossimage_transformer.py"
+    ],
+    "role": "Design/test reference for exact per-generation invariants and F32 pointwise fusion",
+    "upstream_code_imported": false,
+    "implementation": [
+      "patches/stable-diffusion/overlay/src/model/diffusion/moss_dit_ops.hpp",
+      "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp"
+    ],
+    "KohakuMossTrainer_code_imported": false,
+    "Nunchaku_code_imported": false
+  },
+  "MOSS_F32_fused_shader": {
+    "source": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp",
+    "source_sha256": "81c880368804dd06d3cd29c612e6095a4a28a12f8f5be5a21dda7e2ac0e2d8ce",
+    "module_SHA256": "b19488806e5c83abcfe2fa3929cff369b3c702fc484aa52b18fcf92b6b1b0daa",
+    "module_bytes": 9896,
+    "glslc_flags": [
+      "--target-env=vulkan1.1",
+      "-O"
+    ],
+    "spirv_val": true,
+    "embedded_header_recompiled_byte_equal": true
   }
 }

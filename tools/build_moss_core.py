@@ -1,3 +1,4 @@
+from moss_dit_policy import flags as dit_flags, fields as dit_fields, validate as validate_dit
 from moss_lora_precision_policy import flags as lora_precision_flags, fields as lora_precision_fields, contract as lora_precision_contract, validate as validate_lora_precision, validate_core as validate_core_lora_precision
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Fresh 75-member PS5 SD core build; host-only, no weights, deployment or inference.
@@ -61,7 +62,8 @@ def moss_accumulation_compile_flag(enabled):
     return "-DPS5_AI_MOSS_F32_ACCUMULATION="+str(int(enabled))
 
 
-def materialize_compile_commands(rows,expand,moss_f32_accumulation=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False,moss_ffn_token_chunk_trial=False,moss_ffn_chunk_tokens=0,moss_lora_storage=None):
+def materialize_compile_commands(rows,expand,moss_f32_accumulation=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False,moss_ffn_token_chunk_trial=False,moss_ffn_chunk_tokens=0,moss_lora_storage=None,moss_dit_optimizations=False):
+    validate_dit(moss_dit_optimizations,accumulation=moss_f32_accumulation,turbo=moss_turbo_trial,upload=moss_bounded_weight_upload_trial,spectrum=moss_spectrum_trial,ffn=moss_ffn_token_chunk_trial,lora=moss_lora_storage)
     flag=moss_accumulation_compile_flag(moss_f32_accumulation)
     features=feature_compile_flags(moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial)
     validate_ffn_parent(moss_ffn_token_chunk_trial,moss_ffn_chunk_tokens,spectrum=moss_spectrum_trial,bounded_upload=moss_bounded_weight_upload_trial,turbo=moss_turbo_trial,accumulation=moss_f32_accumulation)
@@ -73,9 +75,9 @@ def materialize_compile_commands(rows,expand,moss_f32_accumulation=False,moss_sp
     if (moss_spectrum_trial or moss_bounded_weight_upload_trial or moss_turbo_trial) and not moss_f32_accumulation:
         raise ValueError('Isolated feature core requires explicit F32 accumulation')
     for row in rows:
-        if any(any(m in arg for m in ("PS5_AI_MOSS_F32_ACCUMULATION","PS5_AI_MOSS_SPECTRUM_TRIAL","PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL","PS5_AI_MOSS_TURBO_TRIAL","PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL","PS5_AI_MOSS_FFN_CHUNK_TOKENS","PS5_AI_MOSS_LORA_")) for arg in row["argv"]):
+        if any(any(m in arg for m in ("PS5_AI_MOSS_F32_ACCUMULATION","PS5_AI_MOSS_SPECTRUM_TRIAL","PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL","PS5_AI_MOSS_TURBO_TRIAL","PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL","PS5_AI_MOSS_FFN_CHUNK_TOKENS","PS5_AI_MOSS_LORA_","PS5_AI_MOSS_DIT_")) for arg in row["argv"]):
             raise ValueError("Core recipe must not override the explicit accumulation policy")
-    return [[expand(row["argv"][0]),flag,*features,*ffn,*lora,*[expand(arg) for arg in row["argv"][1:]]] for row in rows]
+    return [[expand(row["argv"][0]),flag,*features,*ffn,*lora,*dit_flags(moss_dit_optimizations),*[expand(arg) for arg in row["argv"][1:]]] for row in rows]
 
 
 def validate_profile(profile):
@@ -194,6 +196,7 @@ def main():
     parser.add_argument('--moss-ffn-token-chunk-trial',action='store_true')
     parser.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0)
     parser.add_argument('--moss-lora-storage',choices=('f32','f16'))
+    parser.add_argument('--moss-dit-optimizations',action='store_true')
     args = parser.parse_args()
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     rows = validate_profile(profile)
@@ -218,7 +221,7 @@ def main():
     replacements = {"ROOT": ROOT.as_posix(), "SD": sd.as_posix(), "SDK": sdk.as_posix(), "LLVM": llvm.as_posix(), "OUT": out.as_posix()}
     def expand(arg):
         return re.sub(r"\$\{([^}]+)\}", lambda match: replacements[match[1]], arg)
-    commands = materialize_compile_commands(rows,expand,args.moss_f32_accumulation,args.moss_spectrum_trial,args.moss_bounded_weight_upload_trial,args.moss_turbo_trial,args.moss_ffn_token_chunk_trial,args.moss_ffn_chunk_tokens,args.moss_lora_storage)
+    commands = materialize_compile_commands(rows,expand,args.moss_f32_accumulation,args.moss_spectrum_trial,args.moss_bounded_weight_upload_trial,args.moss_turbo_trial,args.moss_ffn_token_chunk_trial,args.moss_ffn_chunk_tokens,args.moss_lora_storage,args.moss_dit_optimizations)
     for row, command in zip(rows, commands):
         source = Path(expand(row["source"])).resolve(strict=True)
         if not inside(source, sd) or source.drive.upper() != "D:":
@@ -236,9 +239,11 @@ def main():
     manifest.update({"moss_f32_accumulation":args.moss_f32_accumulation,
         "moss_accumulation_policy":"force_f32" if args.moss_f32_accumulation else "model_default",
         "moss_accumulation_compile_flag":moss_accumulation_compile_flag(args.moss_f32_accumulation)})
+    manifest.update(dit_fields(args.moss_dit_optimizations))
     manifest.update(feature_manifest_fields(args.moss_spectrum_trial,args.moss_bounded_weight_upload_trial,args.moss_turbo_trial))
     manifest.update(ffn_manifest_fields(args.moss_ffn_token_chunk_trial,args.moss_ffn_chunk_tokens))
     manifest['policy_inputs']=[record(ROOT/'tools/moss_feature_policy.py')]
+    manifest['dit_policy_input']=record(ROOT/'tools/moss_dit_policy.py')
     manifest.update(lora_precision_fields(args.moss_lora_storage,core=True))
     manifest['lora_precision_policy_inputs']=[record(ROOT/'tools/moss_lora_precision_policy.py')]
     target_manifest = out / "manifest.private.json"
@@ -264,6 +269,8 @@ def main():
     for key,value in lora_precision_fields(args.moss_lora_storage,core=True).items():
         if (args.moss_lora_storage is not None or key in freeze) and (type(freeze.get(key))is not type(value) or freeze[key]!=value):
             raise ValueError('Source-freeze private LoRA precision identity mismatch: '+key)
+    for key,value in dit_fields(args.moss_dit_optimizations).items():
+        if (args.moss_dit_optimizations or key in freeze) and (type(freeze.get(key))is not type(value)or freeze[key]!=value):raise ValueError('DiT source-freeze policy mismatch: '+key)
     frozen_inputs = []
     for relative, expected in freeze["sources"].items():
         path = (ROOT / relative).resolve(strict=True)
@@ -318,6 +325,7 @@ def main():
         after_overlay = [record(row["path"]) for row in manifest["overlay_inputs"]]
         if after_sources != manifest["sources"] or after_headers != manifest["header_inputs"] or after_overlay != manifest["overlay_inputs"] or record(PROFILE) != manifest["profile"] or record(__file__) != manifest["builder"] or record(args.source_freeze) != manifest["source_freeze"] or [record(item["path"]) for item in frozen_inputs] != frozen_inputs or [record(item["path"]) for item in manifest["tool_inputs"]] != manifest["tool_inputs"] or [record(item["path"]) for item in manifest["policy_inputs"]] != manifest["policy_inputs"] or [record(item['path']) for item in manifest['lora_precision_policy_inputs']] != manifest['lora_precision_policy_inputs']:
             raise ValueError("Source/header/overlay/profile changed during compilation; archive not admitted")
+        if record(manifest["dit_policy_input"]["path"])!=manifest["dit_policy_input"]:raise ValueError("DiT policy changed during compilation")
         manifest["hash_inputs_stable"] = True
         archive = out / "libstable-diffusion.moss-core.a"
         archive_command = [str(llvm / "llvm-ar.exe"), "rcsD", str(archive), *[row["path"] for row in manifest["members"]]]

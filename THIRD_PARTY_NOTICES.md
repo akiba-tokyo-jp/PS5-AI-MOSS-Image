@@ -10,6 +10,7 @@ This is a source publication, not a distribution of Sony SDKs, firmware, model w
 | MOSS latent Spectrum adapter | Existing SD.cpp `runtime/spectrum.hpp` route, plus bounded state, finite checks, strict scheduling and PS5 completion receipts added 2026-10-20 | Original MIT notices retained; new `moss_spectrum.hpp` is GPL-3.0-only |
 | ComfyUI-Spectrum-MOSS | Rkkss, commit `3fde0674b29342565e7f42a0674af48d65aabc4a`; pinned method/reference, not the compiled ComfyUI hidden-state implementation | GPL-3.0-only; see `licenses/ComfyUI-Spectrum-MOSS-GPL-3.0-only.txt` |
 | Strata | Niko1221 and contributors, commit `e88ee39d1d6be6e3364183af3b39b62a7ed6f211`; bounded staging design reference for a new same-format GGML upload adapter, without CUDA/HIP code | MIT; see `licenses/Strata-MIT.txt` |
+| vLLM-Omni MOSS | Revision 942a5daa6c094615812ed89749ef07da96b8edab; per-request text/RoPE cache and pointwise fusion design/test reference. New F32 GGML/GLSL implementation; upstream CUDA/Triton code not imported | Apache-2.0 reference; new files retain their own notices |
 | GGML | ggml contributors; tensor CPU/Vulkan execution | MIT; modifications forming part of the integrated GPL application retain original notices |
 | PS5_Vulkan | Mihawk-99, BlackBearReloaded and contributors; native startup, tools, PS5 GPU reference | GPL-3.0-or-later, file-specific notices |
 | PS5_Mesa / Mesa | RADV, NIR, ACO, Vulkan runtime | Predominantly MIT; individual files / bundled licenses govern |

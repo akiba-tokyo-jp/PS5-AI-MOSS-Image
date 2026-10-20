@@ -1,18 +1,19 @@
 # MOSS Imageの検証状態
 
-2026-10-20。最新の検証済み速度基準は**Turbo4＋bounded upload、F32 LoRA**です。256初回モデル読込込み71.377746秒、同じプロセスでの256後1024初回51.092988秒でした。両PNGは先行Turbo4版と全バイト一致し、PNGを目視確認しました。各1回の観測で、統計的な速度差・長期安定性や全promptの品質を証明しません。
+2026-10-20。最新の検証済み速度基準は**Turbo4＋bounded upload＋DiT不変計算再利用・F32融合**です。256初回モデル読込込み69.275742秒、同じプロセスでの256後1024初回47.760891秒でした。同じcoreの最適化なし71.354991／51.146425秒と比較し、1024は約6.62%短縮しました。両PNGは先行Turbo4版と全バイト一致し、PNGを目視確認しました。各1回の観測で、統計的な速度差・長期安定性や全promptの品質を証明しません。
 
 ## 採用判断と任意実験
 
 | 経路 | 現在の扱い | 実機で確認した範囲 |
 |---|---|---|
-| F32 Turbo4＋bounded upload | 最新の速度比較基準 | 256→1024各1枚、4 DiT／672 Q4 F32／LoRA504、既存14＋Turbo3＋uploadゲート |
-| FFN chunk2048 | 速度基準ではOFF | 1024が55.195208秒、基準より約8%増。workspace高水位は低下 |
+| DiT text/RoPE再利用＋SiTU/norm/residual/QK/LoRA融合 | 最新の限定trial速度基準、明示mask15 | 69.275742／47.760891秒、対照版とPNG完全一致。既存ゲート＋融合16ケース、4 DiT／672 Q4 F32／LoRA504 |
+| F32 Turbo4＋bounded upload | 従来の速度比較基準 | 256→1024各1枚、4 DiT／672 Q4 F32／LoRA504、既存14＋Turbo3＋uploadゲート |
+| FFN chunk2048 | 速度基準ではOFF | 1024が55.195208秒、前段基準より約8%増。workspace高水位は低下 |
 | F16 LoRA storage＋専用F32 shared演算 | default-OFFの任意試験 | 68.897951／51.884730秒、専用8ゲート、LoRA private記録2016。owned Direct使用量637.875MiB低下、warm高速化は未確認 |
 | 任意promptの通常運用版 | 公開対象から除外 | 8GiB起動時の物理確保は確認したが、初回要求が保存領域チェックのHTTP507でジョブ登録前に拒否。画像生成は未実施 |
 | 30-step res_multistep／Spectrum | 別のsampling試験 | 256→1024各1枚。sampling／forecast変更を含み、Turbo4や基準と同画質比較ではない |
 
-最新の全比較表とメモリの定義は[Turbo4メモリ比較](moss-turbo-memory-options-20261020.md)にまとめています。公開版は確認済みの限定trialを対象とし、通常運用の完成や長時間安定性は主張しません。通常運用試作はファイル所有者情報・ディスク空き容量・相対path処理のnative互換性に不整合が見つかったため、検証済みの構成から分離しました。既存画像は削除せず、試作アプリとgatewayは通常APIで終了し、別の確認でprocess不在と既存サービス維持を確かめました。
+最新のDiT比較・メモリ増加・検証範囲は[DiT最適化](moss-dit-fusion-20261020.md)、前段の構成比較は[Turbo4メモリ比較](moss-turbo-memory-options-20261020.md)にまとめています。公開版は確認済みの限定trialを対象とし、通常運用の完成や長時間安定性は主張しません。通常運用試作はファイル所有者情報・ディスク空き容量・相対path処理のnative互換性に不整合が見つかったため、検証済みの構成から分離しました。既存画像は削除せず、試作アプリとgatewayは通常APIで終了し、別の確認でprocess不在と既存サービス維持を確かめました。
 
 ## 実装上の境界
 
@@ -38,7 +39,8 @@ bounded uploadはworkerあたり8MiBの一時host stagingを制限します。F1
 
 ## 保存したMOSS検証資料
 
-- [最新Turbo4／メモリ比較](moss-turbo-memory-options-20261020.md)
+- [最新DiT融合・不変計算再利用](moss-dit-fusion-20261020.md)
+- [前段Turbo4／メモリ比較](moss-turbo-memory-options-20261020.md)
 - [先行Turbo4単独試験](moss-turbo4-results-20261020.md)
 - [sampling／Spectrum](moss-sampler-spectrum-memory-20261020.md)
 - [bounded upload](moss-bounded-weight-upload-20261020.md)

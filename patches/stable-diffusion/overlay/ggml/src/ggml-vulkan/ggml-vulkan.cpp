@@ -1,4 +1,19 @@
+#include "../../../src/model/diffusion/moss_dit_ops.hpp"
 #include "ggml-vulkan-common.h"
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+#include "moss_dit_fused_spv.h"
+struct moss_dit_push { uint32_t count,kind,dims[4],stride[16],offset[5],bdim,cdim; };
+static_assert(sizeof(moss_dit_push)==116,"MOSS GLSL ABI");
+// Keep the pinned shared device ABI unchanged. One extra shared_ptr is owned
+// by this device lifetime and destroyed by its existing completed-idle dtor.
+static vk_pipeline* moss_dit_pipeline_ptr=nullptr;
+static VkDevice moss_dit_pipeline_owner{};
+static vk_pipeline& moss_dit_pipeline(const vk_device& device){
+    if(!moss_dit_pipeline_ptr){moss_dit_pipeline_ptr=new vk_pipeline{};moss_dit_pipeline_owner=VkDevice(device->device);}
+    GGML_ASSERT(moss_dit_pipeline_owner==VkDevice(device->device));return *moss_dit_pipeline_ptr;
+}
+#endif
+extern "C" unsigned ps5_ai_moss_dit_capabilities() { return PS5_AI_MOSS_DIT_OPT_TRIAL ? 15u:0u; }
 #include "moss_q4_bk64.h"
 #include "ggml-vulkan-ps5-profile.h"
 #include "phase_profile.h"
@@ -3754,6 +3769,9 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
     ggml_vk_create_pipeline(device, device->pipeline_soft_max_large2_f32_f16, "soft_max_large2_f32_f16", soft_max_large2_f32_f16_len, soft_max_large2_f32_f16_data, "main", 6, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, { 128, 4 }, 1, true);
     ggml_vk_create_pipeline(device, device->pipeline_soft_max_large3_f32_f16, "soft_max_large3_f32_f16", soft_max_large3_f32_f16_len, soft_max_large3_f32_f16_data, "main", 6, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, { 128, 4 }, 1, true);
 
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+    ggml_vk_create_pipeline(device, moss_dit_pipeline(device), "moss_dit_fused_f32", moss_dit_fused_f32_len, moss_dit_fused_f32_data, "main", 5, sizeof(moss_dit_push), {128,1,1}, {}, 1);
+#endif
     ggml_vk_create_pipeline(device, device->pipeline_rope_apply_f32, "rope_apply_f32", rope_apply_f32_len, rope_apply_f32_data, "main", 3, sizeof(vk_op_rope_apply_push_constants), {256, 1, 1}, {}, 1);
 
     ggml_vk_create_pipeline(device, device->pipeline_rope_norm_f32, "rope_norm_f32", rope_norm_f32_len, rope_norm_f32_data, "main", 5, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
@@ -9075,6 +9093,10 @@ static vk_conv_shapes ggml_vk_conv_select_shape(ggml_backend_vk_context * ctx, u
 
 static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, const ggml_tensor * dst, ggml_op op) {
     switch (op) {
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+    case GGML_OP_MAP_CUSTOM3:
+        return moss_dit_opt::valid(dst) ? moss_dit_pipeline(ctx->device) : nullptr;
+#endif
     case GGML_OP_GET_ROWS:
         GGML_ASSERT(src1->type == GGML_TYPE_I32);
         if (src0->type == GGML_TYPE_I32) {
@@ -11647,6 +11669,40 @@ void ggml_vk_topk_moe(ggml_backend_vk_context * ctx, vk_context& subctx, ggml_cg
     ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, {logits_buf, bias_buf, weights_buf, ids_buf}, pc, elements);
 }
 
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+static void ggml_vk_moss_dit(ggml_backend_vk_context* ctx,vk_context& subctx,ggml_tensor* dst) {
+    GGML_ASSERT(moss_dit_opt::valid(dst));
+    const ggml_tensor* inputs[4]={dst->src[0],dst->src[1],dst->src[2],dst->src[3]?dst->src[3]:dst->src[0]};
+    moss_dit_push pc{};pc.count=ggml_nelements(dst);pc.kind=moss_dit_opt::kind(dst);
+    for(unsigned j=0;j<4;++j)pc.dims[j]=inputs[0]->ne[j];
+    for(unsigned k=0;k<4;++k){
+        for(unsigned j=0;j<4;++j)pc.stride[k*4+j]=inputs[k]->nb[j]/4;
+        pc.offset[k]=get_misalign_bytes(ctx,inputs[k])/4;
+    }
+    pc.offset[4]=get_misalign_bytes(ctx,dst)/4;
+    const vk_subbuffer buffers[5]={ggml_vk_tensor_subbuffer(ctx,inputs[0],true),ggml_vk_tensor_subbuffer(ctx,inputs[1],true),ggml_vk_tensor_subbuffer(ctx,inputs[2],true),ggml_vk_tensor_subbuffer(ctx,inputs[3],true),ggml_vk_tensor_subbuffer(ctx,dst,true)};
+    for(unsigned k=0;k<4;++k){
+        const bool disjoint=moss_dit_opt::storage_ranges_disjoint(buffers[k].buffer->buffer==buffers[4].buffer->buffer,
+            buffers[k].offset+uint64_t(pc.offset[k])*4,ggml_nbytes(inputs[k]),
+            buffers[4].offset+uint64_t(pc.offset[4])*4,ggml_nbytes(dst));
+        if(!disjoint)ps5_ai_ggml_report("MOSS_DIT_storage_overlap kind=%u input=%u",pc.kind,k);
+        GGML_ASSERT(disjoint);
+    }
+    pc.bdim=inputs[1]->ne[0];pc.cdim=inputs[2]->ne[0];
+    auto pipeline=moss_dit_pipeline(ctx->device);
+    GGML_ASSERT(pipeline);
+    ggml_pipeline_request_descriptor_sets(ctx,pipeline,1);
+    const uint32_t groups=CEIL_DIV(pc.count,128);
+    const uint32_t gx=std::min(groups,ctx->device->properties.limits.maxComputeWorkGroupCount[0]);
+    const uint32_t gy=CEIL_DIV(groups,gx);
+    GGML_ASSERT(gy<=ctx->device->properties.limits.maxComputeWorkGroupCount[1]);
+    ggml_vk_dispatch_pipeline(ctx,subctx,pipeline,
+        {buffers[0],buffers[1],buffers[2],buffers[3],buffers[4]},
+        pc,{gx*128,gy,1});
+    moss_dit_opt::GPU_recordings[pc.kind].fetch_add(1,std::memory_order_relaxed);
+}
+#endif
+
 static void ggml_vk_rope_apply(ggml_backend_vk_context * ctx, vk_context & subctx, ggml_tensor * dst) {
     const ggml_tensor * x  = dst->src[0];
     const ggml_tensor * pe = dst->src[1];
@@ -13080,6 +13136,11 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
         ggml_vk_soft_max_back(ctx, compute_ctx, src0, src1, node);
 
         break;
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+    case GGML_OP_MAP_CUSTOM3:
+        ggml_vk_moss_dit(ctx,compute_ctx,node);
+        break;
+#endif
     case GGML_OP_ROPE_APPLY:
         ggml_vk_rope_apply(ctx, compute_ctx, node);
 
@@ -16291,6 +16352,10 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                   (ggml_type_size(op->type) == sizeof(float) || ggml_type_size(op->type) == 2);
         case GGML_OP_REPEAT_BACK:
             return op->type == GGML_TYPE_F32 && op->src[0]->type == GGML_TYPE_F32;
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+        case GGML_OP_MAP_CUSTOM3:
+            return moss_dit_opt::valid(op);
+#endif
         case GGML_OP_ROPE_APPLY:
             if (op->type != GGML_TYPE_F32 || op->src[0]->type != GGML_TYPE_F32 ||
                 op->src[1]->type != GGML_TYPE_F32 || !ggml_is_contiguous(op)) {
@@ -17064,6 +17129,11 @@ vk_device_struct::~vk_device_struct() {
         ggml_vk_destroy_pipeline(device, pl);
     }
     all_pipelines.clear();
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+    if(moss_dit_pipeline_ptr&&moss_dit_pipeline_owner==VkDevice(device)){
+        delete moss_dit_pipeline_ptr;moss_dit_pipeline_ptr=nullptr;moss_dit_pipeline_owner={};
+    }
+#endif
 #if PS5_AI_MOSS_LORA_FP32_SHARED_TRIAL
     if(owns_moss_lora) {
         // Existing loop destroyed actual handles while these strong refs lived.

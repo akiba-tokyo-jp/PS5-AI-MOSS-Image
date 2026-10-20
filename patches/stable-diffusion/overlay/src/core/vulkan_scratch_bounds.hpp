@@ -6,6 +6,9 @@
  * Requested-buffer maxima exclude previous context high-water marks and do not
  * establish aggregate/fragmentation/driver/whole-1024 readiness. */
 #include "ggml.h"
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+#include "model/diffusion/moss_dit_ops.hpp"
+#endif
 #include "ggml-impl.h"
 #include <cstdint>
 #include <cstring>
@@ -312,6 +315,13 @@ static Bounds inspect(const ggml_cgraph * graph,const Profile & profile) {
     for(int i=0;i<graph->n_nodes;++i) {
         const auto * t=graph->nodes[i];++result.inspected_nodes;
         bool known=t && (t->op==GGML_OP_MUL_MAT ? matmul(t,profile,result) :
+#if PS5_AI_MOSS_DIT_OPT_TRIAL
+                         // The dedicated five-binding F32 shader reads tensor
+                         // buffers directly and writes only its GGML output.
+                         // Admit the exact callback/kind/shapes, never MAP_CUSTOM3
+                         // as a blanket enum. No x/y/split/add-RMS request exists.
+                         t->op==GGML_OP_MAP_CUSTOM3 ? moss_dit_opt::valid(t) :
+#endif
                          t->op==GGML_OP_FLASH_ATTN_EXT ? dense_flash(t,profile,result) :
                          t->op==GGML_OP_SOFT_MAX ? small_plain_softmax(t) :
                          t->op==GGML_OP_RMS_NORM ? plain_rms_norm(t) :

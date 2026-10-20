@@ -1,5 +1,7 @@
 # Turbo4：転送・FFN分割・F16 LoRAの実測
 
+後続の最新結果は[DiT不変計算再利用・F32融合](moss-dit-fusion-20261020.md)です。1024が47.760891秒となり、同core対照版から6.62%短縮、PNGは一致しました。以下はその前段の比較履歴です。
+
 2026-10-20 JST。Turbo4とbounded uploadを併用したF32版を速度比較の基準にし、FFN分割とF16 LoRA storageを別々に検証しました。**F16はowned Direct使用量を減らしましたが、読込済み1024の高速化は確認できませんでした。** 公開版は検証済みの10GiB限定trialを対象とします。
 
 ![Turbo4とbounded uploadの256初回出力](images/moss-turbo4-upload-256-20261020.png)
@@ -51,6 +53,6 @@ F16版は[default-OFFの専用trial](../native/app/moss_lora_f16_storage_trial.h
 
 読込済みF32基準51.09秒のうちDiT graphは44.50秒（87.1%）、他runnerは5.99秒でした。包含関係のあるCPU wall timeで、fence waitを削除可能な同期時間とは読みません。予約量を減らすだけで計算が速くなる根拠はありません。
 
-残る候補は、合成LoRAで残る厳密なSCALE×1の省略と、up行列後のADD／q/k/v連結を限定epilogueへまとめる処理です。現4stepsでは前者が最大1008 SCALE、後者が672 ADD＋336 CONCATのgraph-node候補ですが、個別GPU時間は未測定で、短縮率は予測できません。N4202から計算したSCALEの約166.96GiBは名目read/write pass量で、実測物理転送ではありません。SCALEの `a*1+0` はsigned zero／FTZ等の確認が必要で、一般helperのcontiguous化やalias依存も維持する必要があります。いずれも未実装の候補です。
+残る候補は、合成LoRAで残る厳密なSCALE×1の省略と、up行列後のADD／q/k/v連結を限定epilogueへまとめる処理です。現4stepsでは前者が最大1008 SCALE、後者が672 ADD＋336 CONCATのgraph-node候補ですが、個別GPU時間は未測定で、短縮率は予測できません。N4202から計算したSCALEの約166.96GiBは名目read/write pass量で、実測物理転送ではありません。SCALEの `a*1+0` はsigned zero／FTZ等の確認が必要で、一般helperのcontiguous化やalias依存も維持する必要があります。この節は実装前の候補整理です。SCALE省略とADD／packed q/k/v出力の融合は[後続試験](moss-dit-fusion-20261020.md)で実装・確認済みです。行列積本体のepilogue統合は残っています。
 
 任意prompt用の8／10GiB通常運用profileは公開対象に含めません。8GiBで起動・物理予約は確認しましたが、最初の生成要求が保存領域チェックのHTTP507でジョブ登録前に拒否されたため、推論・連続動作の成功として扱いません。公開版はproduction admission0と固定prompt／seed・最大4試行の明示trialを維持します。重み、生ログ、token、ビルド済みbinaryはGitへ含めません。
