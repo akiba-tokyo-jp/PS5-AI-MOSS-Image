@@ -21,6 +21,8 @@
 #include "model_io/torch_legacy_io.h"
 #include "model_io/torch_zip_io.h"
 #include "model_loader.h"
+#include "model_io/bounded_weight_upload.hpp"
+extern "C" int ps5_ai_moss_bounded_weight_upload_enabled(void);
 #include "runtime/imatrix.h"
 #include "stable-diffusion.h"
 
@@ -1070,6 +1072,9 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
     std::atomic<int64_t> copy_to_backend_time_ms(0);
     std::atomic<int64_t> convert_time_ms(0);
     std::atomic<uint64_t> bytes_processed(0);
+    std::atomic<uint64_t> bounded_tensors(0), bounded_chunks(0), bounded_bytes(0), bounded_largest_tensor(0);
+    std::atomic<uint64_t> bounded_worker_instances(0), bounded_first_capacity_min(UINT64_MAX),
+        bounded_first_capacity_max(0), bounded_actual_capacity_max(0), bounded_max_file_worker_threads(0);
 
     int num_threads_to_use = n_threads_;
 
@@ -1163,6 +1168,8 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
                     }
                 }
 
+                ps5_ai_weight_io::Scratch bounded_scratch;
+                bool bounded_worker_observed = false;
                 std::vector<uint8_t> read_buffer;
                 std::vector<uint8_t> convert_buffer;
                 std::vector<uint8_t> zip_entry_buffer;
@@ -1264,6 +1271,66 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
                         }
                         return true;
                     };
+
+                    // Opt-in MOSS raw, same-format GPU parameter uploads only.
+                    // Keep CPU direct reads, conversions, mmap and archives on
+                    // their existing paths. Device addresses are never written
+                    // by host code; the same synchronous GGML backend handles
+                    // every bounded byte range and its existing cache/fence work.
+                    if (ps5_ai_moss_bounded_weight_upload_enabled() &&
+                        imatrix_version == VERSION_MOSS_IMAGE && !zip && !mmapped &&
+                        dst_tensor->buffer && !ggml_backend_buffer_is_host(dst_tensor->buffer) &&
+                        tensor_storage.type == dst_tensor->type &&
+                        !tensor_storage.is_f64 && !tensor_storage.is_i64 &&
+                        !tensor_storage.is_f8_e4m3 && !tensor_storage.is_f8_e5m2 &&
+                        nbytes_to_read == tensor_storage.nbytes() &&
+                        nbytes_to_read == ggml_nbytes(dst_tensor)) {
+                        if (tensor_storage.offset > uint64_t(std::numeric_limits<std::streamoff>::max()) ||
+                            nbytes_to_read > uint64_t(std::numeric_limits<std::streamoff>::max()) - tensor_storage.offset) {
+                            LOG_ERROR("bounded upload source range overflow"); failed = true; break;
+                        }
+                        // Drop staging retained from earlier conversion cases;
+                        // their numerical paths themselves remain unchanged.
+                        std::vector<uint8_t>().swap(read_buffer);
+                        std::vector<uint8_t>().swap(convert_buffer);
+                        const auto result = ps5_ai_weight_io::transfer_exact(
+                            tensor_storage.offset, nbytes_to_read, bounded_scratch,
+                            [&](uint64_t at, unsigned char* memory, size_t n) {
+                                const auto started = ggml_time_ms();
+                                file.seekg(static_cast<std::streamoff>(at));
+                                file.read(reinterpret_cast<char*>(memory), static_cast<std::streamsize>(n));
+                                read_time_ms.fetch_add(ggml_time_ms() - started);
+                                return bool(file) && file.gcount() == static_cast<std::streamsize>(n);
+                            },
+                            [&](size_t at, const unsigned char* memory, size_t n) {
+                                const auto started = ggml_time_ms();
+                                std::lock_guard<std::mutex> lock(backend_tensor_set_mutex);
+                                ggml_backend_tensor_set(dst_tensor, memory, at, n);
+                                copy_to_backend_time_ms.fetch_add(ggml_time_ms() - started);
+                                return true;
+                            });
+                        if (!result.success || result.bytes != nbytes_to_read) {
+                            LOG_ERROR("bounded raw weight upload failed without retry"); failed = true; break;
+                        }
+                        const uint64_t actual_capacity = result.staging_payload;
+                        if (!bounded_worker_observed) {
+                            bounded_worker_observed = true; bounded_worker_instances.fetch_add(1);
+                            const uint64_t launched_file_workers = static_cast<uint64_t>(n_threads);
+                            auto worker_peak = bounded_max_file_worker_threads.load();
+                            while (worker_peak < launched_file_workers && !bounded_max_file_worker_threads.compare_exchange_weak(worker_peak, launched_file_workers)) {}
+                            auto least = bounded_first_capacity_min.load();
+                            while (least > actual_capacity && !bounded_first_capacity_min.compare_exchange_weak(least, actual_capacity)) {}
+                            auto greatest = bounded_first_capacity_max.load();
+                            while (greatest < actual_capacity && !bounded_first_capacity_max.compare_exchange_weak(greatest, actual_capacity)) {}
+                        }
+                        auto capacity_peak = bounded_actual_capacity_max.load();
+                        while (capacity_peak < actual_capacity && !bounded_actual_capacity_max.compare_exchange_weak(capacity_peak, actual_capacity)) {}
+                        bounded_tensors.fetch_add(1); bounded_chunks.fetch_add(result.chunks);
+                        bounded_bytes.fetch_add(result.bytes); bytes_processed.fetch_add(result.bytes);
+                        auto largest = bounded_largest_tensor.load();
+                        while (largest < result.bytes && !bounded_largest_tensor.compare_exchange_weak(largest, result.bytes)) {}
+                        continue;
+                    }
 
                     char* read_buf    = nullptr;
                     char* target_buf  = nullptr;
@@ -1398,6 +1465,17 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
                  (memcpy_time_ms.load() / (float)last_n_threads) / 1000.f,
                  (convert_time_ms.load() / (float)last_n_threads) / 1000.f,
                  (copy_to_backend_time_ms.load() / (float)last_n_threads) / 1000.f);
+    }
+    if (bounded_tensors.load()) {
+        LOG_INFO("MOSS bounded weight upload tensors=%" PRIu64 " chunks=%" PRIu64 " bytes=%" PRIu64
+                 " largest_full_tensor=%" PRIu64 " staging_cap_per_worker=%zu observed_worker_instances=%" PRIu64
+                 " max_file_worker_threads=%" PRIu64 " possible_concurrent_staging_cap_bytes=%" PRIu64
+                 " first_capacity_min=%" PRIu64 " first_capacity_max=%" PRIu64 " max_actual_worker_capacity=%" PRIu64
+                 " capacity_policy=grow_to_min_tensor_bytes_cap8MiB_release_before_grow concurrent_staging_scope=upper_bound_NOT_measured_process_peak scope=owned_host_staging_per_worker_NOTprocess_RAM_NOT_Direct",
+                 bounded_tensors.load(), bounded_chunks.load(), bounded_bytes.load(),
+                 bounded_largest_tensor.load(), ps5_ai_weight_io::staging_bytes, bounded_worker_instances.load(),
+                 bounded_max_file_worker_threads.load(), bounded_max_file_worker_threads.load() * static_cast<uint64_t>(ps5_ai_weight_io::staging_bytes),
+                 bounded_first_capacity_min.load(), bounded_first_capacity_max.load(), bounded_actual_capacity_max.load());
     }
     return success && validate_sources(target_tensor_names);
 }

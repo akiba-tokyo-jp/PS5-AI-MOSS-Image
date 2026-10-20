@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #define _POSIX_C_SOURCE 200809L
 #include "engine.h"
+#include "../app/moss_sampler_trial.h"
 #include "v3_shutdown.h"
 #include "ui_hooks.h"
 #include <ctype.h>
@@ -306,9 +307,9 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
     if (!obj) { snprintf(error, cap, "Out of memory parsing request"); return 0; }
     int ok = 0; int64_t v;
     memset(r, 0, sizeof(*r));
-    r->width = r->height = 1024; r->steps = 50; r->cfg_scale = 3; r->flow_shift = 5; r->seed = -1;
+    r->width = r->height = 1024; r->steps = PS5_AI_MOSS_DEFAULT_REQUEST_STEPS; r->cfg_scale = PS5_AI_MOSS_DEFAULT_REQUEST_CFG; r->flow_shift = 5; r->seed = PS5_AI_MOSS_DEFAULT_REQUEST_SEED;
     r->manga_strength = 0;
-    strcpy(r->sampler, "euler");
+    strcpy(r->sampler, PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER);
     if (!parse_object(body, obj)) { snprintf(error, cap, "Malformed, duplicate, nested, or oversized JSON field"); goto done; }
     for (size_t i = 0; i < obj->count; ++i) {
         field *f = &obj->values[i];
@@ -349,8 +350,8 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else if (!strcmp(f->key, "seed")) {
             if (!get_int(f, -1, INT64_MAX, &r->seed)) { snprintf(error, cap, "seed must be an integer -1..9223372036854775807"); goto done; }
         } else if (!strcmp(f->key, "sampler")) {
-            if (f->type != 1 || (strcmp(f->value, "euler") && strcmp(f->value, "euler_a") && strcmp(f->value, "dpm++2m"))) {
-                snprintf(error, cap, "sampler must be euler, euler_a, or dpm++2m"); goto done;
+            if (f->type != 1 || !ps5_ai_moss_sampler_name_allowed(f->value)) {
+                snprintf(error, cap, "sampler is not allowed by the compiled MOSS profile"); goto done;
             } strcpy(r->sampler, f->value);
         } else { snprintf(error, cap, "Unknown request field: %.63s", f->key); goto done; }
     }
@@ -360,6 +361,9 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         snprintf(error,cap,"Image strength requires its matching input image ID");goto done;
     }
     if(r->mask_image_id[0] && !r->init_image_id[0]){snprintf(error,cap,"Mask requires an init image");goto done;}
+    if(!ps5_ai_moss_sampler_request_allowed(r->width,r->height,r->steps,r->cfg_scale,r->flow_shift,r->sampler,r->seed)){
+        snprintf(error,cap,"Sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep,seed20261020");goto done;
+    }
     ok = 1;
 done:
     free(obj); return ok;
@@ -673,11 +677,13 @@ static void health(socket_t fd) {
         "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-openai-gateway\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false},\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
-        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 "}",
+        "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"moss_sampler_trial\":%s,\"moss_sampler_policy\":\"%s\",\"trial_sampler\":\"%s\",\"trial_scheduler\":\"%s\",\"trial_steps\":%d,\"trial_cfg_scale\":%.1f,\"moss_turbo_trial\":%s,\"moss_turbo_policy\":\"%s\",\"moss_turbo_adapter\":\"%s\",\"moss_turbo_rank\":%d,\"moss_turbo_runtime_multiplier\":%.1f}",
         s.available && s.gpu_available ? "ready" : "degraded", backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
-        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation);
+        model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation,
+        PS5_AI_MOSS_SAMPLER_TRIAL?"true":"false",PS5_AI_MOSS_SAMPLER_POLICY,PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER,PS5_AI_MOSS_REQUEST_SCHEDULER,PS5_AI_MOSS_DEFAULT_REQUEST_STEPS,PS5_AI_MOSS_DEFAULT_REQUEST_CFG,
+        PS5_AI_MOSS_TURBO_TRIAL?"true":"false",PS5_AI_MOSS_TURBO_POLICY,PS5_AI_MOSS_TURBO_TRIAL?PS5_AI_MOSS_TURBO_ADAPTER_BASENAME:"disabled",PS5_AI_MOSS_TURBO_TRIAL?144:0,PS5_AI_MOSS_TURBO_TRIAL?1.0:0.0);
     send_json(fd, 200, body);
 }
 static void submit(socket_t fd, const char *body) {

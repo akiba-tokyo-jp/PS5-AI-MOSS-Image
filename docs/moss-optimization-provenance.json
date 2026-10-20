@@ -1,0 +1,56 @@
+{
+  "schema": "ps5-ai-moss-optimization-source-provenance-v1",
+  "modification_date": "2026-10-20",
+  "stable_diffusion": {
+    "repository": "https://github.com/leejet/stable-diffusion.cpp",
+    "revision": "8cd731e7b4667eb8f40a153315b9a7125d09a58d",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2023 leejet",
+    "reused_files": [
+      "src/runtime/spectrum.hpp",
+      "src/runtime/sample-cache.cpp",
+      "src/runtime/sample-cache.h"
+    ],
+    "notice": "licenses/stable-diffusion-MIT.txt"
+  },
+  "moss_latent_spectrum": {
+    "path": "patches/stable-diffusion/overlay/src/runtime/moss_spectrum.hpp",
+    "license": "GPL-3.0-only",
+    "role": "New conservative C++ hardening of the existing SD.cpp post-CFG latent forecast route; not the ComfyUI hidden-state port",
+    "changes": [
+      "Bounded six-anchor ring and shape limits",
+      "Finite/error checks without NaN clamping",
+      "Strict50-step/order/schedule identity",
+      "Warm8/tail2 alternating forecast policy",
+      "Completion/size receipts and per-generation reset"
+    ]
+  },
+  "Spectrum_reference": {
+    "repository": "https://github.com/Rkkss/ComfyUI-Spectrum-MOSS",
+    "revision": "3fde0674b29342565e7f42a0674af48d65aabc4a",
+    "license": "GPL-3.0-only",
+    "files": [
+      "nodes.py",
+      "README.md",
+      "LICENSE"
+    ],
+    "role": "Pinned method/reference, not the selected latent adapter implementation",
+    "reference_credit": "Rkkss; source also acknowledges awdqwdasdg Comfyui-Spectrum-Qwen2.1 and arXiv:2603.01623",
+    "reference_python_included_or_compiled": false,
+    "notice": "licenses/ComfyUI-Spectrum-MOSS-GPL-3.0-only.txt"
+  },
+  "Strata_reference": {
+    "repository": "https://github.com/Niko1221/Strata",
+    "revision": "e88ee39d1d6be6e3364183af3b39b62a7ed6f211",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 Niko1221 and the Strata contributors",
+    "reference_files": [
+      "src/core/weights.cpp",
+      "LICENSE"
+    ],
+    "role": "Bounded8MiB staging design reference",
+    "implementation": "New callback-based raw same-format GGML upload helper, preserving existing ownership/cache/fence path",
+    "CUDA_HIP_or_MoE_cache_code_imported": false,
+    "notice": "licenses/Strata-MIT.txt"
+  }
+}

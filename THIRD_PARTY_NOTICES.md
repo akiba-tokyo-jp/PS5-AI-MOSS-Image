@@ -1,12 +1,15 @@
 # Third-party notices
 
-The integrated application is GPL-3.0-or-later. Individual MIT, BSD and other notices remain in force.
+This integration contains GPL-3.0-only files alongside GPL-3.0-or-later, MIT, BSD and other components. File-specific notices remain in force; a later-version option does not extend to GPL-3.0-only files.
 See [LICENSE](LICENSE), [licenses](licenses) and the copyright/SPDX notices in each source.
 This is a source publication, not a distribution of Sony SDKs, firmware, model weights or runtime binaries.
 
 | Component | Origin / role | License |
 |---|---|---|
 | stable-diffusion.cpp | leejet; inference and model management | MIT |
+| MOSS latent Spectrum adapter | Existing SD.cpp `runtime/spectrum.hpp` route, plus bounded state, finite checks, strict scheduling and PS5 completion receipts added 2026-10-20 | Original MIT notices retained; new `moss_spectrum.hpp` is GPL-3.0-only |
+| ComfyUI-Spectrum-MOSS | Rkkss, commit `3fde0674b29342565e7f42a0674af48d65aabc4a`; pinned method/reference, not the compiled ComfyUI hidden-state implementation | GPL-3.0-only; see `licenses/ComfyUI-Spectrum-MOSS-GPL-3.0-only.txt` |
+| Strata | Niko1221 and contributors, commit `e88ee39d1d6be6e3364183af3b39b62a7ed6f211`; bounded staging design reference for a new same-format GGML upload adapter, without CUDA/HIP code | MIT; see `licenses/Strata-MIT.txt` |
 | GGML | ggml contributors; tensor CPU/Vulkan execution | MIT; modifications forming part of the integrated GPL application retain original notices |
 | PS5_Vulkan | Mihawk-99, BlackBearReloaded and contributors; native startup, tools, PS5 GPU reference | GPL-3.0-or-later, file-specific notices |
 | PS5_Mesa / Mesa | RADV, NIR, ACO, Vulkan runtime | Predominantly MIT; individual files / bundled licenses govern |
@@ -31,3 +34,6 @@ Keep applicable artwork and model/output terms when reusing images. Private reco
 
 Dashboard glyph masks retain OFL-1.1 separately from application code. Their derivative name is WAI Dashboard Glyphs.
 The static masks and existing app-icon thumbnail need no runtime font library or additional GPU rendering context.
+
+The experimental MOSS Spectrum path forecasts fully CFG-combined denoised latents through the existing SD.cpp cache boundary. It is not the ComfyUI extension's hidden-state/head port, and its performance or quality claims do not transfer to PS5. Reference revisions and modified paths are recorded in [MOSS optimization provenance](docs/moss-optimization-provenance.json).
+The bounded-loader implementation preserves raw same-format bytes through the existing GGML backend. Strata supplied the bounded-staging design reference; its CUDA/HIP loader and conversion kernels are not included here.

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include "moss_sampler_trial.h"
 
 #ifndef PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL
 #define PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL 0
@@ -48,8 +49,8 @@ static inline bool ps5_ai_moss_trial_request_valid(int width,int height,int step
                                                   const char* sampler,int64_t seed=20261019) noexcept {
 #if PS5_AI_MOSS_PERFORMANCE_TRIAL
     return ((width==256 && height==256) || (width==1024 && height==1024)) &&
-           steps==50 && cfg==3.0 && flow_shift==5.0 && seed==20261020 &&
-           sampler && !std::strcmp(sampler,"euler");
+           steps==PS5_AI_MOSS_DEFAULT_REQUEST_STEPS && cfg==PS5_AI_MOSS_DEFAULT_REQUEST_CFG && flow_shift==5.0 && seed==20261020 &&
+           sampler && !std::strcmp(sampler,PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER);
 #elif PS5_AI_MOSS_1024_COLD_WARM_TRIAL
     return width==1024 && height==1024 && steps==50 && cfg==3.0 && flow_shift==5.0 &&
            seed==20261020 && sampler && !std::strcmp(sampler,"euler");

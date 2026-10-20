@@ -1,0 +1,54 @@
+{
+  "schema": "ps5-ai-moss-experimental-spectrum-trial-v1",
+  "experimental_small_trial": true,
+  "production_runtime_admitted": false,
+  "trial_10g": true,
+  "gpu_pool_bytes": 10737418240,
+  "working_reserve_bytes": 1073741824,
+  "max_vram_gib": "Vulkan0=9.5",
+  "steps": 50,
+  "cfg_scale": 3.0,
+  "sampler": "euler",
+  "flow_shift": 5.0,
+  "max_generation_attempts": 4,
+  "selected_moss_lora_required": true,
+  "startup_readback_gates_required": true,
+  "seed": 20261020,
+  "moss_lora_strength": 0.7,
+  "allowed_sizes": [
+    [
+      256,
+      256
+    ],
+    [
+      1024,
+      1024
+    ]
+  ],
+  "performance_variant": 1,
+  "performance_variant_name": "fp16",
+  "requested_precision": "fp16",
+  "small256_success_and_visual_review_before1024": true,
+  "automatic_POST_retries": false,
+  "moss_f32_accumulation": true,
+  "moss_spectrum_trial": true,
+  "moss_spectrum_policy": "post_cfg_latent_manual_50_8_2_alternating_degree3_ridge1_blend04_history6_v1",
+  "moss_bounded_weight_upload_trial": false,
+  "moss_bounded_weight_upload_policy": "disabled",
+  "moss_inference_feature_compile_flags": [
+    "-DPS5_AI_MOSS_SPECTRUM_TRIAL=1",
+    "-DPS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL=0",
+    "-DPS5_AI_MOSS_TURBO_TRIAL=0"
+  ],
+  "scheduler": "discrete",
+  "expected_dit_forwards": 60,
+  "expected_q4_f32acc_recordings": 9960,
+  "new_core_compilation_required": true,
+  "old_core_reuse_allowed": false,
+  "actual_cfg_steps": 30,
+  "forecast_cfg_steps": 20,
+  "history_F32_payload_max_bytes": 12582912,
+  "history_plus_prediction_F32_payload_max_bytes": 14680064,
+  "moss_turbo_trial": false,
+  "moss_turbo_policy": "disabled"
+}

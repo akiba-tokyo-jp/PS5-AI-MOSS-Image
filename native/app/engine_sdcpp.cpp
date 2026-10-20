@@ -19,9 +19,14 @@
 #include "engine_config.h"
 #include "moss_runtime_admission.h"
 #include "moss_trial_contract.hpp"
+#include "moss_spectrum_trial.h"
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+#include "runtime/moss_spectrum.hpp"
+#endif
 #include "moss_accumulation_policy.h"
 #include "moss_gpu_profile.h"
 #include "moss_q4_bk64.h"
+#include "moss_bounded_weight_upload.h"
 #include "moss_lora_contract.hpp"
 #include "moss_lora_receipt.h"
 #include "v3_shutdown.h"
@@ -77,6 +82,37 @@ static std::atomic<uint64_t> cpu_clip_pool_peak_bytes{0};
 static std::atomic<unsigned> moss_lora_loaded{0}, moss_lora_matched{0}, moss_lora_used{0}, moss_lora_skipped{0};
 static std::atomic<uint32_t> moss_lora_scale_bits{0};
 static std::atomic<bool> moss_lora_configured{false}, moss_lora_verified{false}, moss_lora_invalid{false};
+#if PS5_AI_MOSS_TURBO_TRIAL
+static std::atomic<bool> moss_turbo_small_image_completed{false};
+#endif
+static nlohmann::json moss_effective_lora_identity() {
+#if PS5_AI_MOSS_TURBO_TRIAL
+    return {{"schema",PS5_AI_MOSS_TURBO_ADAPTER_SCHEMA},{"adapter","NSFW0.7+Turbo1.0 composed F32"},
+        {"path",engine_config.moss_lora_path},{"sha256",engine_config.moss_lora_sha256},{"rank",144},
+        {"sha256_observation","configured whole-file identity; external preparation/staging rehash required, not a native runtime rehash"},
+        {"runtime_multiplier",1.0},{"base_merged",false},
+        {"configured",moss_lora_configured.load()},{"strength",1.0},
+        {"loaded_tensors",moss_lora_loaded.load()},{"matched_tensors",moss_lora_matched.load()},
+        {"used_tensors",moss_lora_used.load()},{"skipped_tensors",moss_lora_skipped.load()},
+        {"application_verified",moss_lora_verified.load()},
+        {"components",nlohmann::json::array({
+            {{"adapter","axiomofmind/Moss-image-nsfw-uncensored-lora"},{"F32_sha256",PS5_AI_MOSS_TURBO_NSFW_SHA256},{"rank",16},{"strength",0.7}},
+            {{"adapter","akhaliq/MOSS-Image-SFT-4-steps"},{"sha256",PS5_AI_MOSS_TURBO_SOURCE_SHA256},{"rank",128},{"strength",1.0}}})}};
+#else
+    return {{"adapter","axiomofmind/Moss-image-nsfw-uncensored-lora"},{"path",engine_config.moss_lora_path},
+            {"rank",16},{"strength",engine_config.moss_lora_strength}};
+#endif
+}
+#if PS5_AI_MOSS_TURBO_TRIAL
+extern "C" int ps5_ai_moss_turbo_identity_json(char* out,size_t capacity) {
+    if(!out||!capacity)return -1;
+    try {
+        const std::string body=moss_effective_lora_identity().dump();
+        if(body.size()>=capacity)return -1;
+        std::memcpy(out,body.c_str(),body.size()+1);return 0;
+    }catch(...){out[0]=0;return -1;}
+}
+#endif
 extern "C" void ps5_ai_moss_lora_contract_record(unsigned loaded, unsigned matched, unsigned used, unsigned skipped, float strength) {
     if (loaded != 504 || matched != 504 || used > 504 || skipped || !std::isfinite(strength) ||
         strength != static_cast<float>(engine_config.moss_lora_strength)) moss_lora_invalid = true;
@@ -231,6 +267,43 @@ static void write_event(const nlohmann::json& event) noexcept {
     }
 }
 
+
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+// The existing single model worker owns this CPU-only per-generation receipt.
+static sd_moss_spectrum::Receipt moss_spectrum_last{};
+static std::atomic<unsigned> moss_spectrum_completions{0};
+extern "C" void ps5_ai_moss_spectrum_complete(const sd_moss_spectrum::Receipt* r) {
+    if(!r || r->initialized!=1 || r->completed_steps!=50 || r->real_steps!=30 ||
+       r->forecast_steps!=20 || r->anchor_count!=6 || r->errors ||
+       r->history_payload_bytes>sd_moss_spectrum::State::max_history_bytes ||
+       r->peak_payload_bytes>sd_moss_spectrum::State::max_peak_payload_bytes ||
+       moss_spectrum_completions.load(std::memory_order_acquire)!=0)
+        throw std::runtime_error("MOSS Spectrum core completion receipt refused");
+    moss_spectrum_last=*r;
+    moss_spectrum_completions.store(1,std::memory_order_release);
+    write_event({{"event","moss_spectrum_completed"},{"policy",PS5_AI_MOSS_SPECTRUM_POLICY},
+        {"sampler_steps",r->completed_steps},{"actual_cfg_steps",r->real_steps},
+        {"forecast_cfg_steps",r->forecast_steps},{"actual_dit_forwards",r->real_steps*2},
+        {"history_host_payload_bytes",r->history_payload_bytes},{"peak_host_payload_bytes",r->peak_payload_bytes},
+        {"memory_scope","F32 vector payload only, not physical RAM or Direct/VRAM"},
+        {"forecast_device","PS5 CPU"},{"forecast_space","post_CFG_denoised_latent"},
+        {"nonfinite_or_state_errors",r->errors},{"NaN_clamping",false}});
+}
+#endif
+static nlohmann::json moss_spectrum_json() {
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+    const auto r=moss_spectrum_last;
+    return {{"enabled",true},{"policy",PS5_AI_MOSS_SPECTRUM_POLICY},
+        {"completion_events",moss_spectrum_completions.load(std::memory_order_acquire)},
+        {"sampler_steps",r.completed_steps},{"actual_cfg_steps",r.real_steps},
+        {"forecast_cfg_steps",r.forecast_steps},{"actual_dit_forwards",r.real_steps*2},
+        {"history_host_payload_bytes",r.history_payload_bytes},{"peak_host_payload_bytes",r.peak_payload_bytes},
+        {"memory_scope","F32 vector payload; existing host reserve/actual process peak remain separate"},
+        {"nonfinite_or_state_errors",r.errors},{"NaN_clamping",false}};
+#else
+    return {{"enabled",false},{"policy",PS5_AI_MOSS_SPECTRUM_POLICY}};
+#endif
+}
 
 static std::atomic<bool> phase_profile_active{false};
 struct PhaseCounter{std::atomic<uint64_t> ns{0},calls{0},bytes{0},invalid{0};};
@@ -701,6 +774,19 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         current_status.gpu_available = 1;
         current_status.available = 1;
         write_event({{"event", "engine_configured"}, {"model", engine_config.model},
+                     {"moss_spectrum_trial",PS5_AI_MOSS_SPECTRUM_TRIAL!=0},
+                     {"moss_spectrum_policy",PS5_AI_MOSS_SPECTRUM_POLICY},
+                     {"moss_sampler_trial",bool(PS5_AI_MOSS_SAMPLER_TRIAL)},
+                     {"moss_bounded_weight_upload_trial",PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL!=0},
+                     {"moss_bounded_weight_upload_policy",PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_POLICY},
+                     {"bounded_weight_upload_enabled",ps5_ai_moss_bounded_weight_upload_enabled()!=0},
+                     {"moss_sampler_policy",PS5_AI_MOSS_SAMPLER_POLICY},
+                     {"moss_turbo_trial",bool(PS5_AI_MOSS_TURBO_TRIAL)},
+                     {"moss_turbo_policy",PS5_AI_MOSS_TURBO_POLICY},
+                     {"effective_adapter",moss_effective_lora_identity()},
+                     {"trial_sampler",PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER},{"trial_scheduler",PS5_AI_MOSS_REQUEST_SCHEDULER},
+                     {"trial_steps",PS5_AI_MOSS_DEFAULT_REQUEST_STEPS},{"trial_cfg_scale",PS5_AI_MOSS_DEFAULT_REQUEST_CFG},
+                     {"negative_cfg_skip_scope","all_negative_forwards_existing_MOSS_policy"},
                      {"moss_gpu_profile",bool(PS5_AI_MOSS_GPU_PROFILE)},
                      {"moss_q4_bk64_raw64",bool(PS5_AI_MOSS_Q4_BK64_RAW64)},
                      {"moss_q4_bk64_policy",PS5_AI_MOSS_Q4_BK64_RAW64?"canonical_moss_ffn_up_q4k_f32acc_bk64_raw64_v1":"disabled"},
@@ -752,7 +838,11 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
 #include "moss_precision_gate.inc"
 #include "moss_perf_gate.inc"
 #include "moss_q4_bk64_gate.inc"
+#if PS5_AI_MOSS_TURBO_TRIAL
+#include "moss_turbo_lora_gate.inc"
 #endif
+#endif
+#include "moss_bounded_weight_upload_gate.inc"
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
 extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexcept {
@@ -864,10 +954,16 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
 #if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
         moss_precision_readback_gate();
         moss_performance_readback_gate();
+#if PS5_AI_MOSS_TURBO_TRIAL
+        moss_turbo_lora_readback_gate();
+#endif
 #if PS5_AI_MOSS_Q4_BK64_RAW64
         const auto candidate_gate=moss_q4_bk64_readback_gate();
         if(!candidate_gate.numerical_pass)throw std::runtime_error("MOSS Q4 BK64/raw64 candidate B gate did not pass");
 #endif
+#endif
+#if PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL
+        moss_bounded_weight_upload_readback_gate();
 #endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
@@ -901,7 +997,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     *stats = {};
     if (!ps5_ai_moss_trial_request_valid(request->width,request->height,request->steps,
                                         request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
-        set_error(error,error_size,PS5_AI_MOSS_PERFORMANCE_TRIAL
+        set_error(error,error_size,PS5_AI_MOSS_TURBO_TRIAL
+            ? "MOSS Turbo trial requires256/1024 square,4steps,CFG1,shift5,Euler/custom sigmas,seed20261020"
+            : PS5_AI_MOSS_SAMPLER_TRIAL
+            ? "MOSS sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep/simple,seed20261020; production admission is not asserted"
+            : PS5_AI_MOSS_PERFORMANCE_TRIAL
             ? "MOSS performance trial requires256/1024 square,50steps,CFG3,shift5,Euler,seed20261020; production admission is not asserted"
             : PS5_AI_MOSS_1024_COLD_WARM_TRIAL
             ? "MOSS benchmark requires1024x1024,50steps,CFG3,shift5,Euler,seed20261020; production admission is not asserted"
@@ -911,12 +1011,20 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         return -1;
     }
 #if PS5_AI_MOSS_QUALITY_STEP_COMPARISON_TRIAL || PS5_AI_MOSS_1024_COLD_WARM_TRIAL || PS5_AI_MOSS_PERFORMANCE_TRIAL
-    if (engine_config.moss_lora_strength!=0.7) {
-        set_error(error,error_size,"MOSS controlled trial requires unchanged configured LoRA strength0.7");
+    if (engine_config.moss_lora_strength!=(PS5_AI_MOSS_TURBO_TRIAL?1.0:0.7)) {
+        set_error(error,error_size,PS5_AI_MOSS_TURBO_TRIAL?
+            "MOSS Turbo composed adapter requires global1.0, containing NSFW0.7+Turbo1.0":
+            "MOSS controlled trial requires unchanged configured LoRA strength0.7");
         return -1;
     }
 #endif
 #if PS5_AI_MOSS_PERFORMANCE_TRIAL
+#if PS5_AI_MOSS_TURBO_TRIAL
+    if(request->width==1024 && !moss_turbo_small_image_completed.load(std::memory_order_acquire)) {
+        set_error(error,error_size,"Turbo1024 requires one completed native256 image first; manual quality review is additionally required by the client");
+        return -1;
+    }
+#endif
     static std::atomic<unsigned> performance_attempts{0};
     if(!ps5_ai_moss_performance_trial_claim(performance_attempts,request->width,request->height,request->steps,
                                           request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
@@ -937,6 +1045,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     }
 #endif
     phase_profile_begin();
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+    moss_spectrum_last={};
+    moss_spectrum_completions.store(0,std::memory_order_release);
+#endif
     const uint64_t fused_before=perf_fused_selected.load(std::memory_order_relaxed);
     ps5_ai_moss_quant_receipt quant_before{};ps5_ai_moss_quant_snapshot(&quant_before);
     ps5_ai_moss_q4_bk64_report candidate_before{};ps5_ai_moss_q4_bk64_snapshot(&candidate_before);
@@ -986,6 +1098,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if (request->init_image_id[0] || request->reference_image_id[0] || request->mask_image_id[0] ||
             request->controlnet[0] || request->control_image_id[0])
             throw std::runtime_error("MOSS-Image-SFT currently supports text2img only; SDXL IP-Adapter/ControlNet, img2img and inpainting were not run");
+#if PS5_AI_MOSS_TURBO_TRIAL
+        if(!moss_turbo_lora_gate_admitted())
+            throw std::runtime_error("Turbo model loading requires all rank144 F32 GPU numerical gates first");
+#endif
         if (!model_context)
             ps5_ai_init_stage_call(PS5_AI_INIT_PREAMBLE, [&]() { ps5_ai_native_capacity_snapshot("before_moss_generation"); });
         else
@@ -1040,20 +1156,44 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             throw std::runtime_error("MOSS flow_shift must be finite, positive and representable as float");
         if (request->width <= 0 || request->height <= 0 || request->width % 16 || request->height % 16)
             throw std::runtime_error("MOSS image dimensions must be positive multiples of 16");
-        params.sample_params.scheduler = DISCRETE_SCHEDULER;
+        params.sample_params.scheduler = PS5_AI_MOSS_SAMPLER_TRIAL ? SIMPLE_SCHEDULER : DISCRETE_SCHEDULER;
         params.sample_params.flow_shift = static_cast<float>(request->flow_shift);
         // The real upstream MOSS branch applies zero-based layer22 skipping
         // only to the negative CFG evaluation; positive conditioning is intact.
         engine_config.apply_image(params);
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+        params.cache.mode=SD_CACHE_SPECTRUM;
+        params.cache.spectrum_w=0.4f;params.cache.spectrum_m=3;params.cache.spectrum_lam=1.0f;
+        params.cache.spectrum_window_size=2;params.cache.spectrum_flex_window=0.0f;
+        params.cache.spectrum_warmup_steps=8;params.cache.spectrum_stop_percent=0.96f;
+#endif
         sd_lora_t selected_lora = {};
         selected_lora.path = engine_config.moss_lora_path.c_str();
         selected_lora.multiplier = static_cast<float>(engine_config.moss_lora_strength);
         selected_lora.is_high_noise = false;
+#if PS5_AI_MOSS_TURBO_TRIAL
+        if(!moss_turbo_lora_gate_admitted())
+            throw std::runtime_error("Turbo generation requires all new rank144 F32 GPU numerical gates");
+        float turbo_sigmas[PS5_AI_MOSS_TURBO_SIGMA_COUNT];
+        ps5_ai_moss_turbo_sigmas(turbo_sigmas);
+        params.sample_params.sample_method=EULER_SAMPLE_METHOD;
+        params.sample_params.sample_steps=4;
+        params.sample_params.scheduler=DISCRETE_SCHEDULER;
+        params.sample_params.custom_sigmas=turbo_sigmas;
+        params.sample_params.custom_sigmas_count=5;
+        params.sample_params.guidance.txt_cfg=1.0f;
+        params.sample_params.guidance.img_cfg=1.0f;
+        params.sample_params.guidance.distilled_guidance=0.0f;
+        params.sample_params.guidance.slg=sd_slg_params_t{};
+        params.sample_params.extra_sample_args=nullptr;
+#endif
         params.loras = &selected_lora;
         params.lora_count = 1;
         write_event({{"event", "moss_selected_lora_request"}, {"path", engine_config.moss_lora_path},
                      {"strength", engine_config.moss_lora_strength}, {"required_tensors", 504},
-                     {"rank", 16}, {"alpha", 16}, {"source_storage", "F32 exact from BF16"},
+                     {"rank", PS5_AI_MOSS_TURBO_TRIAL?144:16}, {"alpha", PS5_AI_MOSS_TURBO_TRIAL?144:16},
+                     {"source_storage", PS5_AI_MOSS_TURBO_TRIAL?"F32 independent rank16+128 coefficient composition":"F32 exact from BF16"},
+                     {"effective_adapter",moss_effective_lora_identity()},
                      {"qkv_layout", "independent A/B pairs in ordered q,k,v output slices"}, {"base_merge", false}});
         sd_set_backend_eval_callback(observe_graph, &observation);
         sd_set_progress_callback(observe_progress, &observation);
@@ -1084,6 +1224,34 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if(quant_completed.q4_f32acc<=quant_before.q4_f32acc ||
            quant_completed.q4_f16acc!=quant_before.q4_f16acc || quant_completed.invalid!=quant_before.invalid)
             throw std::runtime_error("Image rejected: MOSS Q4 matrix F32 accumulation policy not observed");
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+        const uint64_t latent_values=uint64_t(request->width/16)*uint64_t(request->height/16)*128;
+        const auto sr=moss_spectrum_last;
+        if(request->steps!=50 || stats->actual_steps!=50 || request->cfg_scale!=3.0 ||
+           std::strcmp(request->sampler,"euler") || request->flow_shift!=5.0 ||
+           moss_spectrum_completions.load(std::memory_order_acquire)!=1 ||
+           sr.completed_steps!=50 || sr.real_steps!=30 || sr.forecast_steps!=20 || sr.errors ||
+           sr.history_payload_bytes!=6*latent_values*sizeof(float) ||
+           sr.peak_payload_bytes!=7*latent_values*sizeof(float) ||
+           precision_dit_outputs.load()!=60 ||
+           quant_completed.q4_f32acc-quant_before.q4_f32acc!=9960)
+            throw std::runtime_error("Image rejected: MOSS Spectrum requires30actual CFG steps,20forecasts,60completed DiT forwards and9960 F32 Q4 recordings");
+#endif
+#if PS5_AI_MOSS_SAMPLER_TRIAL
+        // One positive42-layer and one negative41-layer forward per sampler
+        // step, with four Q4 matrix operations per retained main layer.
+        const uint64_t expected_forwards=uint64_t(request->steps)*2;
+        const uint64_t expected_q4=uint64_t(request->steps)*(42+41)*4;
+        if(precision_dit_outputs.load()!=expected_forwards ||
+           quant_completed.q4_f32acc-quant_before.q4_f32acc!=expected_q4)
+            throw std::runtime_error("Image rejected: sampler trial requires exact60 completed DiT forwards and9960 F32 Q4 recordings");
+#endif
+#if PS5_AI_MOSS_TURBO_TRIAL
+        if(request->steps!=4 || stats->actual_steps!=4 || request->cfg_scale!=1.0 ||
+           precision_dit_outputs.load()!=4 || quant_completed.q4_f32acc-quant_before.q4_f32acc!=672 ||
+           !moss_turbo_lora_gate_admitted())
+            throw std::runtime_error("Image rejected: Turbo requires actual4 positive DiT outputs and672 F32 Q4 recordings");
+#endif
 #endif
 #if PS5_AI_MOSS_Q4_BK64_RAW64
         ps5_ai_moss_q4_bk64_report candidate_completed{};ps5_ai_moss_q4_bk64_snapshot(&candidate_completed);
@@ -1178,7 +1346,21 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"moss_lora_loaded_tensors", moss_lora_loaded.load()}, {"moss_lora_matched_tensors", moss_lora_matched.load()},
                  {"moss_lora_used_tensors", moss_lora_used.load()}, {"moss_lora_skipped_tensors", moss_lora_skipped.load()},
                  {"moss_lora_application_verified", moss_lora_verified.load()},
-                 {"flow_shift",request->flow_shift},{"scheduler","discrete"},{"negative_cfg_skip_layers",{22}},
+                 {"flow_shift",request->flow_shift},{"scheduler",PS5_AI_MOSS_REQUEST_SCHEDULER},{"sampler",request->sampler},{"cfg_scale",request->cfg_scale},
+                 {"moss_sampler_trial",bool(PS5_AI_MOSS_SAMPLER_TRIAL)},{"moss_sampler_policy",PS5_AI_MOSS_SAMPLER_POLICY},
+                 {"moss_bounded_weight_upload_trial",PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL!=0},
+                 {"moss_bounded_weight_upload_policy",PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_POLICY},
+                 {"bounded_weight_upload_enabled",ps5_ai_moss_bounded_weight_upload_enabled()!=0},
+                 {"moss_spectrum",moss_spectrum_json()},
+                 {"moss_turbo_trial",bool(PS5_AI_MOSS_TURBO_TRIAL)},{"moss_turbo_policy",PS5_AI_MOSS_TURBO_POLICY},
+                 {"effective_adapter",moss_effective_lora_identity()},
+                 {"custom_sigmas",PS5_AI_MOSS_TURBO_TRIAL?nlohmann::json::array({1.0,.910,.717,.024,0.0}):nlohmann::json(nullptr)},
+                 {"custom_sigmas_second_flow_shift",false},
+                 {"negative_cfg_skip_layers",{22}},
+                 {"negative_cfg_skip_scope",PS5_AI_MOSS_TURBO_TRIAL?"no_negative_forward_CFG1":"all_negative_forwards_existing_MOSS_policy"},
+                 {"negative_cfg_skip_applied",!bool(PS5_AI_MOSS_TURBO_TRIAL)},
+                 {"expected_dit_forwards",PS5_AI_MOSS_TURBO_TRIAL?uint64_t(4):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(60):uint64_t(request->steps)*2},
+                 {"expected_q4_f32acc_recordings",PS5_AI_MOSS_TURBO_TRIAL?uint64_t(672):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(9960):uint64_t(request->steps)*(42+41)*4},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
                  {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},
                  {"mask_preserved_pixels",stats->mask_preserved_pixels},{"mask_changed_pixels",stats->mask_changed_pixels},
@@ -1224,6 +1406,13 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     if (result == 0 && progress) {
         progress(1.0, user);
     }
+#if PS5_AI_MOSS_TURBO_TRIAL
+    if(result==0 && request->width==256 && request->height==256) {
+        if(!ps5_ai_ggml_log_healthy() || pool.fault_retained)
+            throw std::runtime_error("Turbo small-result durable completion proof failed;1024 remains closed");
+        moss_turbo_small_image_completed.store(true,std::memory_order_release);
+    }
+#endif
     return result;
 }
 

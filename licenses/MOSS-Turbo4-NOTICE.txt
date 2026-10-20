@@ -1,0 +1,32 @@
+PS5 AI MOSS Image: optional composed Turbo4 adapter provenance
+
+No weights are distributed with this notice. Converter source and model terms
+are separate. Keep applicable upstream license text/attribution when obtaining
+or sharing model derivatives.
+
+Component1: axiomofmind/Moss-image-nsfw-uncensored-lora
+Revision e0a4cd44a906a4296dca7fa200c76058d1938082
+https://huggingface.co/axiomofmind/Moss-image-nsfw-uncensored-lora/blob/e0a4cd44a906a4296dca7fa200c76058d1938082/LICENSE
+Apache-2.0; retained original text: MOSS-requested-LoRA-Apache-2.0.txt.
+Raw BF16 source SHA256:
+d62ce599744d3e3f07f55a1f539052a99acc38d34bf35c13518aa949fc856afa
+Exact rank16 F32 derivative SHA256:
+907c1e0220c8aa301595b4a369f7b09447001306ffebb53da1fc58f24542cdf9
+
+Component2: akhaliq/MOSS-Image-SFT-4-steps
+Revision2ded95c37a029360245926fe72e475e30039bbfb
+https://huggingface.co/akhaliq/MOSS-Image-SFT-4-steps/blob/2ded95c37a029360245926fe72e475e30039bbfb/README.md
+That pinned author model card declares Apache-2.0. Its training lineage lists
+OpenMOSS-Team/MOSS-Image-SFT and lodestones/MOSS-Image-SFT-8-steps-dmd.
+Selected rank128 F32 file: moss_image_sft_4step_v2.0.safetensors
+SHA256154c7f1455c3bf9925945c2f1ea2e4f09d0d0c67256081384a094b2b585f913f
+
+Project modification: independent per-projection low-rank concatenation,
+rank16 NSFW first at baked0.7, rank128 Turbo second at1.0; final F32 rank144,
+runtime multiplier1.0; no base merge or re-quantization. This is a project
+derivative rather than an unmodified upstream adapter.
+Filename: moss-nsfw07-turbo4-r144-f32.safetensors
+SHA256126fed9dd5268fe20ab0085525a4b7b7f8ff767a28aea907df2089c33360d4d3
+
+See docs/moss-turbo4-reproduction.md for exact preparation and trial scope.
+This attribution does not establish PS5 generation success, memory fit or speed.

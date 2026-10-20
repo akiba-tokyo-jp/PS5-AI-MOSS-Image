@@ -54,6 +54,19 @@ extern "C" void ps5_ai_reference_phase(int, int, double);
 #include "runtime/guidance.h"
 #include "runtime/preview_interval.h"
 #include "runtime/sample-cache.h"
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+extern "C" void ps5_ai_moss_spectrum_complete(const sd_moss_spectrum::Receipt*);
+static sd_moss_spectrum::Shape moss_spectrum_shape(const sd::Tensor<float>& tensor) {
+    const auto& s=tensor.shape();
+    if(s.size()!=3 && s.size()!=4)
+        throw std::runtime_error("MOSS Spectrum latent rank mismatch");
+    sd_moss_spectrum::Shape shape{static_cast<size_t>(s[0]),static_cast<size_t>(s[1]),
+                                 static_cast<size_t>(s[2]),s.size()==4?static_cast<size_t>(s[3]):1};
+    if(shape.numel()!=static_cast<size_t>(tensor.numel()))
+        throw std::runtime_error("MOSS Spectrum latent length mismatch");
+    return shape;
+}
+#endif
 
 #include "name_conversion.h"
 #include "runtime/latent-preview.h"
@@ -2568,6 +2581,26 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
 
     size_t steps                = sigmas.size() - 1;
     bool terminal_sigma_is_zero = sigmas.back() == 0.f;
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+    if(cache_runtime.moss_spectrum_enabled) {
+        auto text_only=[](const SDCondition& c) {
+            return !c.c_crossattn.empty() && c.c_vector.empty() && c.c_concat.empty() &&
+                c.c_t5_ids.empty() && c.c_t5_weights.empty() && c.c_input_ids.empty() &&
+                c.c_position_ids.empty() && c.c_token_types.empty() && c.c_vinput_mask.empty() &&
+                c.c_image_embeds.empty() && c.c_ref_images.empty() && c.c_ref_audios.empty() &&
+                c.c_reference_blocks.empty() && c.extra_c_crossattns.empty();
+        };
+        if(version!=VERSION_MOSS_IMAGE || method!=EULER_SAMPLE_METHOD || !is_flow_denoiser ||
+           steps!=50 || cfg_scale!=3.0f || !terminal_sigma_is_zero ||
+           apply_denoise_mask || !control_image.empty() || !ref_latents.empty() || ref_image_params.pass_to_vlm ||
+           !img_uncond.empty() || !vace_context.empty() || !video_positions.empty() ||
+           !guidance_schedule.empty() || slg_scale!=0.0f || slg_uncond || !skip_layers.empty() ||
+           !text_only(cond) || !text_only(uncond) ||
+           std::any_of(generation_extensions.begin(),generation_extensions.end(),
+                       [](const auto& e){return e->is_enabled();}))
+            throw std::runtime_error("MOSS Spectrum requires the fixed puretext Euler50 CFG3 two-branch trial");
+    }
+#endif
     bool has_skiplayer          = (slg_scale != 0.0f || slg_uncond) && !skip_layers.empty();
     if (has_skiplayer && !sd_version_is_dit(version)) {
         has_skiplayer = false;
@@ -2661,6 +2694,18 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
             noised_input = noised_input * denoise_mask + sampling_init_latent * (1.0f - denoise_mask);
         }
 
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+        if(cache_runtime.moss_spectrum_enabled &&
+           cache_runtime.moss_spectrum.should_predict(step,sigma,moss_spectrum_shape(x))) {
+            auto predicted=cache_runtime.moss_spectrum.predict(step,sigma,moss_spectrum_shape(x));
+            denoised=sd::Tensor<float>(x.shape(),std::move(predicted));
+            if(preview_needed && sd_should_preview_denoised())
+                preview_image(step,denoised,version,preview.mode,preview.callback,preview.data,false);
+            report_sample_progress(step,steps,terminal_sigma_is_zero,&last_progress_us);
+            sd::guidance::GuiderOutput output;output.pred=denoised;
+            return output;
+        }
+#endif
         if (cache_runtime.spectrum_enabled && cache_runtime.spectrum.should_predict()) {
             cache_runtime.spectrum.predict(&denoised);
             if (apply_denoise_mask) {
@@ -3056,6 +3101,15 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                                                        : (!uncond_out.empty() ? uncond_out : cond_out);
             output.pred_uncond                   = base_uncond * c_out + x * c_skip;
         }
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+        if(cache_runtime.moss_spectrum_enabled) {
+            // Every run_condition result was copied to owned CPU storage after
+            // GGMLRunner::execute_segment's existing workspace synchronization.
+            // Store a deep F32 copy of the final post-CFG latent, never a GPU alias.
+            cache_runtime.moss_spectrum.observe_actual(step,sigma,moss_spectrum_shape(denoised),
+                                                       denoised.data(),static_cast<size_t>(denoised.numel()));
+        }
+#endif
         if (cache_runtime.spectrum_enabled) {
             cache_runtime.spectrum.update(denoised);
         }
@@ -3080,6 +3134,14 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
         return {};
     }
 
+#if PS5_AI_MOSS_SPECTRUM_TRIAL
+    if(cache_runtime.moss_spectrum_enabled) {
+        if(!cache_runtime.moss_spectrum.completed())
+            throw std::runtime_error("MOSS Spectrum completed-forward/forecast receipt mismatch");
+        const auto receipt=cache_runtime.moss_spectrum.receipt();
+        ps5_ai_moss_spectrum_complete(&receipt);
+    }
+#endif
     if(apply_denoise_mask)ps5_ai_reference_phase(3,mask_denoise_evaluations,0);
     auto x0 = std::move(x0_opt);
     sd_sample::log_sample_cache_summary(cache_runtime, steps);

@@ -150,7 +150,7 @@ static int parse_backend_health_object(const char *p, object *obj) {
     skip_space(&p);
     if (*p == '}') { ++p; skip_space(&p); return *p == 0; }
     for (;;) {
-        if (obj->count == MAX_FIELDS || *p != '"') return 0;
+        if (obj->count == MAX_BACKEND_JOB_FIELDS || *p != '"') return 0;
         field *f = &obj->values[obj->count];
         if (!parse_string(&p, f->key, sizeof(f->key))) return 0;
         for (size_t i = 0; i < obj->count; ++i)
@@ -191,11 +191,23 @@ static int backend_json(const char *method,const char *path,const char *body,obj
 }
 static int backend_true(object *o,const char *key){field *f=find_field(o,key);return f && f->type==3;}
 static const char *backend_text(object *o,const char *key){field *f=find_field(o,key);return f && f->type==1?f->value:"";}
+static int backend_model_identity_matches(object *o) {
+    int model_ok=!strcmp(backend_text(o,"model_id"),"moss-image-sft") && !strcmp(backend_text(o,"model"),"/app0/models/MOSS-Image-SFT-Q4_K.gguf");
+#if PS5_AI_MOSS_TURBO_TRIAL
+    int64_t turbo_rank=0;double turbo_multiplier=0;
+    model_ok=model_ok && backend_true(o,"moss_turbo_trial") &&
+        !strcmp(backend_text(o,"moss_turbo_policy"),PS5_AI_MOSS_TURBO_POLICY) &&
+        !strcmp(backend_text(o,"moss_turbo_adapter"),PS5_AI_MOSS_TURBO_ADAPTER_BASENAME) &&
+        get_int(find_field(o,"moss_turbo_rank"),144,144,&turbo_rank) &&
+        get_double(find_field(o,"moss_turbo_runtime_multiplier"),1.0,1.0,&turbo_multiplier);
+#endif
+    return model_ok;
+}
 static void backend_status(ps5_ai_engine_status *s) {
     memset(s,0,sizeof(*s));snprintf(s->backend,sizeof(s->backend),"HTTP gateway -> same-PS5 MOSS Image native API%d",PS5_AI_UPSTREAM_PORT);
     object *o=malloc(sizeof(*o));int code=0;
     if(!o || !backend_json("GET","/health",NULL,o,&code) || code!=200){snprintf(s->reason,sizeof(s->reason),"Same-PS5 MOSS Image native API%d is unavailable",PS5_AI_UPSTREAM_PORT);free(o);return;}
-    int model_ok=!strcmp(backend_text(o,"model_id"),"moss-image-sft") && !strcmp(backend_text(o,"model"),"/app0/models/MOSS-Image-SFT-Q4_K.gguf");
+    int model_ok=backend_model_identity_matches(o);
     s->available=model_ok && backend_true(o,"engine_available");s->gpu_available=model_ok && backend_true(o,"gpu_available");s->gpu_verified=model_ok && backend_true(o,"gpu_verified");s->model_loaded=model_ok && backend_true(o,"model_loaded");
     snprintf(s->device,sizeof(s->device),"%s",backend_text(o,"gpu_device"));snprintf(s->driver,sizeof(s->driver),"%s",backend_text(o,"gpu_driver"));snprintf(s->model,sizeof(s->model),"%s",backend_text(o,"model"));
     if(!model_ok)snprintf(s->reason,sizeof(s->reason),"Native backend model is not configured MOSS Image SFT");else snprintf(s->reason,sizeof(s->reason),"%s",backend_text(o,"reason"));free(o);

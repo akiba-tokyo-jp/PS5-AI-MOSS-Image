@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from moss_feature_policy import feature_compile_flags, feature_manifest_fields
 import re
 import shutil
 import struct
@@ -59,12 +60,15 @@ def moss_accumulation_compile_flag(enabled):
     return "-DPS5_AI_MOSS_F32_ACCUMULATION="+str(int(enabled))
 
 
-def materialize_compile_commands(rows,expand,moss_f32_accumulation=False):
+def materialize_compile_commands(rows,expand,moss_f32_accumulation=False,moss_spectrum_trial=False,moss_bounded_weight_upload_trial=False,moss_turbo_trial=False):
     flag=moss_accumulation_compile_flag(moss_f32_accumulation)
+    features=feature_compile_flags(moss_spectrum_trial,moss_bounded_weight_upload_trial,moss_turbo_trial)
+    if (moss_spectrum_trial or moss_bounded_weight_upload_trial or moss_turbo_trial) and not moss_f32_accumulation:
+        raise ValueError('Isolated feature core requires explicit F32 accumulation')
     for row in rows:
-        if any("PS5_AI_MOSS_F32_ACCUMULATION" in arg for arg in row["argv"]):
+        if any(any(m in arg for m in ("PS5_AI_MOSS_F32_ACCUMULATION","PS5_AI_MOSS_SPECTRUM_TRIAL","PS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL","PS5_AI_MOSS_TURBO_TRIAL")) for arg in row["argv"]):
             raise ValueError("Core recipe must not override the explicit accumulation policy")
-    return [[expand(row["argv"][0]),flag,*[expand(arg) for arg in row["argv"][1:]]] for row in rows]
+    return [[expand(row["argv"][0]),flag,*features,*[expand(arg) for arg in row["argv"][1:]]] for row in rows]
 
 
 def validate_profile(profile):
@@ -177,6 +181,9 @@ def main():
     parser.add_argument("--source-freeze", type=Path, help="engine source-freeze receipt; required for actual compilation")
     parser.add_argument("--check-only", action="store_true", help="plan/guards only; no vendor mutation or compilation")
     parser.add_argument("--moss-f32-accumulation",action="store_true",help="Explicit MOSS Linear F32 accumulation; preserved in all75 actual compile commands")
+    parser.add_argument('--moss-spectrum-trial',action='store_true')
+    parser.add_argument('--moss-bounded-weight-upload-trial',action='store_true')
+    parser.add_argument('--moss-turbo-trial',action='store_true')
     args = parser.parse_args()
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     rows = validate_profile(profile)
@@ -201,7 +208,7 @@ def main():
     replacements = {"ROOT": ROOT.as_posix(), "SD": sd.as_posix(), "SDK": sdk.as_posix(), "LLVM": llvm.as_posix(), "OUT": out.as_posix()}
     def expand(arg):
         return re.sub(r"\$\{([^}]+)\}", lambda match: replacements[match[1]], arg)
-    commands = materialize_compile_commands(rows,expand,args.moss_f32_accumulation)
+    commands = materialize_compile_commands(rows,expand,args.moss_f32_accumulation,args.moss_spectrum_trial,args.moss_bounded_weight_upload_trial,args.moss_turbo_trial)
     for row, command in zip(rows, commands):
         source = Path(expand(row["source"])).resolve(strict=True)
         if not inside(source, sd) or source.drive.upper() != "D:":
@@ -219,6 +226,8 @@ def main():
     manifest.update({"moss_f32_accumulation":args.moss_f32_accumulation,
         "moss_accumulation_policy":"force_f32" if args.moss_f32_accumulation else "model_default",
         "moss_accumulation_compile_flag":moss_accumulation_compile_flag(args.moss_f32_accumulation)})
+    manifest.update(feature_manifest_fields(args.moss_spectrum_trial,args.moss_bounded_weight_upload_trial,args.moss_turbo_trial))
+    manifest['policy_inputs']=[record(ROOT/'tools/moss_feature_policy.py')]
     target_manifest = out / "manifest.private.json"
     write_json(target_manifest, manifest)
     if args.check_only:
@@ -229,6 +238,14 @@ def main():
     freeze = json.loads(args.source_freeze.read_text(encoding="utf-8"))
     if freeze.get("schema") != "ps5-ai-moss-engine-source-freeze-v1" or freeze.get("frozen") is not True or freeze.get("runtime_admitted") is not False or freeze.get("upstream_base_revision") != BASE_SD or freeze.get("ggml_revision") != GGML or Path(freeze["repository_root"]).resolve() != ROOT or Path(freeze["private_vendor_root"]).resolve() != sd:
         raise ValueError("Source-freeze receipt does not bind this MOSS repository/vendor/ABI")
+    for key,value in feature_manifest_fields(args.moss_spectrum_trial,args.moss_bounded_weight_upload_trial,args.moss_turbo_trial).items():
+        if key in freeze and (type(freeze[key])is not type(value) or freeze[key]!=value):
+            raise ValueError('Source freeze feature policy mismatch: '+key)
+        if (args.moss_spectrum_trial or args.moss_bounded_weight_upload_trial or args.moss_turbo_trial) and key not in freeze:
+            raise ValueError('Feature source freeze lacks explicit policy: '+key)
+    if (args.moss_spectrum_trial or args.moss_bounded_weight_upload_trial or args.moss_turbo_trial) and (
+        freeze.get('new_core_compilation_required')is not True or freeze.get('old_core_reuse_allowed')is not False):
+        raise ValueError('Feature source freeze must require fresh75 and forbid old core reuse')
     frozen_inputs = []
     for relative, expected in freeze["sources"].items():
         path = (ROOT / relative).resolve(strict=True)
@@ -281,7 +298,7 @@ def main():
         after_sources = [record(row["path"]) for row in manifest["sources"]]
         after_headers = header_snapshot(sd, sdk, llvm, out, after_sources)
         after_overlay = [record(row["path"]) for row in manifest["overlay_inputs"]]
-        if after_sources != manifest["sources"] or after_headers != manifest["header_inputs"] or after_overlay != manifest["overlay_inputs"] or record(PROFILE) != manifest["profile"] or record(__file__) != manifest["builder"] or record(args.source_freeze) != manifest["source_freeze"] or [record(item["path"]) for item in frozen_inputs] != frozen_inputs or [record(item["path"]) for item in manifest["tool_inputs"]] != manifest["tool_inputs"]:
+        if after_sources != manifest["sources"] or after_headers != manifest["header_inputs"] or after_overlay != manifest["overlay_inputs"] or record(PROFILE) != manifest["profile"] or record(__file__) != manifest["builder"] or record(args.source_freeze) != manifest["source_freeze"] or [record(item["path"]) for item in frozen_inputs] != frozen_inputs or [record(item["path"]) for item in manifest["tool_inputs"]] != manifest["tool_inputs"] or [record(item["path"]) for item in manifest["policy_inputs"]] != manifest["policy_inputs"]:
             raise ValueError("Source/header/overlay/profile changed during compilation; archive not admitted")
         manifest["hash_inputs_stable"] = True
         archive = out / "libstable-diffusion.moss-core.a"

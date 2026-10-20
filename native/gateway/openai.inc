@@ -49,7 +49,7 @@ static size_t base64_block(const unsigned char *in,size_t n,char *out) {
 }
 static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,char *err,size_t cap,char param[64]) {
     object *o=malloc(sizeof(*o));if(!o){snprintf(err,cap,"Unable to parse request");return 0;}
-    memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=50;r->cfg_scale=3;r->flow_shift=5;r->seed=-1;strcpy(r->sampler,"euler");r->manga_strength=0;*url_format=0;param[0]=0;int ok=0;int64_t v;
+    memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=PS5_AI_MOSS_DEFAULT_REQUEST_STEPS;r->cfg_scale=PS5_AI_MOSS_DEFAULT_REQUEST_CFG;r->flow_shift=5;r->seed=PS5_AI_MOSS_DEFAULT_REQUEST_SEED;strcpy(r->sampler,PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER);r->manga_strength=0;*url_format=0;param[0]=0;int ok=0;int64_t v;
     r->control_strength=1;
     if(!parse_object(body,o)){snprintf(err,cap,"Malformed, duplicate, nested, or oversized JSON field");goto done;}
     for(size_t i=0;i<o->count;i++){
@@ -115,7 +115,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         }else if(!strcmp(f->key,"seed")){
             if(!get_int(f,-1,INT64_MAX,&r->seed)){snprintf(err,cap,"Invalid seed");goto done;}
         }else if(!strcmp(f->key,"sampler")){
-            if(f->type!=1 || (strcmp(f->value,"euler") && strcmp(f->value,"euler_a") && strcmp(f->value,"dpm++2m"))){snprintf(err,cap,"Unsupported sampler");goto done;}strcpy(r->sampler,f->value);
+            if(f->type!=1 || !ps5_ai_moss_sampler_name_allowed(f->value)){snprintf(err,cap,"Unsupported sampler");goto done;}strcpy(r->sampler,f->value);
         }else{snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
     }
     if(!r->prompt[0]){strcpy(param,"prompt");snprintf(err,cap,"prompt is required and cannot be empty");goto done;}
@@ -127,6 +127,9 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
     if((r->controlnet[0]!=0)!=(r->control_image_id[0]!=0) ||
        (find_field(o,"control_strength") && find_field(o,"control_strength")->type!=5 && !r->controlnet[0])){
         snprintf(err,cap,"ControlNet requires both its model name and prepared control image ID");goto done;
+    }
+    if(!ps5_ai_moss_sampler_request_allowed(r->width,r->height,r->steps,r->cfg_scale,r->flow_shift,r->sampler,r->seed)){
+        snprintf(err,cap,"Sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep,seed20261020");goto done;
     }
     ok=1;
 done:free(o);return ok;

@@ -1,0 +1,71 @@
+{
+  "schema": "ps5-ai-moss-experimental-turbo-trial-v1",
+  "experimental_small_trial": true,
+  "production_runtime_admitted": false,
+  "trial_10g": true,
+  "gpu_pool_bytes": 10737418240,
+  "working_reserve_bytes": 1073741824,
+  "max_vram_gib": "Vulkan0=9.5",
+  "steps": 4,
+  "cfg_scale": 1.0,
+  "sampler": "euler",
+  "flow_shift": 5.0,
+  "max_generation_attempts": 4,
+  "selected_moss_lora_required": true,
+  "startup_readback_gates_required": true,
+  "seed": 20261020,
+  "moss_lora_strength": 1.0,
+  "allowed_sizes": [
+    [
+      256,
+      256
+    ],
+    [
+      1024,
+      1024
+    ]
+  ],
+  "performance_variant": 1,
+  "performance_variant_name": "fp16",
+  "requested_precision": "fp16",
+  "small256_success_and_visual_review_before1024": true,
+  "automatic_POST_retries": false,
+  "moss_f32_accumulation": true,
+  "moss_spectrum_trial": false,
+  "moss_spectrum_policy": "disabled",
+  "moss_bounded_weight_upload_trial": false,
+  "moss_bounded_weight_upload_policy": "disabled",
+  "moss_turbo_trial": true,
+  "moss_turbo_policy": "euler_custom1000_910_717_24_cfg1_nsfw07_turbo1_rank144_v1",
+  "moss_inference_feature_compile_flags": [
+    "-DPS5_AI_MOSS_SPECTRUM_TRIAL=0",
+    "-DPS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL=0",
+    "-DPS5_AI_MOSS_TURBO_TRIAL=1"
+  ],
+  "scheduler": "custom_sigmas_author_training_grid",
+  "expected_dit_forwards": 4,
+  "expected_q4_f32acc_recordings": 672,
+  "new_core_compilation_required": true,
+  "old_core_reuse_allowed": false,
+  "custom_sigmas": [
+    1.0,
+    0.91,
+    0.717,
+    0.024,
+    0.0
+  ],
+  "custom_sigmas_shift_applied_again": false,
+  "moss_lora_rank": 144,
+  "moss_lora_composition_schema": "ps5-ai-moss-nsfw07-turbo1-r144-f32-v1",
+  "moss_lora_components": [
+    {
+      "rank": 16,
+      "strength": 0.7
+    },
+    {
+      "rank": 128,
+      "strength": 1.0
+    }
+  ],
+  "rank144_GPU_numerical_gates_required": true
+}
