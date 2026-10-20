@@ -1,6 +1,6 @@
 # MOSS Imageの状態
 
-2026-10-20 JST。**FP16データ経路＋FP32累積の実験版で、MOSSの1024生成を1219.096190秒から1064.248911秒へ短縮しました。** private、production admission0、最大4試行、10GiB poolを維持します。速度改善を継続する中で得た単回比較で、最速構成や長期安定性の証明ではありません。[現在の実装・実測](moss-mixed-precision-20261020.md)。
+2026-10-20 JST。**最新のMOSS純textキャッシュ版では、同processの256後1024初回を1064.248911秒から1023.859406秒へ短縮しました。** 同promptの解像度変更に限る単回比較です。FP16データ経路＋FP32累積、private、production admission0、最大4試行、10GiB poolを維持します。最速構成や長期安定性の証明ではありません。[追加最適化の実測](moss-additional-optimization-20261020.md)、[混合精度の比較履歴](moss-mixed-precision-20261020.md)。
 
 | 今回の比較 | 計測入りFP32基準 | 提出調整＋限定fusion FP32 | FP16データ＋FP32累積 |
 |---|---:|---:|---:|
@@ -10,7 +10,9 @@
 
 FP32基準比の単回差は256で5.28%、1024で12.70%です。初期のFP16候補はQ4_K N9数値ゲート41/153 mismatchで拒否されましたが、現在の混合精度版はMOSSとruntime LoRAの累積をFP32へ明示し、同じ許容値で合格して両サイズを生成しました。新たなmedium64タイル案は実機で既に既定動作と判明したため採用しません。schema2のdriver計測はlookupを含むnested CPU wallで、GPU timestampや除去可能な待ち時間ではありません。[以前の比較の詳細](moss-performance-optimization-20261020.md)。
 
-現在は実生成に成功した混合精度版と同じSELFをPS5へ配置済みです。復元後のnative672/gateway675のreadyと必須14起動ゲートを再確認し、画像POSTは追加せず通常APIで終了しました。両PID不在と独立observer015のidleを確認し、停止しています。以前の生成計測を復元後の追加生成として数えていません。
+追加調査ではGPU timestampでFFN-upを測定し、WG256候補Aの単体時間差は改善を示さず、BK64候補Bも実画像で256が147.548952秒、1024が1083.242504秒となったため不採用としました。各1回の対応比較で、温度・clockを統制した統計的評価ではありません。
+
+現在は基準GPU経路にMOSS純text条件の解像度間キャッシュを加えた版で、256初回146.016289秒、同processの256後1024初回1023.859406秒を確認しました。対応する基準1064.248911秒比で40.389505秒（3.7951%）短縮し、両PNGは基準と全バイト一致・目視正常です。fresh core全75 object・依存・RTTIリンク、14起動ゲート、両生成のF32累積16600／F16累積0／nonfinite0／LoRA504使用を確認しました。1024のDiT100回は1016.603640→1016.443356秒でほぼ同じですが、他runnerは51→49回、46.183293→5.997303秒へ減りました。nested CPU wallであり加算しません。完全な現行engineログの連続区間で、256要求のcache hit 0件と1024要求のINFO cache hit 2件を確認しました。native875・gateway878を通常API終了し、両PID不在を別確認しました。新規observer023でも同boot・同じ既存サービス／syscore／shellcore、GPU titleなし（BigApp −1、native eboot 0）、3タイトル登録維持を確認済みです。同promptの解像度変更に対する単回結果で、new promptやGPU演算そのものの高速化とは扱いません。[追加調査の詳細](moss-additional-optimization-20261020.md)。
 
 ## 前回の1024 cold/warm（履歴）
 

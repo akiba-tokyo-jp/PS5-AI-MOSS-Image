@@ -28,11 +28,16 @@ MOSS_BENCHMARK_1024_CONTRACT.update({
 
 MOSS_PERFORMANCE_VARIANTS={0:('baseline-fp32','fp32'),1:('fp16','fp16'),2:('submit-fusion-fp32','fp32')}
 
-def moss_performance_contract(variant,moss_f32_accumulation=False):
+def moss_performance_contract(variant,moss_f32_accumulation=False,moss_gpu_profile=False,moss_q4_bk64_raw64=False):
     if type(variant) is not int or variant not in MOSS_PERFORMANCE_VARIANTS:
         raise RuntimeError('Performance variant must be explicit integer0,1,or2')
     if type(moss_f32_accumulation) is not bool or (moss_f32_accumulation and variant!=1):
         raise RuntimeError('F32 accumulation requires the explicit FP16 performance variant')
+    if type(moss_gpu_profile) is not bool or (moss_gpu_profile and not moss_f32_accumulation):
+        raise RuntimeError('GPU operator profiling requires the explicit FP16/F32 accumulation variant')
+    moss_q4_bk64_compile_flags(moss_q4_bk64_raw64)
+    if moss_q4_bk64_raw64 and (not moss_f32_accumulation or moss_gpu_profile):
+        raise RuntimeError('Q4 BK64/raw64 candidate B requires FP16/F32 accumulation with GPU profiling disabled')
     name,precision=MOSS_PERFORMANCE_VARIANTS[variant]
     contract={key:value for key,value in MOSS_BENCHMARK_1024_CONTRACT.items() if key not in ('width','height')}
     contract.update({'schema':'ps5-ai-moss-experimental-performance-v1',
@@ -40,6 +45,8 @@ def moss_performance_contract(variant,moss_f32_accumulation=False):
         'performance_variant':variant,'performance_variant_name':name,'requested_precision':precision,
         'small256_success_and_visual_review_before1024':True,'automatic_POST_retries':False})
     if moss_f32_accumulation:contract['moss_f32_accumulation']=True
+    if moss_gpu_profile:contract['moss_gpu_profile']=True
+    if moss_q4_bk64_raw64:contract['moss_q4_bk64_raw64']=True
     return contract
 
 def validate_moss_performance_precision(variant,precision):
@@ -59,6 +66,45 @@ def validate_moss_accumulation_mode(enabled,performance_variant,precision,experi
     moss_accumulation_compile_flags(enabled)
     if enabled and (performance_variant!=1 or type(performance_variant) is not int or precision!='fp16' or experimental is not True or trial_10g is not True):
         raise RuntimeError('F32 accumulation requires explicit small10GiB performance variant1 and fp16')
+
+def moss_gpu_profile_compile_flags(enabled):
+    if type(enabled) is not bool:raise RuntimeError('GPU operator profiling must be an explicit bool')
+    return ['-DPS5_AI_MOSS_GPU_PROFILE='+str(int(enabled))]
+
+def validate_moss_gpu_profile_mode(enabled,accumulation,performance_variant,precision,experimental,trial_10g):
+    moss_gpu_profile_compile_flags(enabled)
+    if enabled:
+        if accumulation is not True:raise RuntimeError('GPU operator profiling requires explicit F32 accumulation')
+        validate_moss_accumulation_mode(True,performance_variant,precision,experimental,trial_10g)
+
+def validate_moss_gpu_profile_recipes(profile):
+    ggml=profile.get('ggml_compile')
+    if not isinstance(ggml,list) or not ggml:
+        raise RuntimeError('Expected a nonempty native GGML compiler recipe list')
+    recipes=[profile.get('platform_compile'),*ggml]
+    if any(not isinstance(recipe,list) or not recipe or any(not isinstance(arg,str) for arg in recipe) for recipe in recipes):
+        raise RuntimeError('Expected complete native platform/GGML compiler recipes')
+    if any('PS5_AI_MOSS_GPU_PROFILE' in arg for recipe in recipes for arg in recipe):
+        raise RuntimeError('Native recipes cannot override the GPU operator profiling policy')
+
+def moss_q4_bk64_compile_flags(enabled):
+    if type(enabled) is not bool:raise RuntimeError('Q4 BK64/raw64 candidate B must be an explicit bool')
+    return ['-DPS5_AI_MOSS_Q4_BK64_RAW64='+str(int(enabled))]
+
+def validate_moss_q4_bk64_mode(enabled,accumulation,gpu_profile,performance_variant,precision,experimental,trial_10g):
+    moss_q4_bk64_compile_flags(enabled)
+    if type(gpu_profile) is not bool:raise RuntimeError('GPU profiling policy must be an explicit bool')
+    if enabled:
+        if accumulation is not True or gpu_profile is not False:
+            raise RuntimeError('Q4 BK64/raw64 candidate B requires explicit F32 accumulation and GPU profiling disabled')
+        validate_moss_accumulation_mode(True,performance_variant,precision,experimental,trial_10g)
+
+def validate_moss_q4_bk64_recipes(profile):
+    # The existing validator also proves every raw recipe and argument is typed.
+    validate_moss_gpu_profile_recipes(profile)
+    recipes=[profile['platform_compile'],*profile['ggml_compile']]
+    if any('PS5_AI_MOSS_Q4_BK64_RAW64' in arg for recipe in recipes for arg in recipe):
+        raise RuntimeError('Native recipes cannot override the Q4 BK64/raw64 candidate B policy')
 
 def validate_moss_core_accumulation(manifest,required):
     """Bind declared policy to every actual member/compiler command, not labels."""
@@ -97,19 +143,25 @@ def same_typed_contract_value(actual,expected):
         len(actual)==len(expected) and all(same_typed_contract_value(a,e) for a,e in zip(actual,expected))
         if isinstance(expected,list) else actual==expected)
 
-def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None,moss_f32_accumulation=False):
+def moss_trial_flags(enabled,trial_10g,contract=None,quality_comparison=False,benchmark_1024=False,performance_variant=None,moss_f32_accumulation=False,moss_gpu_profile=False,moss_q4_bk64_raw64=False):
     """A trial is permission to RUN verification, never prior GPU admission."""
     if any(type(value) is not bool for value in (enabled,trial_10g,quality_comparison,benchmark_1024)):
         raise RuntimeError('MOSS trial switches must be explicit booleans')
     moss_accumulation_compile_flags(moss_f32_accumulation)
+    moss_gpu_profile_compile_flags(moss_gpu_profile)
+    moss_q4_bk64_compile_flags(moss_q4_bk64_raw64)
+    if moss_q4_bk64_raw64 and (moss_f32_accumulation is not True or moss_gpu_profile is not False or enabled is not True or trial_10g is not True or type(performance_variant) is not int or performance_variant!=1):
+        raise RuntimeError('Q4 BK64/raw64 candidate B requires the explicit FP16/F32 trial with profiling disabled')
+    if moss_gpu_profile and (moss_f32_accumulation is not True or enabled is not True or trial_10g is not True or type(performance_variant) is not int or performance_variant!=1):
+        raise RuntimeError('GPU operator profiling requires the explicit FP16/F32 performance trial')
     if moss_f32_accumulation and (enabled is not True or trial_10g is not True or type(performance_variant) is not int or performance_variant!=1):
         raise RuntimeError('F32 accumulation requires the explicit FP16 performance trial')
-    if performance_variant is not None:moss_performance_contract(performance_variant,moss_f32_accumulation)
+    if performance_variant is not None:moss_performance_contract(performance_variant,moss_f32_accumulation,moss_gpu_profile,moss_q4_bk64_raw64)
     if sum((quality_comparison,benchmark_1024,performance_variant is not None))>1:raise RuntimeError('MOSS trial modes are mutually exclusive')
     if not enabled:
         if trial_10g or quality_comparison or benchmark_1024 or performance_variant is not None:raise RuntimeError('Trial switches require --experimental-small-trial')
         return ['-DPS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL=0','-DPS5_AI_MOSS_TRIAL_10G=0']
-    expected_contract=moss_performance_contract(performance_variant,moss_f32_accumulation) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
+    expected_contract=moss_performance_contract(performance_variant,moss_f32_accumulation,moss_gpu_profile,moss_q4_bk64_raw64) if performance_variant is not None else MOSS_BENCHMARK_1024_CONTRACT if benchmark_1024 else MOSS_QUALITY_COMPARISON_CONTRACT if quality_comparison else MOSS_SMALL_TRIAL_CONTRACT
     valid_contract=isinstance(contract,dict) and set(contract)==set(expected_contract) and all(
         same_typed_contract_value(contract[key],expected)
         for key,expected in expected_contract.items())
@@ -157,8 +209,11 @@ def validate_moss_benchmark_gateway_wait_change(source,original):
         raise RuntimeError('Gateway change exceeds the reviewed wait-only literal')
     return {'old_wait_ms':1800000,'new_wait_ms':7200000,'all_other_bytes_identical':True,
             'restored_original_sha256':original['sha256']}
-def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False,moss_f32_accumulation=False):
+def validate_moss_core(manifest_path, expected_members, build_config, quality_native_only=False, carryforward=None, benchmark_gateway_only=False,moss_f32_accumulation=False,moss_q4_bk64_raw64=False):
     """Consume only a complete, immutable 75-member MOSS core rebuild."""
+    moss_q4_bk64_compile_flags(moss_q4_bk64_raw64)
+    if moss_q4_bk64_raw64 and (quality_native_only is not True or moss_f32_accumulation is not True or benchmark_gateway_only is not False):
+        raise RuntimeError('Q4 candidate core carryforward requires the exact native-only F32 trial')
     manifest=json.loads(Path(manifest_path).read_text(encoding='utf-8'))
     if (manifest.get('schema')!='moss-core-build-v1' or
         manifest.get('local_build_only') is not True or
@@ -206,6 +261,13 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
         # The separately reviewed1024 gateway change only extends its wait.
         # It still must be absent from all75 actual core dependency files.
         if benchmark_gateway_only is True:allowed.add(ROOT/'native/gateway/openai.inc')
+        if moss_q4_bk64_raw64:
+            # These existing superset files must remain absent from every
+            # actual pinned core .d closure. New native-only header/gate
+            # files have no old rows; the new native freeze binds them.
+            allowed={ROOT/'native/app/engine_sdcpp.cpp',
+                ROOT/'patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp',
+                Path(build_config['SD']).resolve()/'ggml/src/ggml-vulkan/ggml-vulkan.cpp'}
         if quality_native_only is not True or any(Path(row['path']).resolve() not in allowed for row in changed):
             raise RuntimeError('MOSS core source/header changed since compile: '+str(changed[0]['path']))
         gateway_wait_proof={}
@@ -234,9 +296,11 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
         if any(Path(row['path']).resolve() in consumed for row in changed):
             raise RuntimeError('Native-only carryforward denied: changed file is a consumed core input')
         if carryforward is not None:
-            carryforward.update({'schema':'moss-quality-native-only-core-carryforward-v1',
+            carryforward.update({'schema':'moss-q4-bk64-raw64-native-only-core-carryforward-v1' if moss_q4_bk64_raw64 else 'moss-quality-native-only-core-carryforward-v1',
                 'original_manifest_sha256':digest(manifest_path),'original_manifest_unchanged':True,
                 'archive_sha256':archive['sha256'],'new_core_compilation':False,
+                'moss_q4_bk64_raw64':moss_q4_bk64_raw64,
+                'allowed_changed_superset_paths':sorted(str(path) for path in allowed),
                 'reviewed_gateway_wait_only_change':gateway_wait_proof,
                 'actual_dependency_files_verified':75,'actual_dependency_paths':len(consumed),
                 'changed_superset_files_not_consumed':[{'path':row['path'],'before':row,
@@ -249,16 +313,22 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
+    validate_moss_gpu_profile_recipes(profile)
+    validate_moss_q4_bk64_recipes(profile)
     validate_moss_performance_precision(a.performance_trial_variant,a.precision)
     validate_moss_accumulation_mode(a.moss_f32_accumulation,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
     accumulation_flags=moss_accumulation_compile_flags(a.moss_f32_accumulation)
-    trial_path=ROOT/('build-profiles/moss-performance-fp16-f32accum.json' if a.moss_f32_accumulation else 'build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
+    validate_moss_gpu_profile_mode(a.moss_gpu_profile,a.moss_f32_accumulation,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
+    gpu_profile_flags=moss_gpu_profile_compile_flags(a.moss_gpu_profile)
+    validate_moss_q4_bk64_mode(a.moss_q4_bk64_raw64,a.moss_f32_accumulation,a.moss_gpu_profile,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
+    q4_candidate_flags=moss_q4_bk64_compile_flags(a.moss_q4_bk64_raw64)
+    trial_path=ROOT/('build-profiles/moss-performance-fp16-f32accum-q4-bk64-raw64.json' if a.moss_q4_bk64_raw64 else 'build-profiles/moss-performance-fp16-f32accum-gpu-profile.json' if a.moss_gpu_profile else 'build-profiles/moss-performance-fp16-f32accum.json' if a.moss_f32_accumulation else 'build-profiles/moss-performance-'+MOSS_PERFORMANCE_VARIANTS[a.performance_trial_variant][0]+'.json' if a.performance_trial_variant is not None else 'build-profiles/moss-1024-cold-warm.json' if a.benchmark_1024_cold_warm_trial else 'build-profiles/moss-quality-step-comparison.json' if a.quality_step_comparison_trial else 'build-profiles/moss-small10g-trial.json')
     trial_contract=json.loads(trial_path.read_text()) if a.experimental_small_trial else None
-    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant,a.moss_f32_accumulation)
+    trial_flags=moss_trial_flags(a.experimental_small_trial,a.trial_10g,trial_contract,a.quality_step_comparison_trial,a.benchmark_1024_cold_warm_trial,a.performance_trial_variant,a.moss_f32_accumulation,a.moss_gpu_profile,a.moss_q4_bk64_raw64)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -273,8 +343,8 @@ def main():
         raise RuntimeError('MOSS preparation build must retain runtime admission0')
     baseline_core=archive_members(Path(c['DEPS'])/'libstable-diffusion.graph-admission-1024-v3.a')
     core_carryforward={}
-    native_only_trial=a.quality_step_comparison_trial or a.benchmark_1024_cold_warm_trial
-    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation)
+    native_only_trial=a.quality_step_comparison_trial or a.benchmark_1024_cold_warm_trial or a.moss_q4_bk64_raw64
+    validate_moss_core(a.core_manifest,baseline_core,c,native_only_trial,core_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation,a.moss_q4_bk64_raw64)
     batch_pair=profile.get('controlnet_batch_pair',0)
     if type(batch_pair)!=int or batch_pair not in (0,1):raise RuntimeError('ControlNet batch-pair profile must be 0 or 1')
     shader_header=profile['generated_shader_header'];shader_path=Path(expand(shader_header['path']))
@@ -298,7 +368,7 @@ def main():
             log.write(subprocess.list2cmdline(cmd)+'\n'+result.stdout+result.stderr+'\n');log.flush()
             if result.returncode:raise RuntimeError(result.stderr[-8000:])
             return result.stdout
-        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,*accumulation_flags,
+        common=['--no-default-config','-target','x86_64-sie-ps5','-D__PROSPERO__=1','-DPS5_AI_MOSS_RUNTIME_ADMITTED=0',*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,
           '-fvisibility-nodllstorageclass=default','-isysroot','${SDK}',
           '-isystem','${SDK}/target/include/c++/v1','-isystem','${SDK}/target/include',
           '-I','${PLATFORM}/src','-I','${ROOT}/native/app','-I','${ROOT}/native/ui',
@@ -321,7 +391,7 @@ def main():
             if stem in ('engine_sdcpp','startup'):extra+=['-DPS5_AI_ENABLE_FP16='+str(int(a.precision=='fp16'))]
             print('Compiling '+source,flush=True)
             run(['${LLVM}/clang.exe',*common,*extra,'-c','${ROOT}/'+source,'-o','${OUT}/obj/'+name])
-        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*accumulation_flags,*profile['platform_compile'][1:]])
+        print('Compiling the owned RADV platform layer',flush=True);run([profile['platform_compile'][0],*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*profile['platform_compile'][1:]])
         driver=out/'libvulkan_radeon.native-direct-data.a';shutil.copyfile(Path(c['DEPS'])/driver.name,driver)
         before=run(['${LLVM}/llvm-ar.exe','t',str(driver)]).splitlines()
         if len(before)!=704 or before.count('radv_ps5_platform_native.o')!=1:raise RuntimeError('Unexpected driver archive members')
@@ -330,7 +400,7 @@ def main():
         core_name='libstable-diffusion.graph-admission-1024-v3.a'
         baseline=archive_members(Path(c['DEPS'])/core_name)
         current_carryforward={}
-        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation)
+        core_source,core_manifest=validate_moss_core(a.core_manifest,baseline,c,native_only_trial,current_carryforward,a.benchmark_1024_cold_warm_trial,a.moss_f32_accumulation,a.moss_q4_bk64_raw64)
         if current_carryforward!=core_carryforward:raise RuntimeError('Core native-only carryforward evidence changed during build')
         core=out/'libstable-diffusion.moss.a';shutil.copyfile(core_source,core)
         core_changed=sorted(name for name,record in archive_members(core).items() if record!=baseline[name])
@@ -343,7 +413,7 @@ def main():
         if ggml_names!=['ggml-vulkan.cpp.o'] or ggml_names[0] not in ggml_before:
             raise RuntimeError('Unexpected GGML provider recipe/archive member')
         for recipe in ggml_recipes:
-            run([recipe[0],*trial_flags,*accumulation_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
+            run([recipe[0],*trial_flags,*accumulation_flags,*gpu_profile_flags,*q4_candidate_flags,*recipe[1:]]);ggml_objects.append(recipe[recipe.index('-o')+1])
         run(['${LLVM}/llvm-ar.exe','r',str(ggml),*ggml_objects])
         ggml_changed=check_archive_update(ggml_before,archive_members(ggml),ggml_names)
         substitutions={driver.name:driver,core_name:core,ggml_name:ggml}
@@ -402,6 +472,12 @@ def main():
             'moss_f32_accumulation':a.moss_f32_accumulation,
             'moss_accumulation_policy':moss_accumulation_policy(a.moss_f32_accumulation),
             'moss_accumulation_compile_flags':accumulation_flags,
+            'moss_gpu_profile':a.moss_gpu_profile,
+            'moss_gpu_profile_policy':'first_two_complete_dit_graphs_per_generation' if a.moss_gpu_profile else 'disabled',
+            'moss_gpu_profile_compile_flags':gpu_profile_flags,
+            'moss_q4_bk64_raw64':a.moss_q4_bk64_raw64,
+            'moss_q4_bk64_policy':'canonical_moss_ffn_up_q4k_f32acc_bk64_raw64_v1' if a.moss_q4_bk64_raw64 else 'disabled',
+            'moss_q4_bk64_compile_flags':q4_candidate_flags,
             'core_accumulation_policy_proof':validate_moss_core_accumulation(core_manifest,a.moss_f32_accumulation),
             'trial_contract_sha256':digest(trial_path) if a.experimental_small_trial else None,
             'runtime_admitted':False,'requested_precision':a.precision,'controlnet_batch_pair':batch_pair,

@@ -1,0 +1,35 @@
+{
+  "schema": "ps5-ai-moss-experimental-performance-v1",
+  "experimental_small_trial": true,
+  "production_runtime_admitted": false,
+  "trial_10g": true,
+  "gpu_pool_bytes": 10737418240,
+  "working_reserve_bytes": 1073741824,
+  "max_vram_gib": "Vulkan0=9.5",
+  "steps": 50,
+  "cfg_scale": 3.0,
+  "sampler": "euler",
+  "flow_shift": 5.0,
+  "max_generation_attempts": 4,
+  "selected_moss_lora_required": true,
+  "startup_readback_gates_required": true,
+  "seed": 20261020,
+  "moss_lora_strength": 0.7,
+  "allowed_sizes": [
+    [
+      256,
+      256
+    ],
+    [
+      1024,
+      1024
+    ]
+  ],
+  "performance_variant": 1,
+  "performance_variant_name": "fp16",
+  "requested_precision": "fp16",
+  "small256_success_and_visual_review_before1024": true,
+  "automatic_POST_retries": false,
+  "moss_f32_accumulation": true,
+  "moss_q4_bk64_raw64": true
+}

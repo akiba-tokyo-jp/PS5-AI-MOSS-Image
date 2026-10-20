@@ -20,6 +20,8 @@
 #include "moss_runtime_admission.h"
 #include "moss_trial_contract.hpp"
 #include "moss_accumulation_policy.h"
+#include "moss_gpu_profile.h"
+#include "moss_q4_bk64.h"
 #include "moss_lora_contract.hpp"
 #include "moss_lora_receipt.h"
 #include "v3_shutdown.h"
@@ -255,6 +257,44 @@ static void phase_profile_report(){
         metrics[name]={{"seconds",c.ns.load()/1e9},{"calls",c.calls.load()},{"bytes",c.bytes.load()},{"invalid_clock_samples",c.invalid.load()}};
     }
     write_event({{"event","native_phase_profile"},{"schema",2},{"CPU_wall_time",true},{"pure_GPU_timestamp",false},{"nested_times_do_not_sum",true},{"scope","engine generation only; log summary excluded; Vulkan wait includes pending GPU execution"},{"metrics",metrics}});
+}
+
+static nlohmann::json moss_gpu_profile_json(const ps5_ai_moss_gpu_profile_report& r) {
+    if(!r.enabled)return nullptr;
+    nlohmann::json graphs=nlohmann::json::array();
+    for(unsigned i=0;i<PS5_AI_MOSS_GPU_PROFILE_GRAPHS && i<r.graphs_sampled;i++) {
+        const auto& g=r.graphs[i];nlohmann::json classes=nlohmann::json::object();
+        for(unsigned c=0;c<PS5_AI_MOSS_GPU_PROFILE_CLASSES;c++) {
+            const auto& s=g.classes[c];
+            classes[ps5_ai_moss_gpu_class_name(c)]={{"intervals",s.intervals},{"ticks",s.ticks},
+                {"interval_seconds",double(s.ticks)*r.timestamp_period_ns*1e-9},
+                {"minimum_ticks",s.minimum_ticks},{"maximum_ticks",s.maximum_ticks}};
+        }
+        graphs.push_back({{"ordinal",g.ordinal},{"nodes",g.nodes},{"recorded_nodes",g.recorded_nodes},
+            {"complete_main_graph",bool(g.complete_main_graph)},{"canonical_layer_count",g.canonical_layer_count},
+            {"canonical_layer_mask",g.canonical_layer_mask},
+            {"q4_main_nodes",{g.q4_main_nodes[0],g.q4_main_nodes[1],g.q4_main_nodes[2],g.q4_main_nodes[3]}},
+            {"lora_down_nodes",g.lora_down_nodes},{"lora_up_nodes",g.lora_up_nodes},{"tokens",g.tokens},
+            {"intervals",g.intervals},{"queries_written",g.queries_written},
+            {"queries_available",g.queries_available},{"zero_intervals",g.zero_intervals},
+            {"invalid_intervals",g.invalid_intervals},{"overflow",g.overflow},{"dispatches",g.dispatches},
+            {"submits",g.submits},{"fences",g.fences},{"CPU_wall_seconds",double(g.cpu_wall_ns)*1e-9},
+            {"classes",classes}});
+    }
+    return {{"schema",r.schema},{"enabled",bool(r.enabled)},{"valid",bool(r.valid)},
+        {"startup_gate",bool(r.startup_gate)},{"active",bool(r.active)},{"gate_verified",bool(r.gate_verified)},
+        {"generation_ordinal",r.generation_ordinal},{"graphs_seen",r.graphs_seen},
+        {"full_graphs_seen",r.full_graphs_seen},{"skipped_partial_views",r.skipped_partial_views},
+        {"graphs_sampled",r.graphs_sampled},{"unprofiled_graphs",r.unprofiled_graphs},
+        {"errors",r.errors},{"capacity_errors",r.capacity_errors},{"unavailable_queries",r.unavailable_queries},
+        {"invalid_intervals",r.invalid_intervals},{"result_calls",r.result_calls},
+        {"cache_flush_calls",r.cache_flush_calls},{"query_reset_commands",r.query_reset_commands},
+        {"query_pool_queries",r.query_pool_queries},
+        {"query_pool_bytes",r.query_pool_bytes},{"cpu_fixed_bytes",r.cpu_fixed_bytes},
+        {"device_generation",r.device_generation},{"timestamp_valid_bits",r.timestamp_valid_bits},
+        {"timestamp_period_ns",r.timestamp_period_ns},{"graphs",graphs},
+        {"scope","bounded sampled dispatch timestamp intervals attributed to graph node classes, including conversion/reduction dispatches; inserted timestamps may perturb scheduling; not an exclusive whole-model decomposition"},
+        {"extra_CPU_waits",0},{"extra_submissions",0},{"extrapolated_whole_generation_seconds",nullptr}};
 }
 
 extern "C" ggml_backend_buffer_t ps5_ai_cpu_clip_params_buffer(size_t size) {
@@ -661,6 +701,10 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         current_status.gpu_available = 1;
         current_status.available = 1;
         write_event({{"event", "engine_configured"}, {"model", engine_config.model},
+                     {"moss_gpu_profile",bool(PS5_AI_MOSS_GPU_PROFILE)},
+                     {"moss_q4_bk64_raw64",bool(PS5_AI_MOSS_Q4_BK64_RAW64)},
+                     {"moss_q4_bk64_policy",PS5_AI_MOSS_Q4_BK64_RAW64?"canonical_moss_ffn_up_q4k_f32acc_bk64_raw64_v1":"disabled"},
+                     {"moss_gpu_profile_policy",PS5_AI_MOSS_GPU_PROFILE?"first_two_complete_dit_graphs_per_generation":"disabled"},
                      {"moss_f32_accumulation",bool(PS5_AI_MOSS_F32_ACCUMULATION)},
                      {"MOSS_linear_accumulation",PS5_AI_MOSS_F32_ACCUMULATION?"f32":"default"},
                      {"architecture", "MOSS-Image"}, {"llm_path", engine_config.llm}, {"vae_path", engine_config.vae}, {"tokenizer_path", engine_config.tokenizer},
@@ -707,6 +751,7 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
 #if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
 #include "moss_precision_gate.inc"
 #include "moss_perf_gate.inc"
+#include "moss_q4_bk64_gate.inc"
 #endif
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
@@ -770,6 +815,10 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
         ps5_ai_ggml_dispatch_stats before = {}, after = {};
         ps5_ai_ggml_dispatch_snapshot(&before);
         if (before.work_pending) ps5_ai_ggml_retain("Native_Direct_data_gate_pre_graph_pending");
+#if PS5_AI_MOSS_GPU_PROFILE
+        if(!ps5_ai_moss_gpu_profile_gate_begin())
+            throw std::runtime_error("GPU timestamp startup gate could not be armed");
+#endif
         const ggml_status status = ggml_backend_graph_compute(resources.backend, graph);
         ggml_backend_synchronize(resources.backend);
         if (status != GGML_STATUS_SUCCESS || !ps5_ai_ggml_wait_backend("Native_Direct_data_gate_after_graph", 1))
@@ -794,6 +843,13 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
         ggml_backend_synchronize(resources.backend);
         if (!ps5_ai_ggml_wait_backend("Native_Direct_data_gate_after_readback", 1))
             ps5_ai_ggml_retain("Native_Direct_data_gate_readback_not_quiescent");
+#if PS5_AI_MOSS_GPU_PROFILE
+        ps5_ai_moss_gpu_profile_report gpu_gate{};
+        const bool gpu_gate_ok=ps5_ai_moss_gpu_profile_gate_end(&gpu_gate)!=0;
+        write_event({{"event","native_moss_gpu_timestamp_gate"},{"report",moss_gpu_profile_json(gpu_gate)}});
+        if(!gpu_gate_ok)
+            throw std::runtime_error("GPU timestamp startup readback unavailable, invalid or incomplete");
+#endif
         ps5_ai_ggml_report("Native_Direct_data_gate_readback compared_values=%llu mismatches=%llu checksum=0x%016llx expected_checksum=0x%016llx dispatch_delta=%llu submit_delta=%llu fence_delta=%llu whole_pool_GPU_verified=0",
             (unsigned long long)elements, (unsigned long long)mismatches,
             (unsigned long long)checksum, (unsigned long long)expected_checksum,
@@ -808,6 +864,10 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
 #if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
         moss_precision_readback_gate();
         moss_performance_readback_gate();
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+        const auto candidate_gate=moss_q4_bk64_readback_gate();
+        if(!candidate_gate.numerical_pass)throw std::runtime_error("MOSS Q4 BK64/raw64 candidate B gate did not pass");
+#endif
 #endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
@@ -819,8 +879,10 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
             ps5_ai_ggml_retain("Native_Direct_data_gate_final_receipt_failed");
         return 0;
     } catch (const std::exception& exception) {
+        ps5_ai_ggml_report("FAIL Native_Direct_data_gate_exception reason=%s",exception.what());
         set_error(error, error_size, exception.what());
     } catch (...) {
+        ps5_ai_ggml_report("FAIL Native_Direct_data_gate_exception reason=unknown_CPU_exception");
         set_error(error, error_size, "Native_Direct memory gate failed with unknown CPU exception");
     }
     std::lock_guard<std::mutex> lock(status_mutex);
@@ -877,6 +939,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     phase_profile_begin();
     const uint64_t fused_before=perf_fused_selected.load(std::memory_order_relaxed);
     ps5_ai_moss_quant_receipt quant_before{};ps5_ai_moss_quant_snapshot(&quant_before);
+    ps5_ai_moss_q4_bk64_report candidate_before{};ps5_ai_moss_q4_bk64_snapshot(&candidate_before);
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;
     observation.requested_steps=request->steps;
@@ -902,9 +965,22 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     } cleanup = {&images, &image_count};
     const auto start = std::chrono::steady_clock::now();
     int result = -1;
+    ps5_ai_moss_gpu_profile_report gpu_profile{};
+#if PS5_AI_MOSS_GPU_PROFILE
+    bool gpu_profile_open=false;
+#endif
     moss_lora_loaded = 0; moss_lora_matched = 0; moss_lora_used = 0; moss_lora_skipped = 0;
     moss_lora_verified = false; moss_lora_invalid = false;
     try {
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+        if(!moss_q4_bk64_admission_passed || !candidate_before.enabled || candidate_before.active!=1 || !candidate_before.device_generation)
+            throw std::runtime_error("MOSS Q4 BK64/raw64 candidate B was not admitted by strict numerical and warmed microtime gates; no image inference permitted");
+#endif
+#if PS5_AI_MOSS_GPU_PROFILE
+        if(!ps5_ai_moss_gpu_profile_job_begin())
+            throw std::runtime_error("Bounded GPU operator profile could not be armed");
+        gpu_profile_open=true;
+#endif
         if (!std::isfinite(request->manga_strength) || request->manga_strength != 0 || request->manga_monochrome)
             throw std::runtime_error("MOSS-Image-SFT text2img does not support the WAI-specific manga LoRA or monochrome option");
         if (request->init_image_id[0] || request->reference_image_id[0] || request->mask_image_id[0] ||
@@ -1009,6 +1085,39 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
            quant_completed.q4_f16acc!=quant_before.q4_f16acc || quant_completed.invalid!=quant_before.invalid)
             throw std::runtime_error("Image rejected: MOSS Q4 matrix F32 accumulation policy not observed");
 #endif
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+        ps5_ai_moss_q4_bk64_report candidate_completed{};ps5_ai_moss_q4_bk64_snapshot(&candidate_completed);
+        if(request->steps!=50 || stats->actual_steps!=50 || !moss_q4_bk64_admission_passed ||
+           candidate_completed.schema!=1 || candidate_completed.enabled!=1 || candidate_completed.active!=1 ||
+           candidate_completed.device_generation!=candidate_before.device_generation ||
+           candidate_completed.selected_calls-candidate_before.selected_calls!=4150 ||
+           candidate_completed.baseline_calls!=candidate_before.baseline_calls ||
+           candidate_completed.invalid_receipts!=candidate_before.invalid_receipts)
+            throw std::runtime_error("Image rejected: MOSS Q4 BK64/raw64 candidate B actual50-step4150FFN-up pipeline selection proof missing");
+        for(unsigned layer=0;layer<42;layer++)
+            if(candidate_completed.layer_calls[layer]-candidate_before.layer_calls[layer]!=(layer==22?50u:100u) ||
+               candidate_completed.baseline_layer_calls[layer]!=candidate_before.baseline_layer_calls[layer])
+                throw std::runtime_error("Image rejected: MOSS Q4 BK64/raw64 candidate B positive42/negative41 layer selection differs");
+        const bool candidate_small=request->width==256 && request->height==256;
+        const bool candidate_large=request->width==1024 && request->height==1024;
+        if(!candidate_small && !candidate_large)
+            throw std::runtime_error("Image rejected: MOSS Q4 BK64/raw64 candidate B exact real-token shape size not admitted");
+        for(unsigned token=0;token<4;token++) {
+            const uint64_t expected=(token==(candidate_small?0u:2u)?2050u:token==(candidate_small?1u:3u)?2100u:0u);
+            if(candidate_completed.token_calls[token]-candidate_before.token_calls[token]!=expected ||
+               candidate_completed.baseline_token_calls[token]!=candidate_before.baseline_token_calls[token])
+                throw std::runtime_error("Image rejected: MOSS Q4 BK64/raw64 candidate B actual negative/positive input-token receipts differ");
+        }
+#endif
+        // Collect already-completed sampled graphs before publishing any PNG.
+#if PS5_AI_MOSS_GPU_PROFILE
+        const bool gpu_profile_ok=ps5_ai_moss_gpu_profile_job_end(&gpu_profile)!=0;
+        gpu_profile_open=false;
+        if(!gpu_profile_ok) {
+            write_event({{"event","moss_gpu_profile_rejected"},{"report",moss_gpu_profile_json(gpu_profile)}});
+            throw std::runtime_error("Image rejected: bounded GPU operator timing evidence is incomplete");
+        }
+#endif
         if(!ps5_ai_direct_pool_log_checkpoint())
             throw std::runtime_error("Direct pool log checkpoint failed; image not published");
         const auto& image = images[0];
@@ -1040,6 +1149,12 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             fallback_log(exception.what());
         }
     }
+#if PS5_AI_MOSS_GPU_PROFILE
+    if(gpu_profile_open) {
+        (void)ps5_ai_moss_gpu_profile_job_end(&gpu_profile);
+        gpu_profile_open=false;
+    }
+#endif
     sd_set_backend_eval_callback(nullptr, nullptr);
     sd_set_progress_callback(nullptr, nullptr);
     if (images) {
@@ -1054,7 +1169,11 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_flex_stats pool = {};
     ps5_ai_flex_snapshot(&pool);
     ps5_ai_moss_quant_receipt quant_after{};ps5_ai_moss_quant_snapshot(&quant_after);
+    ps5_ai_moss_q4_bk64_report candidate_after{};ps5_ai_moss_q4_bk64_snapshot(&candidate_after);
     write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", "text2img"},
+                 {"gpu_operator_profile",moss_gpu_profile_json(gpu_profile)},
+                 {"width",request->width},{"height",request->height},
+                 {"moss_q4_bk64_B",moss_q4_bk64_generation_json(candidate_before,candidate_after)},
                  {"moss_lora_path", engine_config.moss_lora_path}, {"moss_lora_strength", engine_config.moss_lora_strength},
                  {"moss_lora_loaded_tensors", moss_lora_loaded.load()}, {"moss_lora_matched_tensors", moss_lora_matched.load()},
                  {"moss_lora_used_tensors", moss_lora_used.load()}, {"moss_lora_skipped_tensors", moss_lora_skipped.load()},

@@ -2,7 +2,7 @@
 
 MOSS-Image-SFTとユーザー指定LoRAをPS5本体で推論するネイティブアプリと、LAN用のOpenAI Images互換APIを開発しています。
 
-**2026-10-20、MOSS-Image-SFT＋[選択LoRA](docs/moss-requested-lora.md)をPS5で生成し、FP16データ経路＋FP32累積の版で1024×1024を1219.1秒から1064.2秒へ短縮しました。** CPUのtext encoding・Vulkan DiT/VAE・WindowsからOpenAI互換API経由のPNG取得を確認しています。
+**2026-10-20、MOSS-Image-SFT＋[選択LoRA](docs/moss-requested-lora.md)の1024×1024生成は、FP32基準1219.1秒→FP16データ＋FP32累積1064.2秒→同promptの解像度間キャッシュ版1023.9秒となりました。** 同processで256を生成した後の1024初回を各構成1回ずつ比較した結果で、新promptの高速化は示しません。PS5 CPUのtext encoding・Vulkan DiT/VAE・WindowsからOpenAI互換API経由のPNG取得を確認しています。
 
 | PS5生成時間、50steps | 計測入りFP32基準 | 提出調整＋限定fusion FP32 | FP16データ＋FP32累積 |
 |---|---:|---:|---:|
@@ -10,6 +10,8 @@ MOSS-Image-SFTとユーザー指定LoRAをPS5本体で推論するネイティ�
 | 同processの256後、1024×1024初回 | 1219.096190秒 | 1214.444805秒 | **1064.248911秒** |
 
 FP32基準比で256は5.28%、1024は12.70%短縮しました。各構成1回の比較で、反復して安定する改善率は未確定です。新しい版の両PNGを開いて画質、LoRA適用、GPU完了と非有限値0を確認しました。nativeとOpenAI互換APIで取得したPNGは一致します。FP32版とのpixel一致は主張しません。[実装と実測の詳細](docs/moss-mixed-precision-20261020.md)、[以前の提出/fusion・FP16拒否の比較](docs/moss-performance-optimization-20261020.md)を参照してください。
+
+追加最適化では二つのkernel候補に全体短縮が見られず、基準GPU経路へ戻しました。同promptの解像度変更でCPU text encodingを再利用するMOSS限定キャッシュ版は、256初回146.016289秒、同processの256後1024初回**1023.859406秒**でした。上表の混合精度基準1064.248911秒に対し40.389505秒（3.7951%）短縮し、両PNGは対応する基準と全バイト一致・目視正常でした。各1回の比較で、新promptやDiT自体の高速化を示すものではありません。完全な現行ログで256のcache hit 0件／1024の2件を確認し、native・gatewayの通常終了後、別の新規observerでGPU titleなし・既存サービス継続を確認しました。[追加調査と検証範囲](docs/moss-additional-optimization-20261020.md)。
 
 **Privateの実験版です。** 同prompt・seed20261020・LoRA0.7・CFG3・flow shift5・Eulerを固定し、各要求1POST、自動再送0で測定しました。実験profileは最大4試行で失敗も消費し、production admission0を維持します。10GiB poolで12GiB目標は未達、平均／分散・長時間連続運用・最小必要stepsは未検証です。速度改善の余地をすべて調べ終えたものではありません。
 
@@ -41,7 +43,7 @@ Windowsは開発・APIクライアントに使います。モデル推論をPC�
 | モデル | SFT Q4_K + Qwen3.5-9B Q4_K_M + FLUX.2 small VAE + 外部tokenizer + 選定rank16 LoRA |
 | Direct予約目標 / 実測trial | **12GiBは未達** / 承認済み実験10GiB、1GiB regions |
 | 推論予算 | production例11.5GiB / 実験9.5GiB、pool外working reserve 1GiB |
-| 最新の実測 | FP16データ＋FP32累積、256初回145.839851秒／同processの256後1024初回1064.248911秒。50steps、Euler、CFG3、shift5、LoRA0.7 |
+| 最新の単回実測 | キャッシュ版の256初回146.016289秒／同processの256後1024初回1023.859406秒。基準1064.248911秒比3.7951%短縮、両サイズ基準と同一PNG。50steps、Euler、CFG3、shift5、LoRA0.7 |
 
 12GiBはGPU専用の独立VRAMではなく、CPU/GPU共有のDirect領域の目標です。今回のnative contextの総量報告は11.4375GiBで、pool12GiB + reserve1GiBの容量判定を通りません。仮想アドレスの区切り変更では物理メモリ枠は増えません。今回までの生成成功から、12GiB確保や他条件・長時間運用の安全性は推定しません。APIの`peak_gpu_bytes`もCPU text weightsを含む共有Direct poolとdriver arenaのピークから得た上界で、純粋なVRAM実使用量ではありません。
 

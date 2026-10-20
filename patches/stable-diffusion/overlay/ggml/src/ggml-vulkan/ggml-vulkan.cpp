@@ -1,10 +1,300 @@
 #include "ggml-vulkan-common.h"
+#include "moss_q4_bk64.h"
 #include "ggml-vulkan-ps5-profile.h"
 #include "phase_profile.h"
 
 extern "C" void ps5_ai_vk_optimization_profile(unsigned, unsigned, unsigned, uint64_t, uint64_t) __attribute__((weak));
 extern "C" void ps5_ai_vk_limited_fusion_selected(unsigned) __attribute__((weak));
 extern "C" void ps5_ai_vk_quant_accumulation_selected(unsigned, unsigned) __attribute__((weak));
+
+
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+namespace {
+static ps5_ai_moss_q4_bk64_report moss_q4_bk64_report;
+// POD state owns no device. Pair is created under the existing compile mutex.
+static VkDevice moss_q4_bk64_owner{};
+static vk_matmul_pipeline_pair *moss_q4_bk64_pair_ptr{};
+static uint64_t moss_q4_bk64_device_generation{};
+static vk_matmul_pipeline_pair &moss_q4_bk64_pair(const vk_device &device) {
+    if(!moss_q4_bk64_pair_ptr) {
+        moss_q4_bk64_pair_ptr=new vk_matmul_pipeline_pair{};
+        moss_q4_bk64_owner=VkDevice(device->device);++moss_q4_bk64_device_generation;
+        moss_q4_bk64_report={};
+    }
+    GGML_ASSERT(moss_q4_bk64_owner==VkDevice(device->device));
+    return *moss_q4_bk64_pair_ptr;
+}
+static unsigned moss_q4_bk64_active=1,moss_q4_bk64_graph_depth=0;
+static bool moss_q4_bk64_graph_uncertain=false;
+struct MossQ4BK64GraphScope {
+    MossQ4BK64GraphScope(){++moss_q4_bk64_graph_depth;moss_q4_bk64_graph_uncertain=true;}
+    ~MossQ4BK64GraphScope(){--moss_q4_bk64_graph_depth;}
+    void completed(ggml_backend_vk_context *ctx) {
+        ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+        if(moss_q4_bk64_graph_depth==1 && owned.hardware_verified && !owned.work_pending &&
+           !ctx->submit_pending && ctx->compute_ctx.expired())moss_q4_bk64_graph_uncertain=false;
+    }
+};
+static const std::array<uint32_t,11> moss_q4_bk64_geometry{{128,64,64,64,64,32,2,4,2,1,64}};
+static bool moss_q4_bk64_hardware(const vk_device &d) {
+    return d->vendor_id==VK_VENDOR_ID_AMD && d->architecture==AMD_RDNA2 &&
+        std::strstr(d->properties.deviceName.data(),"NAVI21")!=nullptr && d->fp16 &&
+        !d->coopmat_support && !d->coopmat2 && !d->integer_dot_product && !d->dot2_f16 &&
+        d->properties.limits.maxComputeWorkGroupInvocations>=128 &&
+        d->properties.limits.maxComputeWorkGroupSize[0]>=128 && d->properties.limits.maxComputeSharedMemorySize>=16896 &&
+        d->subgroup_size_control && d->subgroup_require_full_support &&
+        d->subgroup_size==64 && d->subgroup_min_size<=64 && d->subgroup_max_size>=64;
+}
+// Metadata is created before queue policy is finalized. Enforce that policy only
+// when compiling or selecting an actual candidate pipeline.
+static bool moss_q4_bk64_device(const vk_device &d) {
+    return moss_q4_bk64_hardware(d) && d->serialize_submissions && !d->async_use_transfer_queue;
+}
+static int moss_q4_bk64_pipeline_index(const vk_device &d,const vk_pipeline &p) {
+    if(!moss_q4_bk64_pair_ptr || moss_q4_bk64_owner!=VkDevice(d->device))return -1;
+    if(p && p==moss_q4_bk64_pair_ptr->unaligned)return 0;
+    if(p && p==moss_q4_bk64_pair_ptr->aligned)return 1;
+    return -1;
+}
+static unsigned moss_q4_bk64_token_index(int64_t n) {
+    if(n==270)return 0;if(n==362)return 1;if(n==4110)return 2;if(n==4202)return 3;
+    GGML_ABORT("MOSS Q4 BK64/raw64 candidate B actual token count outside fixed trial");
+}
+static bool moss_q4_bk64_node(const ggml_tensor *dst,unsigned *layer) {
+    if(!dst || dst->op!=GGML_OP_MUL_MAT || dst->type!=GGML_TYPE_F32 ||
+       (ggml_prec)dst->op_params[0]!=GGML_PREC_F32)return false;
+    const auto *a=dst->src[0],*b=dst->src[1];
+    if(!a||!b||a->type!=GGML_TYPE_Q4_K||b->type!=GGML_TYPE_F32||
+       !ps5_ai_moss_q4_bk64_ffn_layer(a->name,layer))return false;
+    return a->ne[0]==3072 && a->ne[1]==16384 && a->ne[2]==1 && a->ne[3]==1 &&
+        b->ne[0]==3072 && (b->ne[1]==270 || b->ne[1]==362 || b->ne[1]==4110 || b->ne[1]==4202) && b->ne[2]==1 && b->ne[3]==1 &&
+        dst->ne[0]==16384 && dst->ne[1]==b->ne[1] && dst->ne[2]==1 && dst->ne[3]==1 &&
+        ggml_is_contiguous(a) && ggml_is_contiguous(b) && ggml_is_contiguous(dst);
+}
+}
+extern "C" void ps5_ai_moss_q4_bk64_snapshot(ps5_ai_moss_q4_bk64_report *out) {
+    if(out){*out=moss_q4_bk64_report;out->schema=1;out->enabled=1;out->active=moss_q4_bk64_active;out->device_generation=moss_q4_bk64_device_generation;}
+}
+extern "C" int ps5_ai_moss_q4_bk64_set_enabled(unsigned value) {
+    ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+    if(value>1 || moss_q4_bk64_graph_depth || moss_q4_bk64_graph_uncertain ||
+       !owned.hardware_verified || owned.work_pending)return 0;
+    moss_q4_bk64_active=value;return 1;
+}
+#endif
+
+#if PS5_AI_MOSS_GPU_PROFILE
+#include "probe.h"
+extern "C" int ps5_ai_moss_gpu_profile_query_cache_readback(uint64_t, uint32_t, uint32_t, uint64_t);
+namespace {
+struct MossGPUProfileRuntime {
+    VkDevice device{};
+    VkQueryPool pool{};
+    ggml_backend_vk_context *graph_ctx{};
+    ps5_ai_moss_gpu_profile_report report{};
+    ps5_ai_ggml_dispatch_stats before{};
+    ps5_ai_moss_gpu_query_value values[PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES]{};
+    unsigned char classes[PS5_AI_MOSS_GPU_PROFILE_MAX_NODES]{};
+    uint64_t jobs{}, device_generation{}, wall_begin{}, open_command{}, previous_successful_end{};
+    unsigned mode{}, count{}, current_class{PS5_AI_GPU_OTHER}, open_cookie{};
+    bool collecting{}, reset_recorded{}, gate_verified{}, node_scope_active{}, node_had_dispatch{};
+};
+static MossGPUProfileRuntime moss_gpu_profile;
+static uint64_t moss_gpu_profile_wall() {
+    struct timespec t{};
+    if(clock_gettime(CLOCK_MONOTONIC,&t)||t.tv_sec<0||t.tv_nsec<0||t.tv_nsec>=1000000000||uint64_t(t.tv_sec)>UINT64_MAX/1000000000u)return 0;
+    return uint64_t(t.tv_sec)*UINT64_C(1000000000)+uint64_t(t.tv_nsec);
+}
+static void moss_gpu_profile_fail(bool capacity=false) {
+    auto &s=moss_gpu_profile; ++s.report.errors; if(capacity)++s.report.capacity_errors;
+}
+static unsigned ps5_ai_moss_gpu_actual_node_class(const ggml_tensor *node) {
+    if(!node)return PS5_AI_GPU_OTHER;
+    if(node->op==GGML_OP_MUL_MAT) {
+        const auto *a=node->src[0],*b=node->src[1];
+        if(!a||!b)return PS5_AI_GPU_OTHER_MM;
+        const bool matrix_geometry=b->type==GGML_TYPE_F32 && node->type==GGML_TYPE_F32 &&
+            a->ne[2]==1 && a->ne[3]==1 && b->ne[0]==a->ne[0] && node->ne[0]==a->ne[1];
+        if(a->type==GGML_TYPE_Q4_K)return matrix_geometry?
+            ps5_ai_moss_gpu_q4_class(a->name,a->ne[0],a->ne[1]):PS5_AI_GPU_Q4_OTHER;
+        if(a->type==GGML_TYPE_F32 && matrix_geometry)
+            return ps5_ai_moss_gpu_lora_class(a->name,a->ne[0],a->ne[1]);
+        return PS5_AI_GPU_OTHER_MM;
+    }
+    if(node->op==GGML_OP_FLASH_ATTN_EXT)return PS5_AI_GPU_ATTENTION;
+    if(node->op==GGML_OP_SCALE)return PS5_AI_GPU_SCALE;
+    if(node->op==GGML_OP_ADD)return PS5_AI_GPU_ADD;
+    return PS5_AI_GPU_OTHER;
+}
+static ps5_ai_moss_gpu_coverage moss_gpu_profile_actual_graph_coverage(const ggml_cgraph *graph) {
+    ps5_ai_moss_gpu_coverage c{};
+    for(int i=0;i<graph->n_nodes;i++){
+        const auto *node=graph->nodes[i];
+        if(!node||node->op!=GGML_OP_MUL_MAT)continue;
+        const auto *a=node->src[0],*b=node->src[1];
+        if(!a||!b||a->ne[2]!=1||a->ne[3]!=1||b->ne[2]!=1||b->ne[3]!=1||
+           node->ne[2]!=1||node->ne[3]!=1||b->ne[1]!=node->ne[1]||b->ne[1]<=0)continue;
+        const unsigned cls=ps5_ai_moss_gpu_actual_node_class(node);unsigned layer=0;
+        if(cls<=PS5_AI_GPU_Q4_FFN_DOWN && ps5_ai_moss_gpu_layer_index(a->name,0,&layer))
+            ps5_ai_moss_gpu_coverage_add(&c,cls,layer,(uint64_t)b->ne[1]);
+        else if(cls==PS5_AI_GPU_LORA_DOWN)++c.lora_down_nodes;
+        else if(cls==PS5_AI_GPU_LORA_UP)++c.lora_up_nodes;
+    }
+    return c;
+}
+
+struct MossGPUProfileNodeScope {
+    unsigned previous; bool previous_scope,previous_had_dispatch;
+    explicit MossGPUProfileNodeScope(const ggml_tensor *node):previous(moss_gpu_profile.current_class),
+        previous_scope(moss_gpu_profile.node_scope_active),previous_had_dispatch(moss_gpu_profile.node_had_dispatch) {
+        auto &s=moss_gpu_profile;
+        if(s.collecting){s.current_class=ps5_ai_moss_gpu_actual_node_class(node);s.node_scope_active=true;s.node_had_dispatch=false;}
+    }
+    ~MossGPUProfileNodeScope(){auto &s=moss_gpu_profile;s.current_class=previous;s.node_scope_active=previous_scope;s.node_had_dispatch=previous_had_dispatch;}
+};
+static void moss_gpu_profile_device_init(const vk_device &device) {
+    auto &s=moss_gpu_profile;
+    if(s.device==VkDevice(device->device)&&s.pool)return;
+    if(s.device||s.pool)throw std::runtime_error("MOSS GPU profile device ownership mismatch");
+    if(!device->serialize_submissions || device->async_use_transfer_queue || vk_perf_logger_enabled ||
+       vk_perf_logger_concurrent)throw std::runtime_error("MOSS GPU profile requires unchanged serialized queue and no PERFLOGGER");
+    auto props=device->physical_device.getQueueFamilyProperties();
+    const unsigned q=device->compute_queue->queue_family_index;
+    const double period=device->properties.limits.timestampPeriod;
+    if(q>=props.size() || props[q].timestampValidBits!=64 || !std::isfinite(period) || period<=0.0 || period>1000.0)
+        throw std::runtime_error("MOSS GPU timestamp selected queue/period unavailable");
+    ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+    if(!owned.hardware_verified||owned.work_pending)throw std::runtime_error("MOSS GPU query pool initialization requires idle actual hardware");
+    vk::QueryPoolCreateInfo ci{};ci.queryType=vk::QueryType::eTimestamp;ci.queryCount=PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES;
+    const auto pool=device->device.createQueryPool(ci);
+    s.pool=VkQueryPool(pool);s.device=VkDevice(device->device);++s.device_generation;s.gate_verified=false;s.previous_successful_end=0;
+    s.report.timestamp_valid_bits=props[q].timestampValidBits;s.report.timestamp_period_ns=period;
+}
+static void moss_gpu_profile_device_destroy(vk::Device device) {
+    auto &s=moss_gpu_profile;if(s.device!=VkDevice(device)||!s.pool)return;
+    ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+    if(owned.work_pending||s.collecting||s.open_cookie)ps5_ai_ggml_retain("MOSS_GPU_query_pool_destroy_uncertain");
+    device.destroyQueryPool(vk::QueryPool(s.pool));s.pool=VK_NULL_HANDLE;s.device=VK_NULL_HANDLE;s.gate_verified=false;
+}
+static int moss_gpu_profile_begin(unsigned mode) {
+    auto &s=moss_gpu_profile;
+    ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+    if(s.mode||s.collecting||s.open_cookie||!s.pool||!s.device||!owned.hardware_verified||owned.work_pending ||
+       (mode==2&&(!s.gate_verified||s.jobs>=PS5_AI_MOSS_GPU_PROFILE_JOBS)))return 0;
+    const double period=s.report.timestamp_period_ns;const uint32_t bits=s.report.timestamp_valid_bits;
+    s.report={};s.report.schema=2;s.report.enabled=1;s.report.active=1;s.report.startup_gate=mode==1;
+    s.report.gate_verified=s.gate_verified;s.report.timestamp_period_ns=period;s.report.timestamp_valid_bits=bits;
+    s.report.query_pool_queries=PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES;s.report.query_pool_bytes=uint64_t(PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES)*8;
+    s.report.cpu_fixed_bytes=sizeof(s);s.report.device_generation=s.device_generation;
+    if(mode==2)++s.jobs;s.report.generation_ordinal=s.jobs;
+    s.mode=mode;s.count=0;s.graph_ctx=nullptr;s.current_class=PS5_AI_GPU_OTHER;return 1;
+}
+static int moss_gpu_profile_end(unsigned mode,ps5_ai_moss_gpu_profile_report *out) {
+    auto &s=moss_gpu_profile;
+    ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+    const unsigned required=mode==1?1:PS5_AI_MOSS_GPU_PROFILE_GRAPHS;
+    const bool valid=s.mode==mode&&!s.collecting&&!s.open_cookie&&!owned.work_pending&&
+        owned.hardware_verified&&!s.report.errors&&s.report.graphs_sampled==required;
+    s.report.valid=valid;s.report.active=0;if(valid&&mode==1)s.gate_verified=true;s.report.gate_verified=s.gate_verified;
+    s.mode=0;if(out)*out=s.report;return valid?1:0;
+}
+static void moss_gpu_profile_graph_begin(ggml_backend_vk_context *ctx,const ggml_cgraph *graph) {
+    auto &s=moss_gpu_profile;
+    if(!s.mode||graph->n_nodes<=0||(s.mode==2&&ps5_ai_profile_get_runner()!=0))return;
+    ++s.report.graphs_seen;
+    ps5_ai_moss_gpu_coverage coverage{};
+    if(s.mode==2){
+        coverage=moss_gpu_profile_actual_graph_coverage(graph);
+        if(!ps5_ai_moss_gpu_coverage_complete(&coverage)){
+            ++s.report.skipped_partial_views;++s.report.unprofiled_graphs;return;
+        }
+        ++s.report.full_graphs_seen;
+    }
+    const unsigned maximum=s.mode==1?1:PS5_AI_MOSS_GPU_PROFILE_GRAPHS;
+    if(s.report.graphs_sampled>=maximum||s.report.errors){++s.report.unprofiled_graphs;return;}
+    if(s.collecting||s.open_cookie||s.device!=VkDevice(ctx->device->device)||!ctx->device->serialize_submissions||
+       ctx->device->async_use_transfer_queue||graph->n_nodes>int(PS5_AI_MOSS_GPU_PROFILE_MAX_NODES)){
+        moss_gpu_profile_fail(graph->n_nodes>int(PS5_AI_MOSS_GPU_PROFILE_MAX_NODES));return;
+    }
+    ps5_ai_ggml_dispatch_snapshot(&s.before);
+    if(s.before.work_pending||!s.before.hardware_verified){moss_gpu_profile_fail();return;}
+    s.graph_ctx=ctx;s.collecting=true;s.reset_recorded=false;s.count=0;s.open_cookie=0;s.wall_begin=moss_gpu_profile_wall();
+    auto &g=s.report.graphs[s.report.graphs_sampled];g={};g.ordinal=s.report.graphs_seen;g.nodes=graph->n_nodes;
+    if(s.mode==2){
+        g.complete_main_graph=1;g.canonical_layer_count=ps5_ai_moss_gpu_coverage_layers(&coverage);
+        g.canonical_layer_mask=coverage.masks[0];g.tokens=coverage.tokens;
+        for(unsigned i=0;i<4;i++)g.q4_main_nodes[i]=coverage.q4_main_nodes[i];
+        g.lora_down_nodes=coverage.lora_down_nodes;g.lora_up_nodes=coverage.lora_up_nodes;
+    }
+}
+static void moss_gpu_profile_graph_end(ggml_backend_vk_context *ctx) {
+    auto &s=moss_gpu_profile;if(!s.collecting||s.graph_ctx!=ctx)return;
+    auto &g=s.report.graphs[s.report.graphs_sampled];
+    ps5_ai_ggml_dispatch_stats completed{};ps5_ai_ggml_dispatch_snapshot(&completed);
+    const uint64_t wall=moss_gpu_profile_wall();g.cpu_wall_ns=s.wall_begin&&wall>=s.wall_begin?wall-s.wall_begin:0;
+    g.dispatches=completed.dispatches>=s.before.dispatches?completed.dispatches-s.before.dispatches:0;
+    g.submits=completed.submits>=s.before.submits?completed.submits-s.before.submits:0;
+    g.fences=completed.fenced_completions>=s.before.fenced_completions?completed.fenced_completions-s.before.fenced_completions:0;
+    g.intervals=s.count;g.queries_written=uint64_t(s.count)*2;
+    if(s.open_cookie||!s.count||completed.work_pending||!completed.hardware_verified||!g.dispatches||!g.submits||!g.fences||
+       ctx->submit_pending||!ctx->compute_ctx.expired()||
+       !ps5_ai_moss_gpu_profile_query_cache_readback((uint64_t)(uintptr_t)s.pool,0,2*s.count,s.before.fenced_completions)){
+        moss_gpu_profile_fail();s.collecting=false;s.graph_ctx=nullptr;return;
+    }
+    ++s.report.cache_flush_calls;
+    std::memset(s.values,0,2*s.count*sizeof(s.values[0]));
+    ++s.report.result_calls;
+    const auto rc=ctx->device->device.getQueryPoolResults(vk::QueryPool(s.pool),0,2*s.count,
+        2*s.count*sizeof(s.values[0]),s.values,sizeof(s.values[0]),
+        vk::QueryResultFlagBits::e64|vk::QueryResultFlagBits::eWithAvailability);
+    if(rc!=vk::Result::eSuccess)moss_gpu_profile_fail();
+    for(unsigned i=0;i<2*s.count;i++){
+        if(s.values[i].available==1)++g.queries_available;
+        else {++s.report.unavailable_queries;moss_gpu_profile_fail();}
+    }
+    if(s.previous_successful_end && s.values[0].ticks<s.previous_successful_end){++s.report.invalid_intervals;moss_gpu_profile_fail();}
+    for(unsigned i=0;i<s.count;i++){
+        uint64_t ticks=0;
+        if((i && s.values[2*i].ticks<s.values[2*i-1].ticks) ||
+           !ps5_ai_moss_gpu_pair_ticks(&s.values[2*i],&s.values[2*i+1],&ticks)||
+           !ps5_ai_moss_gpu_accumulate(&g.classes[s.classes[i]],ticks)){
+            ++g.invalid_intervals;++s.report.invalid_intervals;moss_gpu_profile_fail();continue;
+        }
+        if(!ticks)++g.zero_intervals;
+    }
+    long double elapsed_ns=0;
+    for(const auto &c:g.classes)elapsed_ns+=(long double)c.ticks*s.report.timestamp_period_ns;
+    if(!g.cpu_wall_ns || !std::isfinite((double)elapsed_ns) ||
+       elapsed_ns>(long double)g.cpu_wall_ns*1.25L+50000000.0L ||
+       (s.mode==1&&(!g.intervals||g.zero_intervals==g.intervals)))moss_gpu_profile_fail();
+    if(!s.report.errors)s.previous_successful_end=s.values[2*s.count-1].ticks;
+    ++s.report.graphs_sampled;s.collecting=false;s.graph_ctx=nullptr;
+}
+}
+extern "C" int ps5_ai_moss_gpu_profile_gate_begin(){return moss_gpu_profile_begin(1);}
+extern "C" int ps5_ai_moss_gpu_profile_gate_end(ps5_ai_moss_gpu_profile_report *out){return moss_gpu_profile_end(1,out);}
+extern "C" int ps5_ai_moss_gpu_profile_job_begin(){return moss_gpu_profile_begin(2);}
+extern "C" int ps5_ai_moss_gpu_profile_job_end(ps5_ai_moss_gpu_profile_report *out){return moss_gpu_profile_end(2,out);}
+extern "C" void ps5_ai_moss_gpu_profile_snapshot(ps5_ai_moss_gpu_profile_report *out){if(out)*out=moss_gpu_profile.report;}
+extern "C" unsigned ps5_ai_moss_gpu_profile_dispatch_begin(uint64_t command_buffer) {
+    auto &s=moss_gpu_profile;if(!s.collecting)return 0;
+    if(!command_buffer||s.open_cookie){moss_gpu_profile_fail();return 0;}
+    if(s.count>=PS5_AI_MOSS_GPU_PROFILE_MAX_NODES){++s.report.graphs[s.report.graphs_sampled].overflow;moss_gpu_profile_fail(true);return 0;}
+    vk::CommandBuffer command((VkCommandBuffer)(uintptr_t)command_buffer);
+    if(!s.reset_recorded){command.resetQueryPool(vk::QueryPool(s.pool),0,PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES);s.reset_recorded=true;++s.report.query_reset_commands;}
+    s.classes[s.count]=(unsigned char)s.current_class;
+    if(s.node_scope_active&&!s.node_had_dispatch){++s.report.graphs[s.report.graphs_sampled].recorded_nodes;s.node_had_dispatch=true;}
+    command.writeTimestamp(vk::PipelineStageFlagBits::eAllCommands,vk::QueryPool(s.pool),2*s.count);
+    s.open_command=command_buffer;s.open_cookie=s.count+1;return s.open_cookie;
+}
+extern "C" void ps5_ai_moss_gpu_profile_dispatch_end(uint64_t command_buffer,unsigned cookie) {
+    auto &s=moss_gpu_profile;if(!cookie)return;
+    if(!s.collecting||cookie!=s.open_cookie||command_buffer!=s.open_command){moss_gpu_profile_fail();return;}
+    vk::CommandBuffer command((VkCommandBuffer)(uintptr_t)command_buffer);
+    command.writeTimestamp(vk::PipelineStageFlagBits::eAllCommands,vk::QueryPool(s.pool),2*s.count+1);
+    ++s.count;s.open_cookie=0;s.open_command=0;
+}
+#endif
 
 static uint64_t ggml_vk_submission_flops_cap(const vk_device & device) {
     uint64_t cap = 200'000'000'000ULL;
@@ -776,6 +1066,34 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
     }
 #endif
 
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    int moss_candidate_index=moss_q4_bk64_pipeline_index(device,pipeline);
+    if(moss_candidate_index<0 && spv_data==matmul_quant_f32_data && spv_size==matmul_quant_f32_len &&
+       specialization_constants.size()==13 && specialization_constants[12]==unsigned(GGML_TYPE_Q4_K)) {
+        // Match the untouched original medium layout's actual raw-device WARP.
+        // The printed RDNA warp32 override does not describe subgroup_props.subgroupSize.
+        const uint32_t baseline_warp=std::min(std::max(device->subgroup_size,8u),64u);
+        const std::array<uint32_t,11> baseline{{128,64,64,32,baseline_warp,32,2,4,2,1,baseline_warp}};
+        bool match=specialization_constants[11]<=1;
+        for(unsigned i=0;i<11;i++)match=match && specialization_constants[i]==baseline[i];
+        if(match)moss_candidate_index=2+specialization_constants[11];
+    }
+    if(moss_candidate_index>=0 && moss_candidate_index<2) {
+        GGML_ASSERT(moss_q4_bk64_device(device));
+        GGML_ASSERT(spv_data==matmul_quant_f32_data && spv_size==matmul_quant_f32_len && entrypoint=="main");
+        GGML_ASSERT(parameter_count==3 && required_subgroup_size==64 && require_full_subgroups);
+        // BK64/raw64 policy: prove physical required64 was attached, independent of log override.
+        GGML_ASSERT(device->subgroup_size_control && device->subgroup_require_full_support);
+        GGML_ASSERT(pipeline_shader_create_info.pNext==&pipeline_shader_stage_required_subgroup_size_create_info);
+        GGML_ASSERT(pipeline_shader_stage_required_subgroup_size_create_info.requiredSubgroupSize==64);
+        GGML_ASSERT(bool(pipeline_shader_create_info.flags & vk::PipelineShaderStageCreateFlagBits::eRequireFullSubgroupsEXT));
+        GGML_ASSERT((wg_denoms==std::array<uint32_t,3>({64,64,1})));
+        GGML_ASSERT(specialization_constants.size()==13);
+        for(unsigned i=0;i<11;i++)GGML_ASSERT(specialization_constants[i]==moss_q4_bk64_geometry[i]);
+        GGML_ASSERT(specialization_constants[11]==unsigned(moss_candidate_index));
+        GGML_ASSERT(specialization_constants[12]==unsigned(GGML_TYPE_Q4_K));
+    }
+#endif
     try {
         pipeline->pipeline = device->device.createComputePipeline(VK_NULL_HANDLE, compute_pipeline_create_info).value;
     } catch (const vk::SystemError& e) {
@@ -784,6 +1102,17 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
         throw e;
     }
 
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    if(moss_candidate_index>=0) {
+        auto &report=moss_q4_bk64_report;report.schema=1;report.enabled=1;
+        auto &actual=report.pipelines[moss_candidate_index];
+        actual.pipeline=(uint64_t)(uintptr_t)VkPipeline(pipeline->pipeline);
+        actual.original_module_bytes=spv_size;actual.actual_module_bytes=shader_module_create_info.codeSize;
+        ++actual.compile_count;actual.required_subgroup=required_subgroup_size;actual.aligned=moss_candidate_index%2;
+        for(unsigned i=0;i<13;i++)actual.specialization[i]=specialization_constants[i];
+        GGML_ASSERT(actual.pipeline && actual.compile_count==1);
+    }
+#endif
     if (vk_instance.debug_utils_support) {
         vk::DebugUtilsObjectNameInfoEXT duoni;
         duoni.objectType = vk::ObjectType::ePipeline;
@@ -797,6 +1126,9 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
         executableInfo.pipeline = pipeline->pipeline;
 
         auto statistics = device->device.getPipelineExecutableStatisticsKHR(executableInfo);
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+        if(moss_candidate_index>=0)moss_q4_bk64_report.pipelines[moss_candidate_index].stats_available=!statistics.empty();
+#endif
 
         bool print_stats = !vk_pipeline_stats_filter.empty() &&
                            pipeline->name.find(vk_pipeline_stats_filter) != std::string::npos;
@@ -805,6 +1137,16 @@ static void ggml_vk_create_pipeline_func(vk_device& device, vk_pipeline& pipelin
         }
 
         for (auto & s : statistics) {
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+            if(moss_candidate_index>=0) {
+                auto &actual=moss_q4_bk64_report.pipelines[moss_candidate_index];++actual.stats_total;
+                if(actual.stats_recorded<16) {
+                    auto &bounded=actual.stats[actual.stats_recorded++];
+                    snprintf(bounded.name,sizeof(bounded.name),"%s",s.name.data());
+                    bounded.format=uint32_t(s.format);memcpy(&bounded.value_bits,&s.value,sizeof(bounded.value_bits));
+                }
+            }
+#endif
             if (print_stats) {
                 std::cerr << "ggml_vulkan:   " << s.name.data() << ": ";
                 switch (s.format) {
@@ -2465,6 +2807,19 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
             // BF16 - no dot2
             sg_create({GGML_TYPE_BF16, GGML_TYPE_BF16, false, false}, tc_mm, "matmul_bf16", matmul_bf16_len, matmul_bf16_data, sizeof(vk_mat_mat_push_constants), 3);
 
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+            if(moss_q4_bk64_hardware(device)) {
+                auto &pair=moss_q4_bk64_pair(device);pair.align=64;
+                std::vector<uint32_t> geometry(moss_q4_bk64_geometry.begin(),moss_q4_bk64_geometry.end());
+                // Private pair, identical scalar F32-acc module; default map is untouched.
+                ggml_vk_create_pipeline(device,pair.unaligned,"moss_q4_ffn_bk64_raw64_v1_unaligned",
+                    matmul_quant_f32_len,matmul_quant_f32_data,"main",3,sizeof(vk_mat_mat_push_constants),
+                    {64,64,1},ggml_vk_mul_mm_spec_quant(geometry,false,unsigned(GGML_TYPE_Q4_K)),1,false,true,64);
+                ggml_vk_create_pipeline(device,pair.aligned,"moss_q4_ffn_bk64_raw64_v1_aligned",
+                    matmul_quant_f32_len,matmul_quant_f32_data,"main",3,sizeof(vk_mat_mat_push_constants),
+                    {64,64,1},ggml_vk_mul_mm_spec_quant(geometry,true,unsigned(GGML_TYPE_Q4_K)),64,false,true,64);
+            }
+#endif
             for (const auto type : non_lut_quant_types) {
                 sg_create_quant({type, GGML_TYPE_F32, false, true},  tc_mmq, "matmul_quant_f32_f16acc", SPV_DOT2_F16ACC(matmul_quant_f32), sizeof(vk_mat_mat_push_constants), 3);
                 sg_create_quant({type, GGML_TYPE_F32, false, false}, tc_mmq, "matmul_quant_f32",        SPV_DOT2(matmul_quant_f32),        sizeof(vk_mat_mat_push_constants), 3);
@@ -5303,6 +5658,9 @@ void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     ctx->name = GGML_VK_NAME + std::to_string(idx);
 
     ctx->device = ggml_vk_get_device(idx);
+#if PS5_AI_MOSS_GPU_PROFILE
+    moss_gpu_profile_device_init(ctx->device);
+#endif
 
     ctx->semaphore_idx = 0;
     ctx->event_idx = 0;
@@ -6250,6 +6608,21 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
     const bool aligned = !quantize_y && ne10 == kpad && ne01 > 8 && ne11 > 8;
 
     vk_pipeline pipeline = ggml_vk_guess_matmul_pipeline_map(ctx, *mmp_map, ne01, ne11, aligned, false);
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    unsigned moss_candidate_layer=0;
+    bool moss_candidate_selected=false;
+    if(moss_q4_bk64_active && moss_q4_bk64_node(dst,&moss_candidate_layer) && moss_q4_bk64_device(ctx->device) &&
+       !x_non_contig && !y_non_contig && !quantize_y && !qx_needs_dequant && !qy_needs_dequant &&
+       !selected_matrix_f16acc) {
+        auto &pair=moss_q4_bk64_pair(ctx->device);
+        vk_pipeline candidate=aligned?pair.aligned:pair.unaligned;
+        GGML_ASSERT(candidate && candidate->initialized && pair.align==64);
+        GGML_ASSERT((candidate->wg_denoms==std::array<uint32_t,3>({64,64,1})));
+        GGML_ASSERT(candidate->align==(aligned?64u:1u));
+        GGML_ASSERT(ggml_nbytes(src0)<=ctx->device->properties.limits.maxStorageBufferRange);
+        pipeline=candidate;moss_candidate_selected=true;
+    }
+#endif
 
     if (ggml_nbytes(src0) > ctx->device->properties.limits.maxStorageBufferRange) {
         pipeline = ggml_vk_get_64b_indexing_pipeline(ctx, pipeline);
@@ -6425,6 +6798,31 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
         ne10, ne10, stride_d, stride_batch_x, stride_batch_y, stride_batch_d,
         split_k, ne12*ne13, ne02, ne12, r2, r3, padded_n
     );  // NOLINT
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    if(moss_candidate_selected) {
+        const int index=moss_q4_bk64_pipeline_index(ctx->device,pipeline);
+        GGML_ASSERT(index>=0 && pipeline->compiled && !selected_matrix_f16acc);
+        auto &report=moss_q4_bk64_report;
+        const auto &actual=report.pipelines[index];
+        if(!actual.pipeline || actual.pipeline!=(uint64_t)(uintptr_t)VkPipeline(pipeline->pipeline) ||
+           actual.compile_count!=1 || actual.specialization[0]!=moss_q4_bk64_geometry[0] || actual.specialization[12]!=unsigned(GGML_TYPE_Q4_K)) {
+            ++report.invalid_receipts;GGML_ABORT("MOSS Q4 BK64/raw64 candidate B missing actual compile receipt");
+        }
+        ++report.selected_calls;++report.layer_calls[moss_candidate_layer];
+        ++report.token_calls[moss_q4_bk64_token_index(src1->ne[1])];
+    } else if(moss_q4_bk64_node(dst,&moss_candidate_layer)) {
+        // The unchanged medium64 compiled pipeline is independently witnessed.
+        auto &report=moss_q4_bk64_report;
+        const auto &actual=report.pipelines[aligned?3:2];
+        if(selected_matrix_f16acc || !actual.pipeline || !pipeline->compiled ||
+           actual.pipeline!=(uint64_t)(uintptr_t)VkPipeline(pipeline->pipeline) || actual.compile_count!=1) {
+            ++report.invalid_receipts;GGML_ABORT("MOSS Q4 baseline missing actual medium64 compile receipt");
+        }
+        ++moss_q4_bk64_report.baseline_calls;
+        ++moss_q4_bk64_report.baseline_layer_calls[moss_candidate_layer];
+        ++moss_q4_bk64_report.baseline_token_calls[moss_q4_bk64_token_index(src1->ne[1])];
+    }
+#endif
     if (ggml_is_quantized(src0->type) && ps5_ai_vk_quant_accumulation_selected) {
         ps5_ai_vk_quant_accumulation_selected(unsigned(src0->type), unsigned(selected_matrix_f16acc));
     }
@@ -12384,6 +12782,9 @@ bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, in
 
     // closed explicitly below, and by the destructor on the early returns
     ggml_vk_debug_label dbg(compute_ctx, cgraph, node_idx, ctx->num_additional_fused_ops);
+#if PS5_AI_MOSS_GPU_PROFILE
+    MossGPUProfileNodeScope moss_node_profile(node);
+#endif
 
     switch (node->op) {
     case GGML_OP_REPEAT:
@@ -14240,10 +14641,16 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
     PS5AIProfileScope backend_timing(ps5_ai_profile_vulkan_metric(4));
     VK_LOG_DEBUG("ggml_backend_vk_graph_compute(" << cgraph->n_nodes << " nodes)");
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    MossQ4BK64GraphScope moss_candidate_graph_scope;
+#endif
 
     ctx->device->diag_cgraph = nullptr;
     ctx->device->diag_prev_start = -1;
     ctx->device->diag_prev_end = -1;
+#if PS5_AI_MOSS_GPU_PROFILE
+    moss_gpu_profile_graph_begin(ctx,cgraph);
+#endif
 
     if (vk_instance.debug_utils_support) {
         ctx->device->debug_cmdbuf_idx = 0;
@@ -14733,7 +15140,15 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
     if (!ctx->device->support_async) {
         ggml_vk_synchronize(ctx);
     }
+#if PS5_AI_MOSS_GPU_PROFILE
+    // Reuse the original synchronization above; never add a profiler wait.
+    moss_gpu_profile_graph_end(ctx);
+#endif
 
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    // Existing synchronize and ownership proof above; exceptions retain uncertainty.
+    moss_candidate_graph_scope.completed(ctx);
+#endif
     return GGML_STATUS_SUCCESS;
 
     UNUSED(backend);
@@ -16540,7 +16955,14 @@ void vk_queue_handle_unsynchronized::submit(vk::ArrayProxy<const vk::SubmitInfo>
 
 vk_device_struct::~vk_device_struct() {
     VK_LOG_DEBUG("destroy device " << name);
-
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    const bool owns_moss_candidate=moss_q4_bk64_pair_ptr && moss_q4_bk64_owner==VkDevice(device);
+    if(owns_moss_candidate) {
+        ps5_ai_ggml_dispatch_stats owned{};ps5_ai_ggml_dispatch_snapshot(&owned);
+        if(moss_q4_bk64_graph_depth || moss_q4_bk64_graph_uncertain || owned.work_pending)
+            ps5_ai_ggml_retain("MOSS_Q4_candidate_device_destroy_uncertain");
+    }
+#endif
     device.destroyFence(fence);
 
     ggml_vk_destroy_buffer(sync_staging);
@@ -16562,9 +16984,16 @@ vk_device_struct::~vk_device_struct() {
         ggml_vk_destroy_pipeline(device, pl);
     }
     all_pipelines.clear();
-
+#if PS5_AI_MOSS_Q4_BK64_RAW64
+    if(owns_moss_candidate) {
+        // Existing loop above destroyed compiled handles while these references were alive.
+        delete moss_q4_bk64_pair_ptr;moss_q4_bk64_pair_ptr=nullptr;moss_q4_bk64_owner=VK_NULL_HANDLE;
+    }
+#endif
     device.destroyDescriptorSetLayout(dsl);
-
+#if PS5_AI_MOSS_GPU_PROFILE
+    moss_gpu_profile_device_destroy(device);
+#endif
     device.destroy();
 }
 

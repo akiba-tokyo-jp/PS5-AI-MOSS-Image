@@ -588,3 +588,44 @@ radv_ps5_platform_init(void)
    call_once(&radv_ps5_once, radv_ps5_platform_once);
    return radv_ps5_ready;
 }
+
+
+/* Opt-in diagnostic query readback. This is not a general Vulkan driver change.
+ * Only the internally owned timestamp pool is accepted, after the same existing
+ * positive fence/quiescence contract used by graph execution. CPU never stores
+ * into query storage: reset is a GPU command and writes are GPU timestamps.
+ */
+#include "moss_gpu_profile.h"
+#if PS5_AI_MOSS_GPU_PROFILE
+#include "probe.h"
+#include "radv_query.h"
+/* Exact layouts independently observed in the adopted staticdriver disassembly.
+ * Refuse an incompatible Mesaheader/driver ABI before touching opaquehandles. */
+_Static_assert(offsetof(struct radv_query_pool, vk.query_type) == 0x40, "query type ABI");
+_Static_assert(offsetof(struct radv_query_pool, stride) == 0x58, "query stride ABI");
+_Static_assert(offsetof(struct radv_query_pool, size) == 0x60, "query size ABI");
+_Static_assert(offsetof(struct radv_query_pool, ptr) == 0x68, "query pointer ABI");
+int ps5_ai_moss_gpu_profile_query_cache_readback(uint64_t handle, uint32_t first,
+                                                uint32_t count, uint64_t before_fences);
+int
+ps5_ai_moss_gpu_profile_query_cache_readback(uint64_t handle, uint32_t first,
+                                            uint32_t count, uint64_t before_fences)
+{
+   struct ps5_ai_ggml_dispatch_stats completed = {0};
+   ps5_ai_ggml_dispatch_snapshot(&completed);
+   if (!handle || !completed.hardware_verified || completed.work_pending ||
+       completed.fenced_completions <= before_fences)
+      return 0;
+   struct radv_query_pool *pool = radv_query_pool_from_handle((VkQueryPool)(uintptr_t)handle);
+   if (!pool || pool->vk.base.type != VK_OBJECT_TYPE_QUERY_POOL ||
+       pool->vk.query_type != VK_QUERY_TYPE_TIMESTAMP || pool->stride != 8 || !pool->ptr ||
+       !ps5_ai_moss_gpu_range_valid(first, count, pool->vk.query_count))
+      return 0;
+   const uint64_t offset = (uint64_t)first * pool->stride;
+   const uint64_t bytes = (uint64_t)count * pool->stride;
+   if (offset > pool->size || bytes > pool->size - offset || bytes > SIZE_MAX)
+      return 0;
+   radv_ps5_cpu_flush(pool->ptr + offset, (size_t)bytes);
+   return 1;
+}
+#endif

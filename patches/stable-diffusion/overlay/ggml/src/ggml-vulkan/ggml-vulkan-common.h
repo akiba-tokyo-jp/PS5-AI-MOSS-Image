@@ -1,3 +1,4 @@
+#include "moss_gpu_profile.h"
 #pragma once
 #include "ggml-vulkan-push-constants.h"
 
@@ -276,7 +277,14 @@ inline void ggml_vk_dispatch_pipeline(ggml_backend_vk_context* ctx, vk_context& 
                                 {});
     {
         ggml_vk_debug_label dbg(subctx, pipeline->name, wg0, wg1, wg2);
+#if PS5_AI_MOSS_GPU_PROFILE
+        const uint64_t profile_command = (uint64_t)(uintptr_t)(VkCommandBuffer)subctx->s->buffer->buf;
+        const unsigned profile_cookie = ps5_ai_moss_gpu_profile_dispatch_begin(profile_command);
+#endif
         subctx->s->buffer->buf.dispatch(wg0, wg1, wg2);
+#if PS5_AI_MOSS_GPU_PROFILE
+        ps5_ai_moss_gpu_profile_dispatch_end(profile_command, profile_cookie);
+#endif
     }
 }
 
