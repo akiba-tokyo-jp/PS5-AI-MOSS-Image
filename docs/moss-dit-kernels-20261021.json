@@ -1,0 +1,185 @@
+{
+  "schema": "moss-dit-kernel-comparison-v1",
+  "date": "2026-10-21 JST",
+  "all_learned_inference_on_PS5": true,
+  "firmware": "12.40",
+  "GPU": "RADV NAVI21",
+  "native_generation_seconds": true,
+  "observations_per_variant": {
+    "first256_lazy_load": 1,
+    "subsequent1024": 2
+  },
+  "variants": [
+    {
+      "variant": "従来のDiT融合版（今回の対照）",
+      "kernel_mask": null,
+      "FA_no_occupancy_limiter": false,
+      "adopted": false,
+      "first256_including_lazy_load_seconds": 69.111579,
+      "native1024_seconds": [
+        47.800313,
+        47.162467
+      ],
+      "mean1024_seconds": 47.481390000000005,
+      "dit_graph1024_CPU_wall_seconds": [
+        41.220569004,
+        40.59155856
+      ],
+      "owned_Direct1024_peak_bytes": [
+        6107971584,
+        6107971584
+      ],
+      "owned_Direct1024_end_bytes": [
+        4749066240,
+        4749066240
+      ],
+      "repeat1024_PNG_identical": true
+    },
+    {
+      "variant": "FFN predecode",
+      "kernel_mask": 1,
+      "FA_no_occupancy_limiter": false,
+      "adopted": false,
+      "first256_including_lazy_load_seconds": 69.561725,
+      "native1024_seconds": [
+        46.836615,
+        46.250174
+      ],
+      "mean1024_seconds": 46.543394500000005,
+      "dit_graph1024_CPU_wall_seconds": [
+        40.248902521,
+        39.62706707
+      ],
+      "owned_Direct1024_peak_bytes": [
+        6208634880,
+        6208634880
+      ],
+      "owned_Direct1024_end_bytes": [
+        4849729536,
+        4849729536
+      ],
+      "repeat1024_PNG_identical": true
+    },
+    {
+      "variant": "FFN＋Attention shared KV・元のoccupancy制限",
+      "kernel_mask": 3,
+      "FA_no_occupancy_limiter": false,
+      "adopted": false,
+      "first256_including_lazy_load_seconds": 69.471026,
+      "native1024_seconds": [
+        51.873448,
+        51.284278
+      ],
+      "mean1024_seconds": 51.578863,
+      "dit_graph1024_CPU_wall_seconds": [
+        45.243822456,
+        44.671719926
+      ],
+      "owned_Direct1024_peak_bytes": [
+        6208634880,
+        6208634880
+      ],
+      "owned_Direct1024_end_bytes": [
+        4849729536,
+        4849729536
+      ],
+      "repeat1024_PNG_identical": true
+    },
+    {
+      "variant": "FFN＋QKV／LoRA",
+      "kernel_mask": 5,
+      "FA_no_occupancy_limiter": false,
+      "adopted": false,
+      "first256_including_lazy_load_seconds": 69.778932,
+      "native1024_seconds": [
+        46.429972,
+        45.823365
+      ],
+      "mean1024_seconds": 46.1266685,
+      "dit_graph1024_CPU_wall_seconds": [
+        39.854501548,
+        39.211749807
+      ],
+      "owned_Direct1024_peak_bytes": [
+        6208634880,
+        6208634880
+      ],
+      "owned_Direct1024_end_bytes": [
+        4849729536,
+        4849729536
+      ],
+      "repeat1024_PNG_identical": true
+    },
+    {
+      "variant": "FFN＋QKV／LoRA＋RMS",
+      "kernel_mask": 13,
+      "FA_no_occupancy_limiter": false,
+      "adopted": false,
+      "first256_including_lazy_load_seconds": 69.641481,
+      "native1024_seconds": [
+        46.068369,
+        45.411577
+      ],
+      "mean1024_seconds": 45.739973,
+      "dit_graph1024_CPU_wall_seconds": [
+        39.501164252,
+        38.840798182
+      ],
+      "owned_Direct1024_peak_bytes": [
+        6208634880,
+        6208634880
+      ],
+      "owned_Direct1024_end_bytes": [
+        4849729536,
+        4849729536
+      ],
+      "repeat1024_PNG_identical": true
+    },
+    {
+      "variant": "4項目＋Attention occupancy調整",
+      "kernel_mask": 15,
+      "FA_no_occupancy_limiter": true,
+      "adopted": true,
+      "first256_including_lazy_load_seconds": 69.449735,
+      "native1024_seconds": [
+        45.41588,
+        44.839066
+      ],
+      "mean1024_seconds": 45.127473,
+      "dit_graph1024_CPU_wall_seconds": [
+        38.847450203,
+        38.270078931
+      ],
+      "owned_Direct1024_peak_bytes": [
+        6208634880,
+        6208634880
+      ],
+      "owned_Direct1024_end_bytes": [
+        4849729536,
+        4849729536
+      ],
+      "repeat1024_PNG_identical": true
+    }
+  ],
+  "selected_kernel_mask": 15,
+  "selected_FA_no_occupancy_limiter": true,
+  "mean1024_reduction_percent": 4.957557055511652,
+  "physical_Direct_reserved_bytes": 10737418240,
+  "inference_budget_bytes": 10200547328,
+  "outside_pool_reserve_bytes": 1073741824,
+  "nonfinite_values": 0,
+  "maximum_generation_attempts_per_process": 4,
+  "production_runtime_admitted": false,
+  "automatic_POST_retries": 0,
+  "temperature_and_clock_controlled": false,
+  "public_source_inventory_is_not_build_consumed_dependency_closure": true,
+  "final1024_pixel_comparison_to_old_baseline": {
+    "width": 1024,
+    "height": 1024,
+    "pixel_equal": false,
+    "changed_pixel_percent": 95.33796310424805,
+    "MAE": 3.500044822692871,
+    "maximum_channel_difference": 227,
+    "PSNR_dB": 28.909150930325694
+  }
+}

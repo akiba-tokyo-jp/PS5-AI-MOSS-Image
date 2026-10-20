@@ -13,7 +13,7 @@ def collect(root, config_path, parameters, profile, expand):
     for folder in ('native', 'patches/stable-diffusion/overlay', 'assets', 'licenses', 'build-profiles'):
         paths.update(p.resolve() for p in (root/folder).rglob('*') if p.is_file())
     paths.update(p.resolve() for p in (root/'config').glob('*.example') if p.is_file())
-    for name in ('tools/build.py', 'tools/build_gateway.py', 'tools/build_input_snapshot.py', 'tools/build_moss_core.py', 'tools/moss_feature_policy.py', 'tools/moss_lora_precision_policy.py', 'tools/moss_dit_policy.py'):
+    for name in ('tools/build.py', 'tools/build_gateway.py', 'tools/build_input_snapshot.py', 'tools/build_moss_core.py', 'tools/moss_feature_policy.py', 'tools/moss_lora_precision_policy.py', 'tools/moss_dit_policy.py', 'tools/moss_kernel_policy.py'):
         path = root/name
         if path.is_file(): paths.add(path.resolve())
     paths.add(Path(config_path).resolve())

@@ -1,3 +1,4 @@
+from moss_kernel_policy import flags as kernel_flags, fields as kernel_fields, validate as validate_kernel, validate_core as validate_kernel_core, fa_flags as kernel_fa_flags
 from moss_dit_policy import flags as dit_flags, fields as dit_fields, validate as validate_dit, validate_core as validate_dit_core, validate_profile as validate_dit_profile
 from moss_lora_precision_policy import flags as lora_precision_flags, fields as lora_precision_fields, contract as lora_precision_contract, validate as validate_lora_precision, validate_core as validate_core_lora_precision
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -294,6 +295,7 @@ def validate_moss_core(manifest_path, expected_members, build_config, quality_na
     if set(archive_members(path))!=set(members):
         raise RuntimeError('MOSS archive contents do not match manifest')
     inputs=manifest.get('sources',[])+manifest.get('header_inputs',[])+manifest.get('overlay_inputs',[])+manifest.get('policy_inputs',[])+manifest.get('lora_precision_policy_inputs',[])+[manifest['profile'],manifest['builder']]
+    if 'kernel_policy_input'in manifest:inputs.append(manifest['kernel_policy_input'])
     if len(manifest.get('sources',[]))!=75 or not manifest.get('header_inputs'):
         raise RuntimeError('Missing full-core source/header provenance')
     changed=[]
@@ -366,7 +368,7 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-dit-optimization-mask',type=int,choices=(0,1,3,7,15));p.add_argument('--moss-dit-gpu-profile',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-dit-optimization-mask',type=int,choices=(0,1,3,7,15));p.add_argument('--moss-dit-gpu-profile',action='store_true');p.add_argument('--moss-dit-kernel-mask',type=int,choices=range(16));p.add_argument('--moss-fa-shmem-no-limit',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
@@ -398,6 +400,10 @@ def main():
     validate_dit(dit_enabled,accumulation=a.moss_f32_accumulation,turbo=a.moss_turbo_trial,upload=a.moss_bounded_weight_upload_trial,spectrum=a.moss_spectrum_trial,ffn=a.moss_ffn_token_chunk_trial,lora=a.moss_lora_storage)
     if dit_enabled and (a.moss_gpu_profile or a.moss_q4_bk64_raw64 or a.moss_sampler_trial):raise RuntimeError('DiT scope excludes extra math/profile candidates')
     validate_dit_core(json.loads(a.core_manifest.read_text(encoding='utf-8')),dit_enabled)
+    kernel_enabled=a.moss_dit_kernel_mask is not None
+    validate_kernel(kernel_enabled,dit=dit_enabled and a.moss_dit_optimization_mask==15,accumulation=a.moss_f32_accumulation,turbo=a.moss_turbo_trial,upload=a.moss_bounded_weight_upload_trial,mask=a.moss_dit_kernel_mask)
+    if kernel_enabled and a.moss_dit_gpu_profile:raise RuntimeError('Kernel timing uses uninstrumented matched runs')
+    validate_kernel_core(json.loads(a.core_manifest.read_text(encoding='utf-8')),kernel_enabled)
     lora_flags=lora_precision_flags(a.moss_lora_storage)
     for recipe in [profile['platform_compile'],*profile['ggml_compile']]:
         if any('PS5_AI_MOSS_LORA_' in arg for arg in recipe):raise RuntimeError('Native recipes cannot override private LoRA precision')
@@ -413,6 +419,7 @@ def main():
     for recipe in [profile['platform_compile'],*profile['ggml_compile']]:
         if any('PS5_AI_MOSS_DIT_'in arg for arg in recipe):raise RuntimeError('Recipes cannot override DiT policy')
     trial_flags += dit_flags(dit_enabled)+['-DPS5_AI_MOSS_DIT_OPT_MASK='+str(a.moss_dit_optimization_mask or 0)]
+    trial_flags += kernel_flags(kernel_enabled)+['-DPS5_AI_MOSS_DIT_KERNEL_MASK='+str(a.moss_dit_kernel_mask or 0)]+kernel_fa_flags(a.moss_fa_shmem_no_limit,a.moss_dit_kernel_mask)
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -524,6 +531,7 @@ def main():
         required_local=['ps5_ai_cpu_clip_shared_direct_live_bytes','ps5_ai_ggml_release_idle_scratch',
                         'ps5_ai_flex_largest_free_span_bytes']
         if dit_enabled:required_local += ['ps5_ai_moss_dit_capabilities']
+        if kernel_enabled:required_local += ['ps5_ai_moss_dit_kernel_capabilities']
         if a.moss_lora_storage is not None:required_local += ['ps5_ai_moss_lora_storage_snapshot','ps5_ai_vk_lora_storage_compile','ps5_ai_vk_lora_storage_record','ps5_ai_moss_lora_precision_backend_admission']
         for name in required_local:
             if len(re.findall(r'\b'+re.escape(name)+r'$',definitions,re.M))!=1 or re.search(r'\b'+re.escape(name)+r'$',undefined,re.M):
@@ -558,6 +566,10 @@ def main():
             **feature_manifest_fields(a.moss_spectrum_trial,a.moss_bounded_weight_upload_trial,a.moss_turbo_trial),
             **ffn_manifest_fields(a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens),
             **dit_fields(dit_enabled),
+            **kernel_fields(kernel_enabled),
+            'moss_dit_kernel_mask':a.moss_dit_kernel_mask,
+            'moss_fa_shmem_no_limit':a.moss_fa_shmem_no_limit,
+            'moss_fa_shmem_compile_flags':kernel_fa_flags(a.moss_fa_shmem_no_limit,a.moss_dit_kernel_mask),
             'moss_dit_optimization_mask':a.moss_dit_optimization_mask,
             'core_dit_policy_proof':validate_dit_core(core_manifest,dit_enabled),
             'core_ffn_policy_proof':validate_core_ffn(core_manifest,a.moss_ffn_token_chunk_trial,a.moss_ffn_chunk_tokens),

@@ -52,3 +52,11 @@ F32積算・Turbo4・bounded uploadを必須とし、FFN分割・private LoRA pr
 Turbo4＋bounded upload＋F32と同じparentを使い、coreに --moss-dit-optimizations、nativeに --moss-dit-optimization-mask 15 と --moss-dit-gpu-profile を明示します。旧rank16/50-step用 --moss-gpu-profile は併用しません。新しいflagはdefault-OFFで、同一deviceの既存完了後に最初の完全DiT graph2回を読み戻します。固定256→1024、最大4試行、production admission0を保持します。[実測と範囲](moss-dit-gpu-profile-20261021.md)。
 
 ホストのmetadata／policy試験は tests/moss_dit_gpu_profile.py --config CONFIG --out FRESH_D_OUTPUT です。モデル推論やGPU実行は行いません。
+
+## 採用したDiT kernel改善版
+
+2026-10-21の[実機比較](moss-dit-kernels-20261021.md)では4項目＋Attention occupancy調整が1024平均45.127473秒でした。Turbo4＋upload＋F32 parentに、coreの --moss-dit-optimizations --moss-dit-kernels、nativeの --moss-dit-optimization-mask 15 --moss-dit-kernel-mask 15 --moss-fa-shmem-no-limit を明示します。新しいoutとsource-freezeを使用し、tools/moss_kernel_policy.py の実byte・fields(True)・全75 compile flagを固定します。
+
+既存optimization maskと新kernel maskは別です。kernel bitsはFFN=1、Attention shared KV=2、QKV/O predecode＋LoRA vec4=4、RMS fusion=8。occupancy調整にはbit2が必要で、未指定は元の制限を保持します。元のAttention案は今回遅くなったため、採用構成と混同しないでください。default-OFF、F32累積、rank144 F32、Direct10GiB、最大4試行・固定要求を維持します。
+
+ホストpolicyは tests/moss_kernel_policy.py --out FRESH_OUTPUT で94検査。tests/moss_kernel_selection.cpp はC++17、-DPS5_AI_MOSS_DIT_KERNEL_TRIAL=1、overlay/src/model/diffusionをinclude pathにしてホストbuildすると239検査です。モデルやPS5へ接続しません。実機は選択したbitの追加GPUゲートを実行し、採用mask15は20ケースです。数値・容量・GPU完了・所有権の条件を弱めません。

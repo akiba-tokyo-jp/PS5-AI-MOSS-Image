@@ -2,6 +2,7 @@
 // F32 pointwise fusion, preserving the existing PS5 port's operation order.
 #version 450
 layout(local_size_x=128) in;
+layout(constant_id=0) const uint VEC_LORA=0;
 layout(binding=0) readonly buffer A {float a[];};
 layout(binding=1) readonly buffer B {float b[];};
 layout(binding=2) readonly buffer C {float c[];};
@@ -13,6 +14,17 @@ layout(push_constant) uniform Params {
 uint addr(uint slot,uvec4 j){return p.offset[slot]+(j.x*p.stride[slot*4]+j.y*p.stride[slot*4+1]+j.z*p.stride[slot*4+2]+j.w*p.stride[slot*4+3]);}
 float old_tanh(float x){precise float t=2.0*x;precise float d=exp(t)+1.0;precise float y=1.0-2.0/d;return y;}
 void main(){
+ if(VEC_LORA!=0 && p.kind>=6 && p.kind<=8){
+  uint base=(gl_GlobalInvocationID.x+gl_NumWorkGroups.x*128*gl_GlobalInvocationID.y)*4;
+  if(base>=p.count)return;
+  uint j=base%p.dims[0],r=base/p.dims[0];uvec4 ix=uvec4(j,r%p.dims[1],(r/p.dims[1])%p.dims[2],r/(p.dims[1]*p.dims[2]));
+  uint aa=addr(0,ix),slot=1;
+  if(p.kind>=7 && j>=p.bdim){ix.x-=p.bdim;slot=2;if(ix.x>=p.cdim){ix.x-=p.cdim;slot=3;}}
+  // Fixed slots keep divergent part selection out of push-constant indexing.
+  uint bb=slot==1?addr(1,ix):slot==2?addr(2,ix):addr(3,ix);
+  for(uint n=0;n<4 && base+n<p.count;++n){float delta;if(slot==1)delta=b[bb+n];else if(slot==2)delta=c[bb+n];else delta=e[bb+n];precise float value=a[aa+n]+delta;dst[p.offset[4]+base+n]=value;}
+  return;
+ }
  uint i=gl_GlobalInvocationID.x+gl_NumWorkGroups.x*128*gl_GlobalInvocationID.y;if(i>=p.count)return;
  uint j=i%p.dims[0],r=i/p.dims[0];uvec4 ix=uvec4(j,r%p.dims[1],(r/p.dims[1])%p.dims[2],r/(p.dims[1]*p.dims[2]));
  precise float outv;

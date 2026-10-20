@@ -19,6 +19,7 @@
 #pragma clang diagnostic pop
 #endif
 #include <atomic>
+#include "moss_dit_kernels.hpp"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -27,7 +28,7 @@ extern "C" unsigned ps5_ai_moss_dit_capabilities();
 namespace moss_dit_opt {
 inline std::atomic<unsigned> active_mask{0};
 inline std::atomic<uint64_t> generation{0}, cache_misses{0},cache_hits{0},rope_builds{0},scale_elisions{0};
-inline std::atomic<uint64_t> GPU_recordings[9]{};
+inline std::atomic<uint64_t> GPU_recordings[12]{};
 inline std::atomic<void*> cache_owner{nullptr};
 using clear_fn=void(*)(void*);
 inline std::atomic<clear_fn> clear_cache{nullptr};
@@ -53,7 +54,7 @@ inline bool storage_ranges_disjoint(bool same_buffer,uint64_t input_offset,uint6
     if(input_bytes>UINT64_MAX-input_offset||output_bytes>UINT64_MAX-output_offset)return false;
     return input_offset+input_bytes<=output_offset||output_offset+output_bytes<=input_offset;
 }
-enum Kind:unsigned {SITU=1,NORM_MOD0=2,NORM_MOD3=3,GATED_RESIDUAL=4,QK_WEIGHT_ROPE=5,LORA_ADD1=6,LORA_PACK2=7,LORA_PACK3=8};
+enum Kind:unsigned {SITU=1,NORM_MOD0=2,NORM_MOD3=3,GATED_RESIDUAL=4,QK_WEIGHT_ROPE=5,LORA_ADD1=6,LORA_PACK2=7,LORA_PACK3=8,RMS_MOD0=9,RMS_MOD3=10,RMS_QK_ROPE=11};
 inline float load(const ggml_tensor* t,uint64_t i0,uint64_t i1=0,uint64_t i2=0,uint64_t i3=0) {
     float x;std::memcpy(&x,(const unsigned char*)t->data+i0*t->nb[0]+i1*t->nb[1]+i2*t->nb[2]+i3*t->nb[3],4);return x;
 }
@@ -61,8 +62,9 @@ inline float mul(float a,float b){volatile float x=a*b;return x;}
 inline float add(float a,float b){volatile float x=a+b;return x;}
 inline float tanh_reference(float x){return 1.f-2.f/(std::exp(2.f*x)+1.f);}
 inline float scalar(unsigned kind,const ggml_tensor* a,const ggml_tensor* b,const ggml_tensor* c,const ggml_tensor* d,uint64_t i) {
+    if(kind>=9)throw std::runtime_error("RMS kernel CPU fallback forbidden");
     uint64_t j=i%a->ne[0],r=i/a->ne[0],y=r%a->ne[1],z=(r/a->ne[1])%a->ne[2],w=r/(a->ne[1]*a->ne[2]);
-    if(kind==QK_WEIGHT_ROPE){
+    if((kind==QK_WEIGHT_ROPE||kind==RMS_QK_ROPE)){
         const uint64_t H=a->ne[0],T=a->ne[2],heads=a->ne[1],half=H/2;
         j=i%H;r=i/H;const uint64_t token=r%T,head=(r/T)%heads,batch=r/(T*heads),p=j%half;
         float av=mul(load(a,p,head,token,batch),load(b,p));
@@ -79,14 +81,14 @@ inline float scalar(unsigned kind,const ggml_tensor* a,const ggml_tensor* b,cons
     return add(av,load(part,j,y,z,w));
 }
 inline void cpu(ggml_tensor* dst,const ggml_tensor* a,const ggml_tensor* b,const ggml_tensor* c,int ith,int nth,void* userdata) {
-    unsigned kind=unsigned(uintptr_t(userdata));GGML_ASSERT(kind>=1&&kind<=8);
+    unsigned kind=unsigned(uintptr_t(userdata));GGML_ASSERT(kind>=1&&kind<=11);
     for(uint64_t i=ith;i<uint64_t(ggml_nelements(dst));i+=nth){float x=scalar(kind,a,b,c,dst->src[3],i);std::memcpy((unsigned char*)dst->data+i*4,&x,4);}
 }
 inline unsigned kind(const ggml_tensor* t) {
 #if PS5_AI_MOSS_DIT_OPT_TRIAL
     if(!t||t->op!=GGML_OP_MAP_CUSTOM3)return 0;
     ggml_map_custom3_op_params p{};std::memcpy(&p,t->op_params,sizeof(p));
-    if(p.fun!=cpu||p.n_tasks!=1)return 0;auto k=uintptr_t(p.userdata);return k>=1&&k<=8?unsigned(k):0;
+    if(p.fun!=cpu||p.n_tasks!=1)return 0;auto k=uintptr_t(p.userdata);return k>=1&&k<=11?unsigned(k):0;
 #else
     (void)t;return 0;
 #endif
@@ -99,12 +101,13 @@ inline bool addressable(const ggml_tensor* t) {
 }
 inline bool valid(const ggml_tensor* t) {
     unsigned k=kind(t);if(!k||!addressable(t)||!ggml_is_contiguous(t)||t->view_src)return false;
+    if(k>=9&&!PS5_AI_MOSS_DIT_KERNEL_TRIAL)return false;
     auto a=t->src[0],b=t->src[1],c=t->src[2],d=t->src[3];
     if(!addressable(a)||!addressable(b)||!addressable(c))return false;
-    if(k==QK_WEIGHT_ROPE)return a->ne[0]==128&&a->ne[3]==1&&b->ne[0]==128&&ggml_nelements(b)==128&&c->ne[0]==2&&c->ne[1]==2&&c->ne[2]==64&&c->ne[3]==a->ne[2]&&t->ne[0]==128&&t->ne[1]==a->ne[2]&&t->ne[2]==a->ne[1]&&t->ne[3]==1;
+    if((k==QK_WEIGHT_ROPE||k==RMS_QK_ROPE))return a->ne[0]==128&&a->ne[3]==1&&b->ne[0]==128&&ggml_nelements(b)==128&&c->ne[0]==2&&c->ne[1]==2&&c->ne[2]==64&&c->ne[3]==a->ne[2]&&t->ne[0]==128&&t->ne[1]==a->ne[2]&&t->ne[2]==a->ne[1]&&t->ne[3]==1;
     if(!ggml_are_same_shape(t,a))return false;
     if(k==SITU)return ggml_are_same_shape(a,b);
-    if(k==NORM_MOD0||k==NORM_MOD3)return ggml_nelements(b)==a->ne[0]&&c->ne[0]==6*a->ne[0]&&ggml_nelements(c)==c->ne[0];
+    if(k==RMS_MOD0||k==RMS_MOD3||k==NORM_MOD0||k==NORM_MOD3)return ggml_nelements(b)==a->ne[0]&&c->ne[0]==6*a->ne[0]&&ggml_nelements(c)==c->ne[0];
     if(k==GATED_RESIDUAL)return ggml_are_same_shape(a,b)&&ggml_nelements(c)==a->ne[0];
     if(k==LORA_ADD1)return ggml_are_same_shape(a,b);
     if(a->ne[2]!=1||a->ne[3]!=1||b->ne[1]!=a->ne[1]||c->ne[1]!=a->ne[1]||b->ne[2]!=1||b->ne[3]!=1||c->ne[2]!=1||c->ne[3]!=1)return false;
@@ -113,7 +116,7 @@ inline bool valid(const ggml_tensor* t) {
 }
 inline ggml_tensor* make(ggml_context* ctx,unsigned k,ggml_tensor* a,ggml_tensor* b,ggml_tensor* c,ggml_tensor* d=nullptr,ggml_backend_t backend=nullptr) {
     auto out=ggml_map_custom3(ctx,a,b,c,cpu,1,reinterpret_cast<void*>(uintptr_t(k)));out->src[3]=d;
-    if(k==QK_WEIGHT_ROPE){out->ne[1]=a->ne[2];out->ne[2]=a->ne[1]*a->ne[3];out->ne[3]=1;for(int i=1;i<4;++i)out->nb[i]=out->nb[i-1]*out->ne[i-1];}
+    if((k==QK_WEIGHT_ROPE||k==RMS_QK_ROPE)){out->ne[1]=a->ne[2];out->ne[2]=a->ne[1]*a->ne[3];out->ne[3]=1;for(int i=1;i<4;++i)out->nb[i]=out->nb[i-1]*out->ne[i-1];}
     if(!valid(out))throw std::runtime_error("Invalid MOSS fused shape/stride; no fallback");
     if(backend&&!ggml_backend_supports_op(backend,out))throw std::runtime_error("MOSS fused Vulkan operator unavailable; CPU fallback forbidden");
     ggml_format_name(out,"moss_dit_fused_%u",k);return out;

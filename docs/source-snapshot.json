@@ -15,8 +15,8 @@
     },
     {
       "file": "AGENTS.md",
-      "published_bytes": 4149,
-      "published_sha256": "77cfd857926fa5db5c373d10224b0241b22da4e48fa709e9628f109d97a0e0ef"
+      "published_bytes": 4204,
+      "published_sha256": "94a2674500160e654de37c5dc0cb4ff29b32b2962c0e87d78c8112f02363e6a2"
     },
     {
       "file": "LICENSE",
@@ -25,8 +25,8 @@
     },
     {
       "file": "README.md",
-      "published_bytes": 6633,
-      "published_sha256": "7d6e46621dd15864eb70e5de92aae14f8219bc4891a44e1ca88a298ed9b20b74"
+      "published_bytes": 5854,
+      "published_sha256": "8159aa0a2d2d0fc130499867fdb93a75b7e43ebef51c35cbab7956fd697897d1"
     },
     {
       "file": "THIRD_PARTY_NOTICES.md",
@@ -200,8 +200,8 @@
     },
     {
       "file": "docs/build.md",
-      "published_bytes": 7165,
-      "published_sha256": "15ff735b504c5223350f250aa03f389c30d8a3523048a62ec18b07392974852e"
+      "published_bytes": 8570,
+      "published_sha256": "04ed355a07cd3970cee59281afc8bacc107665d55f0fd7b59d5176d86e228905"
     },
     {
       "file": "docs/dashboard.md",
@@ -227,6 +227,16 @@
       "file": "docs/images/moss-256-50step-20261019.png",
       "published_bytes": 194931,
       "published_sha256": "8e14a3df612932dcef0bbdef38eb3a7cbafd964b87329e8c5a6c7bf55bc07a65"
+    },
+    {
+      "file": "docs/images/moss-dit-kernels-1024-20261021.png",
+      "published_bytes": 2138392,
+      "published_sha256": "a7540f177b434d597f739efbe2ad6f67939357c219d29288696b299b38ea2f61"
+    },
+    {
+      "file": "docs/images/moss-dit-kernels-256-20261021.png",
+      "published_bytes": 178199,
+      "published_sha256": "9fbed3063ca16dbd159bf98af97112b8b67f10065f3860ee2eb1f548a13c4ef3"
     },
     {
       "file": "docs/images/moss-mixed-1024-20261020.png",
@@ -279,9 +289,19 @@
       "published_sha256": "81e93944ac31ac81c2ed7d299c34bf44021bbd51e8636b027a626430a41fdac9"
     },
     {
+      "file": "docs/moss-dit-kernels-20261021.json",
+      "published_bytes": 4889,
+      "published_sha256": "efaccfde62315d0cb8e1e43d472e450d4a33dceea47efbb7babe1cabad6c61e4"
+    },
+    {
+      "file": "docs/moss-dit-kernels-20261021.md",
+      "published_bytes": 8094,
+      "published_sha256": "659411ba56d7dd36121bb638312906dacd17a365cb4f4a56a92f8674b39d4d09"
+    },
+    {
       "file": "docs/moss-dit-reference-evaluation-20261021.md",
-      "published_bytes": 5276,
-      "published_sha256": "a0db25459476b4426618f02cea0fdf092f60ce7a61e878e3c69ed807065fd088"
+      "published_bytes": 5510,
+      "published_sha256": "73cb37f1c341cbdc511cb6406d67ff8327a644c32f543c01b80ff5dae5b7f1bf"
     },
     {
       "file": "docs/moss-lora-private-precision-trial.md",
@@ -305,8 +325,8 @@
     },
     {
       "file": "docs/moss-optimization-provenance.json",
-      "published_bytes": 3496,
-      "published_sha256": "e941dc205eab0641602851bb551b79655d72feeabea0abcaddfaf46aa4eaef8f"
+      "published_bytes": 3983,
+      "published_sha256": "06d43b25655529709af7ec0ede58f19df5191fca398a498fa457354076cc0638"
     },
     {
       "file": "docs/moss-performance-optimization-20261020.md",
@@ -350,18 +370,18 @@
     },
     {
       "file": "docs/publication-checks-20261020.md",
-      "published_bytes": 2237,
-      "published_sha256": "f380cfa2beae4c11c6f3f061ac5f2d20dcfb5dd6ab6dfed9306622c18529d245"
+      "published_bytes": 2896,
+      "published_sha256": "893b3847f0406962b70aefc0fc095d5d71604f33c39777008a05bf6148230fee"
     },
     {
       "file": "docs/status.md",
-      "published_bytes": 5930,
-      "published_sha256": "f4735962b7277f4f50e84eff8a99be1d428bc4f49e24b27300e61eb6466b3b39"
+      "published_bytes": 6088,
+      "published_sha256": "f83698db653b247ac75d7b680fd471d662c6ee898a119a362e89e831bd434e1f"
     },
     {
       "file": "docs/verification.json",
-      "published_bytes": 41607,
-      "published_sha256": "b0dfa1d5c6cf0014d0e995aeaf20e9df2284bb263140915a9a59cc1f0a4d5a63"
+      "published_bytes": 44776,
+      "published_sha256": "5176f94ebc6e2c0405c8922a7cee43c632b6b533fd17f5ca3d94dbab1cefa7f0"
     },
     {
       "file": "licenses/Artwork-NOTE.txt",
@@ -560,8 +580,8 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "published_bytes": 100488,
-      "published_sha256": "be20dd581e5c0688878cad19153fa5e3735d08b1a9959f39934c66b45b10947d"
+      "published_bytes": 101759,
+      "published_sha256": "dce2a7a5b096f4ed017659f7f489713622840320d25a92a2cf598b28d6118fa4"
     },
     {
       "file": "native/app/host_shim.h",
@@ -667,6 +687,16 @@
       "file": "native/app/moss_gpu_profile.h",
       "published_bytes": 11814,
       "published_sha256": "f1a720b6ab71ff236155366b76a795f281b6438b0562e4e39ceef77e20c187bd"
+    },
+    {
+      "file": "native/app/moss_kernel_gate.inc",
+      "published_bytes": 9936,
+      "published_sha256": "54ae331cdcc093af3e21a4293cbd6b6a260e06cd21c9a690739065c6c377cb0b"
+    },
+    {
+      "file": "native/app/moss_kernel_matrix_gate.inc",
+      "published_bytes": 6570,
+      "published_sha256": "6a9e4b2f7c14ea913934aa3047112c6bd9a4b1fb62ab66909fae70f6a24a2de1"
     },
     {
       "file": "native/app/moss_lora_contract.hpp",
@@ -1175,13 +1205,18 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp",
-      "published_bytes": 925761,
-      "published_sha256": "7ca27484a951c61dcf41f4f98c15c66f433ea5aa7cb1c29a9276c58e7681f899"
+      "published_bytes": 928600,
+      "published_sha256": "33ac185f9a4ee2d73ba4889edb94b7987c8690420c07efa25d711266242db67d"
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/moss_dit_fused_spv.h",
-      "published_bytes": 31520,
-      "published_sha256": "fd11bb050a8c55f38d0cedf8efc69e7b228b269a5c87122249634094c37e89c5"
+      "published_bytes": 45304,
+      "published_sha256": "199cf877882191e05f34ccde48d7c097f3be945e08680b2739d808569bd4a7ee"
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/moss_dit_rms_spv.h",
+      "published_bytes": 23064,
+      "published_sha256": "13de1147b85c8e5c08a92b85e4d4f7a9857ade3a548829d7d0483411fa3483cb"
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/pool.h",
@@ -1195,8 +1230,13 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp",
-      "published_bytes": 2468,
-      "published_sha256": "81c880368804dd06d3cd29c612e6095a4a28a12f8f5be5a21dda7e2ac0e2d8ce"
+      "published_bytes": 3255,
+      "published_sha256": "3c8095630e0e99f0100ab6bbba521b96830fc2c0d10438834efecccf25f46ee6"
+    },
+    {
+      "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_rms.comp",
+      "published_bytes": 2065,
+      "published_sha256": "ea1a2c6e01fda4ec4a0d5fac4ed4f1187bb8fba27c4e55631023b66275369a3e"
     },
     {
       "file": "patches/stable-diffusion/overlay/src/conditioning/conditioner.hpp",
@@ -1269,9 +1309,14 @@
       "published_sha256": "2f3800ba066748c80f17595ed59d055ef80bc158d24849b4596fa87ece650292"
     },
     {
+      "file": "patches/stable-diffusion/overlay/src/model/diffusion/moss_dit_kernels.hpp",
+      "published_bytes": 1386,
+      "published_sha256": "b20f7dffc113fe8e2d38682617b6f199cd25a9872a794bc8b511000b8e0c77a7"
+    },
+    {
       "file": "patches/stable-diffusion/overlay/src/model/diffusion/moss_dit_ops.hpp",
-      "published_bytes": 7528,
-      "published_sha256": "7565ab796235bd1a173aba60bf644d8627a78291f463c99390bff85ebb334e35"
+      "published_bytes": 7819,
+      "published_sha256": "1378f1b41d83040db7ffa364e862660ae1c0b7ac7e8a577fc22eab147a51d675"
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/diffusion/moss_ffn_token_chunk.hpp",
@@ -1280,8 +1325,8 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp",
-      "published_bytes": 18762,
-      "published_sha256": "6e4cafd9388cfef7724dabbb8d34febf05e40a101cff7d7f9be99e7ee9816a24"
+      "published_bytes": 19118,
+      "published_sha256": "4b06f8978cc04d905d6dc967785a8ae5c1967eb75dd88fe93fb3f8606b56b99b"
     },
     {
       "file": "patches/stable-diffusion/overlay/src/model/diffusion/unet.hpp",
@@ -1544,6 +1589,16 @@
       "published_sha256": "c8a1d799e76d85cacc8650bf5fb97ed77e78a449e139e3b8112c9a9768aca092"
     },
     {
+      "file": "tests/moss_kernel_policy.py",
+      "published_bytes": 3055,
+      "published_sha256": "75d522dd05ccbf3a4ed0b0417dc7b2dd8e9b4a5cfa46a76320c9471b67579fb5"
+    },
+    {
+      "file": "tests/moss_kernel_selection.cpp",
+      "published_bytes": 1201,
+      "published_sha256": "0aae17b60563034f6c4bbe8805ed21c4db9fe6468616165265bac7d17dabf350"
+    },
+    {
       "file": "tests/moss_lifecycle.c",
       "published_bytes": 2718,
       "published_sha256": "f291ec13c95160fbc8f9e20a362e8479606441f999102e3eea4dca661dcd9965"
@@ -1705,8 +1760,8 @@
     },
     {
       "file": "tools/build.py",
-      "published_bytes": 53572,
-      "published_sha256": "9b622e5011838aca18fae4dec84fa01ec06ddef2da04e1135b8e29a5d77233f4"
+      "published_bytes": 54995,
+      "published_sha256": "07500f8b76de470e8a28981d8ec21c71798bfde565214bda5f29a7ea84ddec24"
     },
     {
       "file": "tools/build_gateway.py",
@@ -1715,13 +1770,13 @@
     },
     {
       "file": "tools/build_input_snapshot.py",
-      "published_bytes": 3347,
-      "published_sha256": "b0203e1f4932fdfb73415b8aa80828aff376e4e89e6d568b0a38585dba2daa80"
+      "published_bytes": 3378,
+      "published_sha256": "896deaf7b41bbb9b46e57e3957fcb53ca8f76d3745dfcd0b5720f846f3939a58"
     },
     {
       "file": "tools/build_moss_core.py",
-      "published_bytes": 24506,
-      "published_sha256": "18c2045d8a31ff6ba3a8723f93f7c62bf60873a003b84f0fb678d9c7086f192a"
+      "published_bytes": 25490,
+      "published_sha256": "4e24fed3229de6fd1ed4b30b19349aaccda2da01dc298d878ba7a63a2e494604"
     },
     {
       "file": "tools/check_publication.py",
@@ -1767,6 +1822,11 @@
       "file": "tools/moss_feature_policy.py",
       "published_bytes": 10845,
       "published_sha256": "4cdf8ff0e9a705b6038b1a96972895b0a31dcc744ef1d9d1a89c4206dda9e203"
+    },
+    {
+      "file": "tools/moss_kernel_policy.py",
+      "published_bytes": 2085,
+      "published_sha256": "60f1c46aa6ff422322a794c4751792323ba40c0ce6a51743a9ce5633c1752f86"
     },
     {
       "file": "tools/moss_lora_precision_policy.py",

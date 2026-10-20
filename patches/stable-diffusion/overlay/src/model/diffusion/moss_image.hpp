@@ -80,6 +80,7 @@ namespace MOSSImage {
 
     inline ggml_tensor* fused_norm_mod(GGMLRunnerContext* ctx,ggml_tensor* weighted,ggml_tensor* mod,unsigned offset) {
         if(weighted->op!=GGML_OP_MUL || weighted->src[0]->op!=GGML_OP_RMS_NORM)throw std::runtime_error("MOSS norm decomposition differs");
+        if(moss_kernel::enabled(8))return moss_dit_opt::make(ctx->ggml_ctx,offset?moss_dit_opt::RMS_MOD3:moss_dit_opt::RMS_MOD0,weighted->src[0]->src[0],weighted->src[1],mod,nullptr,ctx->backend);
         return moss_dit_opt::make(ctx->ggml_ctx,offset?moss_dit_opt::NORM_MOD3:moss_dit_opt::NORM_MOD0,weighted->src[0],weighted->src[1],mod,nullptr,ctx->backend);
     }
     inline ggml_tensor* attention(GGMLRunnerContext* ctx,ggml_tensor* q,ggml_tensor* k,ggml_tensor* v,ggml_tensor* pe) {
@@ -87,6 +88,7 @@ namespace MOSSImage {
         const auto heads=q->ne[1];
         auto fused=[&](ggml_tensor* t){
             if(t->op!=GGML_OP_MUL || t->src[0]->op!=GGML_OP_RMS_NORM)throw std::runtime_error("MOSS QK norm decomposition differs");
+            if(moss_kernel::enabled(8))return moss_dit_opt::make(ctx->ggml_ctx,moss_dit_opt::RMS_QK_ROPE,t->src[0]->src[0],t->src[1],pe,nullptr,ctx->backend);
             return moss_dit_opt::make(ctx->ggml_ctx,moss_dit_opt::QK_WEIGHT_ROPE,t->src[0],t->src[1],pe,nullptr,ctx->backend);
         };
         return ggml_ext_attention_ext(ctx,fused(q),fused(k),v,heads,nullptr,true,ctx->flash_attn_enabled,1.f);

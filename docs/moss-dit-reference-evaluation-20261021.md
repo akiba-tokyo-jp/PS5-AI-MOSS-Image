@@ -1,5 +1,7 @@
 # Additional DiT references observed 2026-10-21
 
+2026-10-21追記：下記の評価を参考にFFN、Attention、QKV/LoRA、RMSの4項目を実装し、PS5の1024で検証しました。[実測と採用判断](moss-dit-kernels-20261021.md)。以下は調査時点の評価です。
+
 These are source-code findings, not PS5 benchmarks or adopted math changes.
 
 | Reference | Confirmed mechanism | Current MOSS Turbo4 implications |

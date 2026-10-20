@@ -837,6 +837,8 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
                      {"negative_cfg_skip_scope","all_negative_forwards_existing_MOSS_policy"},
                      {"moss_gpu_profile",bool(PS5_AI_MOSS_GPU_PROFILE)},
                      {"moss_dit_gpu_profile",bool(PS5_AI_MOSS_DIT_GPU_PROFILE)},
+                     {"moss_dit_kernel_mask",PS5_AI_MOSS_DIT_KERNEL_MASK},
+                     {"moss_fa_shmem_no_limit",bool(PS5_AI_MOSS_DIT_FA_NO_OCCUPANCY_LIMIT)},
                      {"moss_q4_bk64_raw64",bool(PS5_AI_MOSS_Q4_BK64_RAW64)},
                      {"moss_q4_bk64_policy",PS5_AI_MOSS_Q4_BK64_RAW64?"canonical_moss_ffn_up_q4k_f32acc_bk64_raw64_v1":"disabled"},
                      {"moss_gpu_profile_policy",PS5_AI_MOSS_DIT_GPU_PROFILE?"mask15_Turbo4_rank144_first_two_complete_cached_DiT_graphs_parent_and_shader_v1":PS5_AI_MOSS_GPU_PROFILE?"first_two_complete_dit_graphs_per_generation":"disabled"},
@@ -896,6 +898,7 @@ static void engine_status_impl(ps5_ai_engine_status* status) {
 #endif
 #include "moss_bounded_weight_upload_gate.inc"
 #include "moss_dit_gate.inc"
+#include "moss_kernel_gate.inc"
 /* One actual >Direct32 data-buffer gate in the same shared Vulkan device.
  * No model, scheduler, second device or inference on the development PC. */
 extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexcept {
@@ -1034,6 +1037,9 @@ extern "C" int ps5_ai_native_gpu_data_gate(char* error, size_t error_size) noexc
 #endif
 #if PS5_AI_MOSS_DIT_OPT_TRIAL
         moss_dit_readback_gate();
+#if PS5_AI_MOSS_DIT_KERNEL_TRIAL
+        moss_kernel_readback_gate();
+#endif
 #endif
         ps5_ai_flex_stats final_pool = {};
         ps5_ai_flex_snapshot(&final_pool);
@@ -1283,6 +1289,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
 #if PS5_AI_MOSS_DIT_OPT_TRIAL
         if(!moss_dit_gate_passed)throw std::runtime_error("DiT optimization startup admission lost");
         moss_dit_opt::begin(PS5_AI_MOSS_DIT_OPT_MASK);
+#if PS5_AI_MOSS_DIT_KERNEL_TRIAL
+        if(!moss_kernel_gate_passed)throw std::runtime_error("Kernel GPU readback admission missing");
+        moss_kernel::reset(PS5_AI_MOSS_DIT_KERNEL_MASK);
+#endif
 #endif
         if (!generate_image(model_context, &params, &images, &image_count) || image_count != 1 || !images || !images[0].data) {
             throw std::runtime_error("MOSS-Image image generation failed; see engine.jsonl");
@@ -1385,9 +1395,18 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         const unsigned dit_mask=PS5_AI_MOSS_DIT_OPT_MASK;
         if((dit_mask&1)&&(!moss_dit_opt::cache_hits.load()||!moss_dit_opt::cache_misses.load()))throw std::runtime_error("DiT invariant cache not used");
         if((dit_mask&2)&&!moss_dit_opt::GPU_recordings[moss_dit_opt::SITU].load())throw std::runtime_error("SiTU GPU fusion not used");
-        if(dit_mask&4)for(unsigned k=2;k<=5;++k)if(!moss_dit_opt::GPU_recordings[k].load())throw std::runtime_error("Norm/residual/QK GPU fusion not used");
+        if(dit_mask&4)for(unsigned k=2;k<=5;++k){
+            const unsigned actual=moss_kernel::enabled(8)?(k==2?9:k==3?10:k==5?11:k):k;
+            if(!moss_dit_opt::GPU_recordings[actual].load())throw std::runtime_error("Norm/residual/QK GPU fusion not used");
+        }
         if((dit_mask&8)&&(!moss_dit_opt::scale_elisions.load()||!moss_dit_opt::GPU_recordings[8].load()))throw std::runtime_error("LoRA unit-scale/packed qkv fusion not used");
         write_event({{"event","moss_dit_optimization_completed"},{"mask",dit_mask},{"cache_graph_hits",moss_dit_opt::cache_hits.load()},{"cache_graph_misses",moss_dit_opt::cache_misses.load()},{"rope_builds",moss_dit_opt::rope_builds.load()},{"scale_elisions",moss_dit_opt::scale_elisions.load()},{"GPU_recordings_kinds1_to8",fused_receipts},{"finite_DiT_outputs",precision_dit_outputs.load()},{"nonfinite",precision_nonfinite.load()}});
+#if PS5_AI_MOSS_DIT_KERNEL_TRIAL
+        nlohmann::json kr=nlohmann::json::array();for(auto& v:moss_kernel::records)kr.push_back(v.load());
+        for(unsigned bit=1,index=0;bit<=8;bit<<=1,++index)if((PS5_AI_MOSS_DIT_KERNEL_MASK&bit)&&!moss_kernel::records[index].load())throw std::runtime_error("Selected kernel path not exercised");
+        write_event({{"event","moss_dit_kernel_completed"},{"kernel_mask",PS5_AI_MOSS_DIT_KERNEL_MASK},{"path_selection_records",kr},{"RMS_GPU_records",{moss_dit_opt::GPU_recordings[9].load(),moss_dit_opt::GPU_recordings[10].load(),moss_dit_opt::GPU_recordings[11].load()}},{"F32_accumulation",true}});
+        moss_kernel::reset(0);
+#endif
         moss_dit_opt::end_completed();
 #endif
         // Collect already-completed sampled graphs before publishing any PNG.

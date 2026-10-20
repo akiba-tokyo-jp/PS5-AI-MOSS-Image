@@ -72,9 +72,21 @@
   },
   "MOSS_F32_fused_shader": {
     "source": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp",
-    "source_sha256": "81c880368804dd06d3cd29c612e6095a4a28a12f8f5be5a21dda7e2ac0e2d8ce",
-    "module_SHA256": "b19488806e5c83abcfe2fa3929cff369b3c702fc484aa52b18fcf92b6b1b0daa",
-    "module_bytes": 9896,
+    "source_sha256": "3c8095630e0e99f0100ab6bbba521b96830fc2c0d10438834efecccf25f46ee6",
+    "module_SHA256": "381c0ee3d5eeae2a3646584f4fead1363e555ca79164507ae2c12da9777ee6c1",
+    "module_bytes": 14264,
+    "glslc_flags": [
+      "--target-env=vulkan1.1",
+      "-O"
+    ],
+    "spirv_val": true,
+    "embedded_header_recompiled_byte_equal": true
+  },
+  "MOSS_RMS_fused_shader": {
+    "source": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_rms.comp",
+    "source_sha256": "ea1a2c6e01fda4ec4a0d5fac4ed4f1187bb8fba27c4e55631023b66275369a3e",
+    "module_SHA256": "f7c32197a354cc302e1ec9e0f76ee36ef7d6efbc9f4bd62c4f260e29e3e4ca87",
+    "module_bytes": 7220,
     "glslc_flags": [
       "--target-env=vulkan1.1",
       "-O"

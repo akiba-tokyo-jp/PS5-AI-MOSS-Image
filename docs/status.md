@@ -1,21 +1,22 @@
 # MOSS Imageの検証状態
 
-2026-10-21。最新の検証済み速度基準は**Turbo4＋bounded upload＋DiT不変計算再利用・F32融合**です。256初回モデル読込込み69.275742秒、同じプロセスでの256後1024初回47.760891秒でした。同じcoreの最適化なし71.354991／51.146425秒と比較し、1024は約6.62%短縮しました。両PNGは先行Turbo4版と全バイト一致し、PNGを目視確認しました。各1回の観測で、統計的な速度差・長期安定性や全promptの品質を証明しません。
+2026-10-21。最新速度基準はTurbo4＋bounded upload＋DiT融合＋kernel mask15・Attention occupancy調整です。1024は45.415880秒／44.839066秒、平均45.127473秒。今回の対照平均47.481390秒から4.96%短縮しました。初回256は69.449735秒（モデルlazy load込み）。旧版とはPNG画素差があり、同画質・全prompt・長時間安定性は未確認です。[最新の実機比較](moss-dit-kernels-20261021.md)。
 
-現行Turbo4のGPU timestampを追加測定し、1024はFFN40.15%、Attention25.41%、QKV15.01%でした。これは採取した完全forward2回のGPU区間割合です。計測なし版の速度基準は維持し、測定後に同版とAPIへ復帰しました。[GPU計測](moss-dit-gpu-profile-20261021.md)。
+前段のGPU timestamp測定で、1024はFFN40.15%、Attention25.41%、QKV15.01%を確認しました。その結果を今回のkernel改善に反映しています。[計測範囲](moss-dit-gpu-profile-20261021.md)。
 
 ## 採用判断と任意実験
 
 | 経路 | 現在の扱い | 実機で確認した範囲 |
 |---|---|---|
-| DiT text/RoPE再利用＋SiTU/norm/residual/QK/LoRA融合 | 最新の限定trial速度基準、明示mask15 | 69.275742／47.760891秒、対照版とPNG完全一致。既存ゲート＋融合16ケース、4 DiT／672 Q4 F32／LoRA504 |
+| DiT kernel4項目＋FA occupancy調整 | 最新の限定trial速度基準、optimization15＋kernel15 | 1024平均45.127473秒、追加20 GPUゲート、4 DiT／672 Q4 F32／LoRA504。owned Direct高水位＋96MiB |
+| DiT text/RoPE再利用＋SiTU/norm/residual/QK/LoRA融合 | 前段の基準、明示mask15 | 69.275742／47.760891秒、対照版とPNG完全一致。既存ゲート＋融合16ケース、4 DiT／672 Q4 F32／LoRA504 |
 | F32 Turbo4＋bounded upload | 従来の速度比較基準 | 256→1024各1枚、4 DiT／672 Q4 F32／LoRA504、既存14＋Turbo3＋uploadゲート |
 | FFN chunk2048 | 速度基準ではOFF | 1024が55.195208秒、前段基準より約8%増。workspace高水位は低下 |
 | F16 LoRA storage＋専用F32 shared演算 | default-OFFの任意試験 | 68.897951／51.884730秒、専用8ゲート、LoRA private記録2016。owned Direct使用量637.875MiB低下、warm高速化は未確認 |
 | 任意promptの通常運用版 | 公開対象から除外 | 8GiB起動時の物理確保は確認したが、初回要求が保存領域チェックのHTTP507でジョブ登録前に拒否。画像生成は未実施 |
 | 30-step res_multistep／Spectrum | 別のsampling試験 | 256→1024各1枚。sampling／forecast変更を含み、Turbo4や基準と同画質比較ではない |
 
-最新のDiT比較・メモリ増加・検証範囲は[DiT最適化](moss-dit-fusion-20261020.md)、前段の構成比較は[Turbo4メモリ比較](moss-turbo-memory-options-20261020.md)にまとめています。公開版は確認済みの限定trialを対象とし、通常運用の完成や長時間安定性は主張しません。通常運用試作はファイル所有者情報・ディスク空き容量・相対path処理のnative互換性に不整合が見つかったため、検証済みの構成から分離しました。既存画像は削除せず、試作アプリとgatewayは通常APIで終了し、別の確認でprocess不在と既存サービス維持を確かめました。
+最新のDiT比較・メモリ・画像差は[kernel改善](moss-dit-kernels-20261021.md)、前段は[DiT最適化](moss-dit-fusion-20261020.md)、前段の構成比較は[Turbo4メモリ比較](moss-turbo-memory-options-20261020.md)にまとめています。公開版は確認済みの限定trialを対象とし、通常運用の完成や長時間安定性は主張しません。通常運用試作はファイル所有者情報・ディスク空き容量・相対path処理のnative互換性に不整合が見つかったため、検証済みの構成から分離しました。既存画像は削除せず、試作アプリとgatewayは通常APIで終了し、別の確認でprocess不在と既存サービス維持を確かめました。
 
 ## 実装上の境界
 
@@ -40,6 +41,8 @@ bounded uploadはworkerあたり8MiBの一時host stagingを制限します。F1
 公開するのは集約した条件・秒数・正常PNG・ソースです。token、個人path／PID、元ログ全文、モデルweights、実行binaryは含めません。
 
 ## 保存したMOSS検証資料
+
+- [最新DiT kernel4項目の実機比較](moss-dit-kernels-20261021.md)
 
 - [現行Turbo4のGPU時間特定](moss-dit-gpu-profile-20261021.md) / [外部実装の適用評価](moss-dit-reference-evaluation-20261021.md)
 - [最新DiT融合・不変計算再利用](moss-dit-fusion-20261020.md)

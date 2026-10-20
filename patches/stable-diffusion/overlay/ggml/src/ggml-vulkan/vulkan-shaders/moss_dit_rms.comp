@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: MIT
+// Same 512-lane F32 reduction topology as the original GGML RMS shader.
+#version 450
+layout(local_size_x=512) in;
+layout(binding=0) readonly buffer A {float a[];};
+layout(binding=1) readonly buffer B {float b[];};
+layout(binding=2) readonly buffer C {float c[];};
+layout(binding=3) readonly buffer E {float e[];};
+layout(binding=4) writeonly buffer D {float dst[];};
+layout(push_constant) uniform Params {
+ uint count;uint kind;uint dims[4];uint stride[16];uint offset[5];uint bdim;uint cdim;
+} p;
+shared float sums[512];
+uint addr(uint slot,uvec4 j){return p.offset[slot]+j.x*p.stride[slot*4]+j.y*p.stride[slot*4+1]+j.z*p.stride[slot*4+2]+j.w*p.stride[slot*4+3];}
+void main(){
+ uint row=gl_WorkGroupID.x+gl_NumWorkGroups.x*gl_WorkGroupID.y;
+ uint H=p.dims[0],tid=gl_LocalInvocationID.x;
+ bool valid=row<p.count/H;
+ uvec4 ix=uvec4(0,row%p.dims[1],(row/p.dims[1])%p.dims[2],row/(p.dims[1]*p.dims[2]));
+ float sum=0.0;
+ for(uint j=tid;j<H;j+=512){ix.x=j;float x=valid?a[addr(0,ix)]:0.0;sum+=x*x;}
+ sums[tid]=sum;barrier();
+ for(uint s=256;s>0;s>>=1){if(tid<s){sum+=sums[tid+s];sums[tid]=sum;}barrier();}
+ float scale=inversesqrt(sums[0]/float(H)+1e-6);
+ if(!valid)return;
+ for(uint j=tid;j<H;j+=512){
+  ix.x=j;
+  if(p.kind==11){
+   uint pair=j%(H/2);uvec4 lo=ix;lo.x=pair;uvec4 hi=ix;hi.x=pair+H/2;
+   precise float an=a[addr(0,lo)]*scale,bn=a[addr(0,hi)]*scale;
+   precise float av=an*b[addr(1,uvec4(pair,0,0,0))],bv=bn*b[addr(1,uvec4(pair+H/2,0,0,0))];
+   float co=c[addr(2,uvec4(0,0,pair,ix.z))],si=c[addr(2,uvec4(0,1,pair,ix.z))];
+   precise float x0=av*co,x1=bv*si,y0=av*si,y1=bv*co;
+   precise float outv=j<H/2?x0-x1:y0+y1;
+   dst[p.offset[4]+j+H*(ix.z+p.dims[2]*(ix.y+p.dims[1]*ix.w))]=outv;
+  }else{
+   uint off=p.kind==9?0:3;
+   precise float normalized=a[addr(0,ix)]*scale;
+   precise float weighted=normalized*b[addr(1,uvec4(j,0,0,0))];
+   precise float product=weighted*c[addr(2,uvec4(j+(off+1)*H,0,0,0))];
+   precise float sumv=weighted+product;
+   dst[p.offset[4]+row*H+j]=sumv+c[addr(2,uvec4(j+off*H,0,0,0))];
+  }
+ }
+}

@@ -2,12 +2,15 @@
 #include "ggml-vulkan-common.h"
 #if PS5_AI_MOSS_DIT_OPT_TRIAL
 #include "moss_dit_fused_spv.h"
+#include "moss_dit_rms_spv.h"
 struct moss_dit_push { uint32_t count,kind,dims[4],stride[16],offset[5],bdim,cdim; };
 static_assert(sizeof(moss_dit_push)==116,"MOSS GLSL ABI");
 // Keep the pinned shared device ABI unchanged. One extra shared_ptr is owned
 // by this device lifetime and destroyed by its existing completed-idle dtor.
 static vk_pipeline* moss_dit_pipeline_ptr=nullptr;
 static VkDevice moss_dit_pipeline_owner{};
+static vk_pipeline *moss_kernel_rms_ptr=nullptr,*moss_kernel_lora_ptr=nullptr;
+extern "C" unsigned ps5_ai_moss_dit_kernel_capabilities(){return PS5_AI_MOSS_DIT_KERNEL_TRIAL?15u:0u;}
 static vk_pipeline& moss_dit_pipeline(const vk_device& device){
     if(!moss_dit_pipeline_ptr){moss_dit_pipeline_ptr=new vk_pipeline{};moss_dit_pipeline_owner=VkDevice(device->device);}
     GGML_ASSERT(moss_dit_pipeline_owner==VkDevice(device->device));return *moss_dit_pipeline_ptr;
@@ -1691,6 +1694,14 @@ static vk_fa_tuning_params get_fa_tuning_params_scalar(const vk_device& device, 
         }
     }
 
+    if(moss_kernel::enabled(2) && hsk==128 && hsv==128 && n_rows>=256 && n_rows<=4202 && n_kv<=4202 &&
+       k_type==GGML_TYPE_F16 && v_type==GGML_TYPE_F16 && f32acc && device->vendor_id==VK_VENDOR_ID_AMD && !device->coopmat2) {
+        result.shmem_staging=1;
+        // The original unused LDS limiter targets global-KV cache thrashing.
+        // Explicit shared-KV changes that tradeoff; measure the alternative.
+        if(PS5_AI_MOSS_DIT_FA_NO_OCCUPANCY_LIMIT)result.limit_occupancy_shmem=0;
+        if(!ggml_vk_flash_attn_scalar_shmem_support(device,result,hsk,hsv,f32acc,k_type,v_type))throw std::runtime_error("MOSS FA shared KV exceeds actual shmem");
+    }
     return result;
 }
 
@@ -1808,6 +1819,7 @@ vk_fa_pipeline_state get_fa_pipeline_state(const vk_device& device, const vk_fa_
                      (old_amd_windows   ? 8 : 0) |
                      (use_sparse        ? 16 : 0);
 
+    if(moss_kernel::enabled(2) && params.shmem_staging && hsk==128 && hsv==128)moss_kernel::records[1].fetch_add(1);
     const uint32_t subgroup_size = params.disable_subgroups ? 0 : params.subgroup_size;
 
     return vk_fa_pipeline_state{hsk, hsv, params.block_rows, params.block_cols, params.d_split, params.row_split, params.shmem_staging, params.path, params.workgroup_size, subgroup_size, aligned, f32acc, flags, params.limit_occupancy_shmem, k_type, v_type};
@@ -3807,6 +3819,14 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 
 #if PS5_AI_MOSS_DIT_OPT_TRIAL
     ggml_vk_create_pipeline(device, moss_dit_pipeline(device), "moss_dit_fused_f32", moss_dit_fused_f32_len, moss_dit_fused_f32_data, "main", 5, sizeof(moss_dit_push), {128,1,1}, {}, 1);
+#if PS5_AI_MOSS_DIT_KERNEL_TRIAL
+    // load_shaders enumerates these on every requested pipeline. Keep pointer
+    // identity stable so its requested/initialized/compiled guards can work.
+    if(!moss_kernel_rms_ptr)moss_kernel_rms_ptr=new vk_pipeline{};
+    if(!moss_kernel_lora_ptr)moss_kernel_lora_ptr=new vk_pipeline{};
+    ggml_vk_create_pipeline(device,*moss_kernel_rms_ptr,"moss_rms_epilogue_f32",moss_dit_rms_f32_len,moss_dit_rms_f32_data,"main",5,sizeof(moss_dit_push),{512,1,1},{},1);
+    ggml_vk_create_pipeline(device,*moss_kernel_lora_ptr,"moss_lora_vec4_f32",moss_dit_fused_f32_len,moss_dit_fused_f32_data,"main",5,sizeof(moss_dit_push),{128,1,1},{1},1);
+#endif
 #endif
     ggml_vk_create_pipeline(device, device->pipeline_rope_apply_f32, "rope_apply_f32", rope_apply_f32_len, rope_apply_f32_data, "main", 3, sizeof(vk_op_rope_apply_push_constants), {256, 1, 1}, {}, 1);
 
@@ -6684,7 +6704,12 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
         quantize_y = false;
     }
 
-    const bool qx_needs_dequant = mmp_map == nullptr || x_non_contig;
+    const unsigned kernel_bit=moss_kernel::projection(src0->name);
+    const bool kernel_predecode=moss_kernel::enabled(kernel_bit) && kernel_bit && src0->type==GGML_TYPE_Q4_K &&
+        (ggml_prec)dst->op_params[0]==GGML_PREC_F32 && ggml_is_contiguous(src0) && ggml_is_contiguous(src1) &&
+        src1->type==GGML_TYPE_F32 && ne02==1 && ne03==1 && ne12==1 && ne13==1 &&
+        (ne00==3072 || ne00==8192) && ne01<=16384 && ne11<=4202 && !quantize_y && !selected_matrix_f16acc;
+    const bool qx_needs_dequant = mmp_map == nullptr || x_non_contig || kernel_predecode;
     const bool qy_needs_dequant = !quantize_y && ((src1->type != f16_type && !y_f32_kernel) || y_non_contig);
 
     if (qx_needs_dequant) {
@@ -6692,6 +6717,7 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
         mmp_map = ggml_vk_get_mul_mat_mat_pipeline_map(ctx, f16_type, y_f32_kernel ? GGML_TYPE_F32 : f16_type, (ggml_prec)dst->op_params[0], false, &selected_matrix_f16acc);
     }
 
+    if(kernel_predecode)GGML_ASSERT(!selected_matrix_f16acc);
     // Not implemented
     GGML_ASSERT(y_non_contig || !qy_needs_dequant);  // NOLINT
 
@@ -6825,6 +6851,7 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
         qy_buf_offset = vk_tensor_offset(src1) + src1->view_offs;
         GGML_ASSERT(d_Qy != nullptr);
     }
+    if(kernel_predecode)moss_kernel::records[kernel_bit==1?0:2].fetch_add(1);
     if (qx_needs_dequant) {
         d_X = ctx->prealloc_x;
         GGML_ASSERT(d_X->size >= x_sz);
@@ -11725,16 +11752,21 @@ static void ggml_vk_moss_dit(ggml_backend_vk_context* ctx,vk_context& subctx,ggm
         GGML_ASSERT(disjoint);
     }
     pc.bdim=inputs[1]->ne[0];pc.cdim=inputs[2]->ne[0];
-    auto pipeline=moss_dit_pipeline(ctx->device);
+    const bool rms=pc.kind>=9;
+    const bool vec=moss_kernel::enabled(4) && pc.kind>=6 && pc.kind<=8 && pc.dims[0]%4==0 && pc.bdim%4==0 && pc.cdim%4==0;
+    auto pipeline=rms?*moss_kernel_rms_ptr:vec?*moss_kernel_lora_ptr:moss_dit_pipeline(ctx->device);
     GGML_ASSERT(pipeline);
+    if(rms)moss_kernel::records[3].fetch_add(1);
+    if(vec)moss_kernel::records[4].fetch_add(1);
     ggml_pipeline_request_descriptor_sets(ctx,pipeline,1);
-    const uint32_t groups=CEIL_DIV(pc.count,128);
+    const uint32_t units=rms?pc.count/pc.dims[0]:vec?CEIL_DIV(pc.count,4):pc.count;
+    const uint32_t groups=rms?units:CEIL_DIV(units,128);
     const uint32_t gx=std::min(groups,ctx->device->properties.limits.maxComputeWorkGroupCount[0]);
     const uint32_t gy=CEIL_DIV(groups,gx);
     GGML_ASSERT(gy<=ctx->device->properties.limits.maxComputeWorkGroupCount[1]);
     ggml_vk_dispatch_pipeline(ctx,subctx,pipeline,
         {buffers[0],buffers[1],buffers[2],buffers[3],buffers[4]},
-        pc,{gx*128,gy,1});
+        pc,{gx*(rms?512:128),gy,1});
     moss_dit_opt::GPU_recordings[pc.kind].fetch_add(1,std::memory_order_relaxed);
 }
 #endif
@@ -17167,6 +17199,7 @@ vk_device_struct::~vk_device_struct() {
     all_pipelines.clear();
 #if PS5_AI_MOSS_DIT_OPT_TRIAL
     if(moss_dit_pipeline_ptr&&moss_dit_pipeline_owner==VkDevice(device)){
+        delete moss_kernel_rms_ptr;moss_kernel_rms_ptr=nullptr;delete moss_kernel_lora_ptr;moss_kernel_lora_ptr=nullptr;
         delete moss_dit_pipeline_ptr;moss_dit_pipeline_ptr=nullptr;moss_dit_pipeline_owner={};
     }
 #endif
