@@ -1304,6 +1304,32 @@
       },
       "actual_SELF_sha256": "66015a326606bde03773b3db3e48a6d59cb9875516b1228b77dcd217bb943dd0",
       "actual_fresh75_core_sha256": "fe7c1f85a60d38d375c24d22064f00003fa99d266f84d1d29bd6a97317f2bad6"
+    },
+    {
+      "id": "moss-dit-mask15-gpu-profile-256-20261021",
+      "model_id": "moss-image-sft",
+      "size": "256x256",
+      "native_generation_seconds": 69.118352,
+      "profile": "Turbo4_upload_mask15_F32_rank144_GPU_timestamp_diagnostic",
+      "image": "docs/images/moss-turbo4-upload-256-20261020.png",
+      "PNG_bytes": 178213,
+      "PNG_sha256": "be9e6ebad5da8ee7a4e536a40e905307a2aa24bcced8e86b600af9fa0aaa2ad7",
+      "sampled_complete_DiT_forwards": 2,
+      "whole_generation_extrapolated": false,
+      "baseline_PNG_identical": true
+    },
+    {
+      "id": "moss-dit-mask15-gpu-profile-1024-20261021",
+      "model_id": "moss-image-sft",
+      "size": "1024x1024",
+      "native_generation_seconds": 47.777175,
+      "profile": "Turbo4_upload_mask15_F32_rank144_GPU_timestamp_diagnostic",
+      "image": "docs/images/moss-turbo4-upload-1024-20261020.png",
+      "PNG_bytes": 2133928,
+      "PNG_sha256": "9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a",
+      "sampled_complete_DiT_forwards": 2,
+      "whole_generation_extrapolated": false,
+      "baseline_PNG_identical": true
     }
   ],
   "normal_API_shutdown_and_independent_idle_observation": true,
@@ -1315,5 +1341,7 @@
     "Arbitrary-prompt operating mode and8GiB inference are not validated or included."
   ],
   "selected_DiT_optimization_mask": 15,
-  "DiT_comparison_scope": "Same core, each size/config once; exact canonical prompt/sampling/adapter; CPU wall phases overlap; temperature and clocks not controlled"
+  "DiT_comparison_scope": "Same core, each size/config once; exact canonical prompt/sampling/adapter; CPU wall phases overlap; temperature and clocks not controlled",
+  "latest_diagnostic_document": "docs/moss-dit-gpu-profile-20261021.md",
+  "latest_diagnostic_data": "docs/moss-dit-gpu-profile-20261021.json"
 }

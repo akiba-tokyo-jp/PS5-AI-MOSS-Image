@@ -15,8 +15,8 @@
     },
     {
       "file": "AGENTS.md",
-      "published_bytes": 3626,
-      "published_sha256": "f7aee730086fa01d543673fe98467958a42e5e0958dcfceaf7f39dc25c254a53"
+      "published_bytes": 4149,
+      "published_sha256": "77cfd857926fa5db5c373d10224b0241b22da4e48fa709e9628f109d97a0e0ef"
     },
     {
       "file": "LICENSE",
@@ -25,8 +25,8 @@
     },
     {
       "file": "README.md",
-      "published_bytes": 6188,
-      "published_sha256": "c8bf8df42ea0c5a87cb4d8cb5cece24e3954e7a229bd548af012da88bba03deb"
+      "published_bytes": 6633,
+      "published_sha256": "7d6e46621dd15864eb70e5de92aae14f8219bc4891a44e1ca88a298ed9b20b74"
     },
     {
       "file": "THIRD_PARTY_NOTICES.md",
@@ -200,8 +200,8 @@
     },
     {
       "file": "docs/build.md",
-      "published_bytes": 6454,
-      "published_sha256": "94a75033a3b11511431ad06b67b8cffff9b8357977b8430ba13749849ccc86ed"
+      "published_bytes": 7165,
+      "published_sha256": "15ff735b504c5223350f250aa03f389c30d8a3523048a62ec18b07392974852e"
     },
     {
       "file": "docs/dashboard.md",
@@ -267,6 +267,21 @@
       "file": "docs/moss-dit-fusion-20261020.md",
       "published_bytes": 7731,
       "published_sha256": "0af6c3f1faa676c6665db3c9ec3cf66221de50caa41634254b78411461879db9"
+    },
+    {
+      "file": "docs/moss-dit-gpu-profile-20261021.json",
+      "published_bytes": 17203,
+      "published_sha256": "6e412c6bfaaee450b82d6772cd18e1f57badec0dec372536ed4035ffa11122fd"
+    },
+    {
+      "file": "docs/moss-dit-gpu-profile-20261021.md",
+      "published_bytes": 8149,
+      "published_sha256": "81e93944ac31ac81c2ed7d299c34bf44021bbd51e8636b027a626430a41fdac9"
+    },
+    {
+      "file": "docs/moss-dit-reference-evaluation-20261021.md",
+      "published_bytes": 2561,
+      "published_sha256": "de0f32629d278e8d81efa3ff651c98183febbb63f4d1609ad2430c0d8e1bbc8f"
     },
     {
       "file": "docs/moss-lora-private-precision-trial.md",
@@ -340,13 +355,13 @@
     },
     {
       "file": "docs/status.md",
-      "published_bytes": 5471,
-      "published_sha256": "d705364d5a22d249b6ded3cc07a8865ee71a286642393b210a8ec0a867e0da58"
+      "published_bytes": 5930,
+      "published_sha256": "f4735962b7277f4f50e84eff8a99be1d428bc4f49e24b27300e61eb6466b3b39"
     },
     {
       "file": "docs/verification.json",
-      "published_bytes": 40338,
-      "published_sha256": "869d659ad2a37c259273b4020690ee5f42d607e4f1171fd8791950c075d48f7b"
+      "published_bytes": 41607,
+      "published_sha256": "b0dfa1d5c6cf0014d0e995aeaf20e9df2284bb263140915a9a59cc1f0a4d5a63"
     },
     {
       "file": "licenses/Artwork-NOTE.txt",
@@ -545,8 +560,8 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "published_bytes": 99605,
-      "published_sha256": "6778793bf16b04e61379232eb3c88812f67d1db8bb12b305b032821bc9602738"
+      "published_bytes": 100488,
+      "published_sha256": "be20dd581e5c0688878cad19153fa5e3735d08b1a9959f39934c66b45b10947d"
     },
     {
       "file": "native/app/host_shim.h",
@@ -610,8 +625,8 @@
     },
     {
       "file": "native/app/moss_bounded_weight_upload.h",
-      "published_bytes": 1424,
-      "published_sha256": "30d01684dbc0acb26974f98e918907223f01860aacfe490b4933aa1cc37b5a78"
+      "published_bytes": 1499,
+      "published_sha256": "f42c65e71e343d98c573d7ca37e3e1c0caad3f0669a734c1ed2e0b9592080f36"
     },
     {
       "file": "native/app/moss_bounded_weight_upload_gate.inc",
@@ -622,6 +637,11 @@
       "file": "native/app/moss_dit_gate.inc",
       "published_bytes": 9022,
       "published_sha256": "7b3b1264b8e7d6c8ba4b5b0528cff159fd3bcdc504801bc933f664a81f096c54"
+    },
+    {
+      "file": "native/app/moss_dit_gpu_profile_policy.h",
+      "published_bytes": 996,
+      "published_sha256": "fab8f8590012c1513bb92bea7a69fd3357cf3f5a8ae1df4492f6267794445459"
     },
     {
       "file": "native/app/moss_ffn_chunk_fixture.hpp",
@@ -645,8 +665,8 @@
     },
     {
       "file": "native/app/moss_gpu_profile.h",
-      "published_bytes": 9322,
-      "published_sha256": "b37406e3ce977a7e065009fe5ddb8f5511f189f408e67fd7c64ef86e2a267b77"
+      "published_bytes": 11814,
+      "published_sha256": "f1a720b6ab71ff236155366b76a795f281b6438b0562e4e39ceef77e20c187bd"
     },
     {
       "file": "native/app/moss_lora_contract.hpp",
@@ -765,8 +785,8 @@
     },
     {
       "file": "native/app/moss_turbo_trial.h",
-      "published_bytes": 3805,
-      "published_sha256": "bb982bd9a44f89fc631b980303e506168732a0f7d50943eba4f17ef08a7177ac"
+      "published_bytes": 3880,
+      "published_sha256": "5ef4ca1d084889661d1e676ba21e9b713cbf3d88d590cd758c2b8fcf50e723fc"
     },
     {
       "file": "native/app/native_constructor_expect.h",
@@ -1135,8 +1155,8 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-common.h",
-      "published_bytes": 27113,
-      "published_sha256": "b0ecea1ba7d729dd70c080e5e4aaf04d8b818d302b0fbc126ef12353394f3d12"
+      "published_bytes": 27284,
+      "published_sha256": "d26faa1258f93080f12b4a7a6ac4355e35f17d9a76379160210a60840fa4eb80"
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan-ps5-profile.h",
@@ -1155,8 +1175,8 @@
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp",
-      "published_bytes": 923825,
-      "published_sha256": "640c76f32ef8e888b2878517002e6995c893e7089a4e7b57b2394705ad94aa5e"
+      "published_bytes": 925761,
+      "published_sha256": "7ca27484a951c61dcf41f4f98c15c66f433ea5aa7cb1c29a9276c58e7681f899"
     },
     {
       "file": "patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/moss_dit_fused_spv.h",
@@ -1459,6 +1479,16 @@
       "published_sha256": "a0f9bcb43e9393a473822d069e3b043b03b57d3c02a5fb8b963da79c411bfc93"
     },
     {
+      "file": "tests/moss_dit_gpu_profile.cpp",
+      "published_bytes": 4652,
+      "published_sha256": "fd4004353dbf78bc76925f2787e5ad8a8b069640b456fd0bdfe2e4b934eda6b5"
+    },
+    {
+      "file": "tests/moss_dit_gpu_profile.py",
+      "published_bytes": 5627,
+      "published_sha256": "98349905091cf6276be4df71e98c1a96ae8cd06da30915f1bb8317c9fc2dc319"
+    },
+    {
       "file": "tests/moss_dit_graph_scratch.cpp",
       "published_bytes": 6237,
       "published_sha256": "f8588b07fbac15ba389a170c839952bd5de739e3a2764fc228d1672acd63a6f1"
@@ -1505,8 +1535,8 @@
     },
     {
       "file": "tests/moss_gpu_profile_build.py",
-      "published_bytes": 17709,
-      "published_sha256": "67f7701ea6312485da7fffad663fbc811a73e67afeb8761052cc6bdc09b4b133"
+      "published_bytes": 19267,
+      "published_sha256": "956be5b28dc8d6e1d182d35e53ba0a13b54d70551b7fb72ab1503fcd5dee7919"
     },
     {
       "file": "tests/moss_init_stage.cpp",
@@ -1675,8 +1705,8 @@
     },
     {
       "file": "tools/build.py",
-      "published_bytes": 52784,
-      "published_sha256": "1d606c6892ffe8baa22263a37716f772ba565a35387c7e6fcbff0ccd2bbfa159"
+      "published_bytes": 53572,
+      "published_sha256": "9b622e5011838aca18fae4dec84fa01ec06ddef2da04e1135b8e29a5d77233f4"
     },
     {
       "file": "tools/build_gateway.py",
@@ -1730,8 +1760,8 @@
     },
     {
       "file": "tools/moss_dit_policy.py",
-      "published_bytes": 1500,
-      "published_sha256": "3c002cb9f98b5e03bd40fd810e5fde07b550024d6d36a92756debd6e8810f1fb"
+      "published_bytes": 2146,
+      "published_sha256": "d75633982f2cd823a267852f259f4dc9061c0ab4fa8bab98a00fedea2d1bc550"
     },
     {
       "file": "tools/moss_feature_policy.py",

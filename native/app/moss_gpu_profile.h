@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "moss_dit_gpu_profile_policy.h"
 #ifndef PS5_AI_MOSS_GPU_PROFILE
 #define PS5_AI_MOSS_GPU_PROFILE 0
 #endif
@@ -20,7 +21,12 @@
 #define PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES (2u * PS5_AI_MOSS_GPU_PROFILE_MAX_NODES)
 #define PS5_AI_MOSS_GPU_PROFILE_GRAPHS 2u
 #define PS5_AI_MOSS_GPU_PROFILE_JOBS 4u
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+#define PS5_AI_MOSS_GPU_PROFILE_CLASSES 25u
+#define PS5_AI_MOSS_GPU_SHADER_CLASSES 8u
+#else
 #define PS5_AI_MOSS_GPU_PROFILE_CLASSES 12u
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,6 +35,12 @@ enum ps5_ai_moss_gpu_class {
     PS5_AI_GPU_Q4_FFN_DOWN, PS5_AI_GPU_Q4_OTHER,
     PS5_AI_GPU_LORA_DOWN, PS5_AI_GPU_LORA_UP, PS5_AI_GPU_OTHER_MM,
     PS5_AI_GPU_ATTENTION, PS5_AI_GPU_SCALE, PS5_AI_GPU_ADD, PS5_AI_GPU_OTHER
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+    , PS5_AI_GPU_RMS, PS5_AI_GPU_CAST, PS5_AI_GPU_CONT, PS5_AI_GPU_COPY,
+    PS5_AI_GPU_LAYOUT, PS5_AI_GPU_SITU, PS5_AI_GPU_NORM_MOD,
+    PS5_AI_GPU_RESIDUAL, PS5_AI_GPU_QK_ROPE, PS5_AI_GPU_LORA_ADD,
+    PS5_AI_GPU_LORA_PACK, PS5_AI_GPU_ROPE, PS5_AI_GPU_MUL
+#endif
 };
 struct ps5_ai_moss_gpu_class_stat {
     uint64_t intervals, ticks, minimum_ticks, maximum_ticks;
@@ -40,6 +52,10 @@ struct ps5_ai_moss_gpu_graph_stat {
     uint64_t zero_intervals, invalid_intervals, overflow, dispatches, submits, fences;
     uint64_t cpu_wall_ns;
     struct ps5_ai_moss_gpu_class_stat classes[PS5_AI_MOSS_GPU_PROFILE_CLASSES];
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+    /* Secondary attribution of the SAME intervals, never an additional total. */
+    struct ps5_ai_moss_gpu_class_stat shader_classes[PS5_AI_MOSS_GPU_PROFILE_CLASSES][PS5_AI_MOSS_GPU_SHADER_CLASSES];
+#endif
 };
 struct ps5_ai_moss_gpu_profile_report {
     uint32_t schema, enabled, valid, startup_gate, active, gate_verified;
@@ -57,9 +73,35 @@ static inline const char *ps5_ai_moss_gpu_class_name(unsigned id) {
     static const char * const names[PS5_AI_MOSS_GPU_PROFILE_CLASSES] = {
         "q4_qkv", "q4_o", "q4_ffn_up_gate", "q4_ffn_down", "q4_other",
         "lora_down_f32", "lora_up_f32", "other_matmul", "attention",
-        "scale", "add", "other"};
+        "scale", "add", "other"
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+        , "rms_norm", "cast", "contiguous", "copy", "layout", "fused_situ",
+        "fused_norm_mod", "fused_residual", "fused_qk_rope", "fused_lora_add",
+        "fused_lora_pack", "rope", "mul"
+#endif
+    };
     return id < PS5_AI_MOSS_GPU_PROFILE_CLASSES ? names[id] : "invalid";
 }
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+static inline unsigned ps5_ai_moss_gpu_shader_class(const char *name) {
+    if(!name)return 7;
+    if(!strcmp(name,"split_k_reduce")||!strcmp(name,"fa_split_k_reduce"))return 3;
+    if(!strncmp(name,"matmul_split_k_reduce",21)||!strncmp(name,"reduce_",7)||!strncmp(name,"sum_rows",8))return 3;
+    if(!strncmp(name,"matmul",6)||!strncmp(name,"mul_mat",7))return 0;
+    if(!strncmp(name,"flash_attn",10))return 1;
+    if(!strncmp(name,"dequant",7)||!strncmp(name,"copy",4)||!strncmp(name,"cpy",3)||!strncmp(name,"cont",4))return 2;
+    if(!strncmp(name,"rms_norm",8))return 4;
+    if(!strcmp(name,"moss_dit_fused_f32"))return 5;
+    if(!strncmp(name,"add",3)||!strncmp(name,"mul",3)||!strncmp(name,"scale",5)||
+       !strncmp(name,"unary",5)||!strncmp(name,"silu",4)||!strncmp(name,"tanh",4)||
+       !strncmp(name,"sigmoid",7)||!strncmp(name,"rope",4))return 6;
+    return 7;
+}
+static inline const char *ps5_ai_moss_gpu_shader_name(unsigned id) {
+    static const char *const names[PS5_AI_MOSS_GPU_SHADER_CLASSES]={"matrix","attention","conversion_copy","reduction","rms_norm","moss_fused","pointwise","other"};
+    return id<PS5_AI_MOSS_GPU_SHADER_CLASSES?names[id]:"invalid";
+}
+#endif
 /* Exact layer grammar: no partial names, out-of-range layers or leadingzero aliases. */
 static inline const char *ps5_ai_moss_gpu_layer_tail(const char *name, int lora) {
     const char *prefix = lora ? "lora.model.diffusion_model.layers." : "model.diffusion_model.layers.";
@@ -75,12 +117,13 @@ static inline const char *ps5_ai_moss_gpu_layer_tail(const char *name, int lora)
  */
 static inline unsigned ps5_ai_moss_gpu_lora_class(const char *name, int64_t k, int64_t m) {
     const char *p=ps5_ai_moss_gpu_layer_tail(name,1); if(!p) return PS5_AI_GPU_OTHER_MM;
+    const int64_t rank=PS5_AI_MOSS_DIT_GPU_PROFILE?144:16;
     const char *tails[]={"qkv.weight", "qkv.weight.1", "qkv.weight.2", "o.weight", "ffn_up_gate.weight", "ffn_down.weight"};
     for(unsigned i=0;i<6;i++){
         size_t n=strlen(tails[i]); if(strncmp(p,tails[i],n))continue;
         const int64_t input=i==5?8192:3072, output=i==4?16384:3072;
-        if(!strcmp(p+n,".lora_down") && k==input && m==16) return PS5_AI_GPU_LORA_DOWN;
-        if(!strcmp(p+n,".lora_up") && k==16 && m==output) return PS5_AI_GPU_LORA_UP;
+        if(!strcmp(p+n,".lora_down") && k==input && m==rank) return PS5_AI_GPU_LORA_DOWN;
+        if(!strcmp(p+n,".lora_up") && k==rank && m==output) return PS5_AI_GPU_LORA_UP;
     }
     return PS5_AI_GPU_OTHER_MM;
 }
@@ -122,6 +165,9 @@ static inline int ps5_ai_moss_gpu_coverage_complete(const struct ps5_ai_moss_gpu
     const uint64_t all=(UINT64_C(1)<<42)-1,negative=all^(UINT64_C(1)<<22);
     if(!c||c->invalid||!c->tokens||(c->masks[0]!=all&&c->masks[0]!=negative))return 0;
     const unsigned layers=c->masks[0]==all?42:41;
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+    if(layers!=42||c->lora_down_nodes!=252||c->lora_up_nodes!=252)return 0;
+#endif
     for(unsigned i=0;i<4;i++)if(c->masks[i]!=c->masks[0]||c->q4_main_nodes[i]!=layers)return 0;
     return 1;
 }
@@ -152,6 +198,9 @@ int ps5_ai_moss_gpu_profile_job_end(struct ps5_ai_moss_gpu_profile_report *out);
 void ps5_ai_moss_gpu_profile_snapshot(struct ps5_ai_moss_gpu_profile_report *out);
 /* Called only immediately around real dispatch command recording. */
 unsigned ps5_ai_moss_gpu_profile_dispatch_begin(uint64_t command_buffer);
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+unsigned ps5_ai_moss_gpu_profile_dispatch_begin_named(uint64_t command_buffer,const char *pipeline_name);
+#endif
 void ps5_ai_moss_gpu_profile_dispatch_end(uint64_t command_buffer,unsigned cookie);
 #else
 static inline int ps5_ai_moss_gpu_profile_gate_begin(void){return 0;}

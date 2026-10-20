@@ -346,6 +346,16 @@ static nlohmann::json moss_gpu_profile_json(const ps5_ai_moss_gpu_profile_report
             classes[ps5_ai_moss_gpu_class_name(c)]={{"intervals",s.intervals},{"ticks",s.ticks},
                 {"interval_seconds",double(s.ticks)*r.timestamp_period_ns*1e-9},
                 {"minimum_ticks",s.minimum_ticks},{"maximum_ticks",s.maximum_ticks}};
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+            nlohmann::json shaders=nlohmann::json::object();
+            for(unsigned k=0;k<PS5_AI_MOSS_GPU_SHADER_CLASSES;k++){
+                const auto& t=g.shader_classes[c][k];if(!t.intervals)continue;
+                shaders[ps5_ai_moss_gpu_shader_name(k)]={{"intervals",t.intervals},{"ticks",t.ticks},
+                    {"interval_seconds",double(t.ticks)*r.timestamp_period_ns*1e-9},
+                    {"minimum_ticks",t.minimum_ticks},{"maximum_ticks",t.maximum_ticks}};
+            }
+            classes[ps5_ai_moss_gpu_class_name(c)]["shader_groups"]=shaders;
+#endif
         }
         graphs.push_back({{"ordinal",g.ordinal},{"nodes",g.nodes},{"recorded_nodes",g.recorded_nodes},
             {"complete_main_graph",bool(g.complete_main_graph)},{"canonical_layer_count",g.canonical_layer_count},
@@ -359,6 +369,7 @@ static nlohmann::json moss_gpu_profile_json(const ps5_ai_moss_gpu_profile_report
             {"classes",classes}});
     }
     return {{"schema",r.schema},{"enabled",bool(r.enabled)},{"valid",bool(r.valid)},
+        {"dit_mask15_rank144_diagnostic",bool(PS5_AI_MOSS_DIT_GPU_PROFILE)},
         {"startup_gate",bool(r.startup_gate)},{"active",bool(r.active)},{"gate_verified",bool(r.gate_verified)},
         {"generation_ordinal",r.generation_ordinal},{"graphs_seen",r.graphs_seen},
         {"full_graphs_seen",r.full_graphs_seen},{"skipped_partial_views",r.skipped_partial_views},
@@ -825,9 +836,10 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
                      {"trial_steps",PS5_AI_MOSS_DEFAULT_REQUEST_STEPS},{"trial_cfg_scale",PS5_AI_MOSS_DEFAULT_REQUEST_CFG},
                      {"negative_cfg_skip_scope","all_negative_forwards_existing_MOSS_policy"},
                      {"moss_gpu_profile",bool(PS5_AI_MOSS_GPU_PROFILE)},
+                     {"moss_dit_gpu_profile",bool(PS5_AI_MOSS_DIT_GPU_PROFILE)},
                      {"moss_q4_bk64_raw64",bool(PS5_AI_MOSS_Q4_BK64_RAW64)},
                      {"moss_q4_bk64_policy",PS5_AI_MOSS_Q4_BK64_RAW64?"canonical_moss_ffn_up_q4k_f32acc_bk64_raw64_v1":"disabled"},
-                     {"moss_gpu_profile_policy",PS5_AI_MOSS_GPU_PROFILE?"first_two_complete_dit_graphs_per_generation":"disabled"},
+                     {"moss_gpu_profile_policy",PS5_AI_MOSS_DIT_GPU_PROFILE?"mask15_Turbo4_rank144_first_two_complete_cached_DiT_graphs_parent_and_shader_v1":PS5_AI_MOSS_GPU_PROFILE?"first_two_complete_dit_graphs_per_generation":"disabled"},
                      {"moss_f32_accumulation",bool(PS5_AI_MOSS_F32_ACCUMULATION)},
                      {"MOSS_linear_accumulation",PS5_AI_MOSS_F32_ACCUMULATION?"f32":"default"},
                      {"architecture", "MOSS-Image"}, {"llm_path", engine_config.llm}, {"vae_path", engine_config.vae}, {"tokenizer_path", engine_config.tokenizer},

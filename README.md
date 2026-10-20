@@ -25,6 +25,8 @@
 
 **現在公開しているのは検証用アプリです。** 採用候補のTurbo4プロファイルは固定prompt・seed・256／1024、1プロセス最大4試行に制限しています。任意promptの連続運用版は公開対象に含めません。[確認済み機能と制約](docs/status.md)を先に確認してください。
 
+2026-10-21に現行版のGPU時間を実測しました。1024の採取区間ではFFN約40%、Flash Attention約25%、QKV約15%で、次の優先対象はFFN行列積とAttentionです。計測版は256／1024とも検証済みPNGと完全一致し、測定後に計測なし版へ戻しました。[内訳・計測範囲](docs/moss-dit-gpu-profile-20261021.md) / [ComfyUI等の参考実装](docs/moss-dit-reference-evaluation-20261021.md)。
+
 ## PS5内の処理
 
 ![MOSS専用の処理構成](docs/images/architecture.svg)

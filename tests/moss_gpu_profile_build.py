@@ -27,13 +27,15 @@ def load_module(name, path):
 
 
 def native_command_emissions(builder_source, profile, trial_flags,
-                             accumulation_flags, gpu_profile_flags):
+                             accumulation_flags, gpu_profile_flags, features=(False,False,False)):
     """Execute only actual main's list/loop expressions with a recording run().
 
     No subprocess, filesystem build operation, inference or modified model is
     involved. This uses the real command-construction AST rather than duplicating
     the native source mapping in a second implementation.
     """
+    from moss_feature_policy import feature_compile_flags, ffn_compile_flags
+    from moss_lora_precision_policy import flags as lora_flags
     tree = ast.parse(builder_source)
     main = next(node for node in tree.body
                 if isinstance(node, ast.FunctionDef) and node.name == "main")
@@ -62,6 +64,9 @@ def native_command_emissions(builder_source, profile, trial_flags,
                  trial_flags=trial_flags, accumulation_flags=accumulation_flags,
                  gpu_profile_flags=gpu_profile_flags,
                  q4_candidate_flags=["-DPS5_AI_MOSS_Q4_BK64_RAW64=0"],
+                 sampler_flags=["-DPS5_AI_MOSS_SAMPLER_TRIAL=0"],
+                 feature_flags=feature_compile_flags(*features),
+                 ffn_flags=ffn_compile_flags(False,0),lora_flags=lora_flags(None),
                  ggml_recipes=copy.deepcopy(profile["ggml_compile"]),
                  ggml_objects=[], a=SimpleNamespace(precision="fp16"),
                  run=lambda command: commands.append(list(command)),
@@ -262,6 +267,20 @@ def main():
                   "single actual emitted macro " + str(enabled) + " "
                   + Path(command[command.index("-o") + 1]).name)
         emissions[str(enabled)] = commands
+    combined=builder.moss_performance_contract(1,True,moss_turbo_trial=True,moss_bounded_weight_upload_trial=True)
+    diagnostic=builder.validate_dit_profile(True,mask=15,legacy_gpu_profile=False,accumulation=True,turbo=True,upload=True)
+    commands=native_command_emissions((ROOT/'tools/build.py').read_text(),native_profile,
+        builder.moss_trial_flags(True,True,combined,False,False,1,True,False,False,False,False,True,True)
+        +builder.dit_flags(True)+['-DPS5_AI_MOSS_DIT_OPT_MASK=15'],
+        builder.moss_accumulation_compile_flags(True),builder.moss_gpu_profile_compile_flags(True)+diagnostic,
+        features=(False,True,True))
+    for command in commands:
+        check(command.count('-DPS5_AI_MOSS_GPU_PROFILE=1')==command.count('-DPS5_AI_MOSS_DIT_GPU_PROFILE=1')==1
+              and command.count('-DPS5_AI_MOSS_DIT_OPT_MASK=15')==1
+              and '-DPS5_AI_MOSS_TURBO_TRIAL=1'in command
+              and '-DPS5_AI_MOSS_BOUNDED_WEIGHT_UPLOAD_TRIAL=1'in command,
+              'actual native/platform/backend command records exact mask15 diagnostic parent '+Path(command[command.index('-o')+1]).name)
+    emissions['mask15_diagnostic']=commands
     rows = core.validate_profile(json.loads((ROOT / "build-profiles/moss-core.json").read_text()))
     parameters = dict(ROOT=ROOT.as_posix(), SD="D:/metadata-only/moss", SDK="D:/metadata-only/sdk",
                       LLVM="D:/metadata-only/llvm", OUT=out.as_posix())

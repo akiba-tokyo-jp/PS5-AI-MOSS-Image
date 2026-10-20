@@ -1,4 +1,4 @@
-from moss_dit_policy import flags as dit_flags, fields as dit_fields, validate as validate_dit, validate_core as validate_dit_core
+from moss_dit_policy import flags as dit_flags, fields as dit_fields, validate as validate_dit, validate_core as validate_dit_core, validate_profile as validate_dit_profile
 from moss_lora_precision_policy import flags as lora_precision_flags, fields as lora_precision_fields, contract as lora_precision_contract, validate as validate_lora_precision, validate_core as validate_core_lora_precision
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Windows local native rebuild from exported sources + reviewed dependencies.
@@ -118,7 +118,7 @@ def validate_moss_gpu_profile_recipes(profile):
     recipes=[profile.get('platform_compile'),*ggml]
     if any(not isinstance(recipe,list) or not recipe or any(not isinstance(arg,str) for arg in recipe) for recipe in recipes):
         raise RuntimeError('Expected complete native platform/GGML compiler recipes')
-    if any('PS5_AI_MOSS_GPU_PROFILE' in arg for recipe in recipes for arg in recipe):
+    if any('PS5_AI_MOSS_GPU_PROFILE' in arg or 'PS5_AI_MOSS_DIT_GPU_PROFILE' in arg for recipe in recipes for arg in recipe):
         raise RuntimeError('Native recipes cannot override the GPU operator profiling policy')
 
 def moss_q4_bk64_compile_flags(enabled):
@@ -366,7 +366,7 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-dit-optimization-mask',type=int,choices=(0,1,3,7,15));a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-dit-optimization-mask',type=int,choices=(0,1,3,7,15));p.add_argument('--moss-dit-gpu-profile',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
@@ -378,7 +378,10 @@ def main():
     validate_moss_accumulation_mode(a.moss_f32_accumulation,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
     accumulation_flags=moss_accumulation_compile_flags(a.moss_f32_accumulation)
     validate_moss_gpu_profile_mode(a.moss_gpu_profile,a.moss_f32_accumulation,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
-    gpu_profile_flags=moss_gpu_profile_compile_flags(a.moss_gpu_profile)
+    dit_profile_flags=validate_dit_profile(a.moss_dit_gpu_profile,mask=a.moss_dit_optimization_mask,legacy_gpu_profile=a.moss_gpu_profile,
+        accumulation=a.moss_f32_accumulation,turbo=a.moss_turbo_trial,upload=a.moss_bounded_weight_upload_trial,
+        spectrum=a.moss_spectrum_trial,ffn=a.moss_ffn_token_chunk_trial,lora=a.moss_lora_storage,q4=a.moss_q4_bk64_raw64,sampler=a.moss_sampler_trial)
+    gpu_profile_flags=moss_gpu_profile_compile_flags(a.moss_gpu_profile or a.moss_dit_gpu_profile)+dit_profile_flags
     validate_moss_q4_bk64_mode(a.moss_q4_bk64_raw64,a.moss_f32_accumulation,a.moss_gpu_profile,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
     q4_candidate_flags=moss_q4_bk64_compile_flags(a.moss_q4_bk64_raw64)
     validate_moss_sampler_mode(a.moss_sampler_trial,a.moss_f32_accumulation,a.moss_gpu_profile,a.moss_q4_bk64_raw64,a.performance_trial_variant,a.precision,a.experimental_small_trial,a.trial_10g)
@@ -567,8 +570,9 @@ def main():
             'moss_f32_accumulation':a.moss_f32_accumulation,
             'moss_accumulation_policy':moss_accumulation_policy(a.moss_f32_accumulation),
             'moss_accumulation_compile_flags':accumulation_flags,
-            'moss_gpu_profile':a.moss_gpu_profile,
-            'moss_gpu_profile_policy':'first_two_complete_dit_graphs_per_generation' if a.moss_gpu_profile else 'disabled',
+            'moss_gpu_profile':a.moss_gpu_profile or a.moss_dit_gpu_profile,
+            'moss_dit_gpu_profile':a.moss_dit_gpu_profile,
+            'moss_gpu_profile_policy':'mask15_Turbo4_rank144_first_two_complete_cached_DiT_graphs_parent_and_shader_v1' if a.moss_dit_gpu_profile else 'first_two_complete_dit_graphs_per_generation' if a.moss_gpu_profile else 'disabled',
             'moss_gpu_profile_compile_flags':gpu_profile_flags,
             'moss_q4_bk64_raw64':a.moss_q4_bk64_raw64,
             'moss_q4_bk64_policy':'canonical_moss_ffn_up_q4k_f32acc_bk64_raw64_v1' if a.moss_q4_bk64_raw64 else 'disabled',

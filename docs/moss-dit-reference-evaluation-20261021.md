@@ -1,0 +1,12 @@
+# Additional DiT references observed 2026-10-21
+
+These are source-code findings, not PS5 benchmarks or adopted math changes.
+
+| Reference | Confirmed mechanism | Current MOSS Turbo4 implications |
+| --- | --- | --- |
+| [Elastic-DiT](https://github.com/wangjiangshan0725/Elastic-DiT/tree/5be46a21b298e712bff7634bc90623e505060387) | Adaptive router skips blocks and selects reduced MLP widths; block feature caching. Released infer.py loads Qwen-Image plus a separate checkpoint, BF16 CUDA,30 steps. | Not a drop-in MOSS/GGML/Vulkan patch. Would require MOSS-specific compatible routing/weights or a separately validated adaptation. Changes computed function; no claimed2x on PS5. |
+| [ComfyUI-CacheDiT](https://github.com/Jasonzzt/ComfyUI-CacheDiT/tree/1d92bbd86ec59aa6223fe2368849b7413a1acb93) | Approximate reuse of residuals across differing denoising steps. README verified example Z-Image-Turbo9 steps/warmup3; Qwen50; Klein20. | No published MOSS-specific preset found in inspected utils.py. Four steps leave little reuse after warmup. No inference precision/quality equivalence or1.4–1.6x PS5 claim. Distinct from our exact per-generation text/RoPE cache. |
+| [ComfyUI MOSS source](https://github.com/Comfy-Org/ComfyUI/blob/1045d48eb4cc1afd27c419a4765555440f192eab/comfy/ldm/moss_image/model.py) | Fused rms_adaln; joint q/k RMS+RoPE; fused QKV base projection; SiTU can feed activation quantization directly; prefetch and memory compiler. | QKV base projection already packed here, independent q/k/v LoRA preserved. Our RMS reduction is still separate from weight/modulation and RoPE. Reduction+epilogue fusion is a candidate, but arithmetic grouping and aliasing need numerical tests. Prefetch benefit is conditional on actual transfer/idle gaps; resident weights do not imply new useful disk transfers. |
+| [Comfy Kitchen](https://github.com/Comfy-Org/comfy-kitchen/tree/a3bac2cc284adfcae41a297932970ad65b878033) | Eager/CUDA/Triton/HIP/Ascend support matrix, including RMS and quantization kernels. | No Vulkan backend in published matrix. Port algorithms to existing PS5 backend where justified, not Python/Torch packages or CUDA binaries. INT8/FP8 changes require matching kernels, model/activation format and quality tests; PC hardware timings are not PS5 estimates. |
+
+The existing4-step authored schedule, F32 accumulation, selectedrank144 adapter and numerical gates stay unchanged during timestamp identification. No external reference implementation is executed on the Windows client or imported into PS5 inference in this measurement pass.

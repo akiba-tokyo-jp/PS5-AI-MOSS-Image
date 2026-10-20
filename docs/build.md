@@ -46,3 +46,9 @@ FFN2048分割とF16 LoRA storage／専用F32 shared演算は別の明示実験�
 [実機比較](moss-dit-fusion-20261020.md)の4項目を有効にする場合、上のcoreコマンドに --moss-dit-optimizations、nativeコマンドに --moss-dit-optimization-mask 15 を追加します。新しいoutを使い、source-freezeにも tools/moss_dit_policy.py のfields(True)に対応するpolicy・compile flag・全sourceの実hashを固定します。coreは全75コマンドでcapability1、nativeも同じcapabilityを必要とします。mask0は同じcoreの対照版で、1／3／7は累積した限定比較用です。flags未指定はOFFです。
 
 F32積算・Turbo4・bounded uploadを必須とし、FFN分割・private LoRA precision・Spectrum・別のsampling／GPU profile候補との混在を拒否します。一般fusion、試行上限、production admission、容量・数値・完了・所有権の条件は維持します。gatewayのAPIと設定は変更しません。生成ソースを更新するgateway build等はsource-freeze前に済ませ、core／native build中にソースを変更しないでください。
+
+## 現行Turbo4のGPU時間を測る限定診断
+
+Turbo4＋bounded upload＋F32と同じparentを使い、coreに --moss-dit-optimizations、nativeに --moss-dit-optimization-mask 15 と --moss-dit-gpu-profile を明示します。旧rank16/50-step用 --moss-gpu-profile は併用しません。新しいflagはdefault-OFFで、同一deviceの既存完了後に最初の完全DiT graph2回を読み戻します。固定256→1024、最大4試行、production admission0を保持します。[実測と範囲](moss-dit-gpu-profile-20261021.md)。
+
+ホストのmetadata／policy試験は tests/moss_dit_gpu_profile.py --config CONFIG --out FRESH_D_OUTPUT です。モデル推論やGPU実行は行いません。

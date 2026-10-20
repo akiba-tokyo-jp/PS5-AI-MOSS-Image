@@ -20,3 +20,10 @@ def validate_core(manifest,enabled):
         if sum(MACRO in arg for arg in row)!=1 or flags(enabled)[0]not in row:raise ValueError('DiT flag missing/overridden in actual core commands')
     if len(manifest.get('commands',[]))!=75:raise ValueError('All75 commands required')
     return expected
+
+def validate_profile(enabled,*,mask,legacy_gpu_profile,accumulation,turbo,upload,spectrum=False,ffn=False,lora=None,q4=False,sampler=False):
+    if type(enabled)is not bool or type(legacy_gpu_profile)is not bool:raise ValueError('Typed DiT profiling opt-in required')
+    if enabled:
+        validate(True,accumulation=accumulation,turbo=turbo,upload=upload,spectrum=spectrum,ffn=ffn,lora=lora)
+        if type(mask)is not int or mask!=15 or legacy_gpu_profile or q4 or sampler:raise ValueError('DiT profiling requires exact mask15 parent and no other diagnostic/math candidates')
+    return ['-DPS5_AI_MOSS_DIT_GPU_PROFILE='+str(int(enabled))]

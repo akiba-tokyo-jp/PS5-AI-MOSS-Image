@@ -1,0 +1,560 @@
+{
+  "schema": "ps5-ai-moss-dit-dispatch-timestamp-profile-v1",
+  "observed_JST": "2026-10-21",
+  "model_id": "moss-image-sft",
+  "math_profile": "Turbo4_upload_mask15_F32_rank144",
+  "steps": 4,
+  "cfg_scale": 1,
+  "seed": 20261020,
+  "sigmas": [
+    1,
+    0.91,
+    0.717,
+    0.024,
+    0
+  ],
+  "physical_pool_bytes": 10737418240,
+  "inference_budget_gib": 9.5,
+  "outside_reserve_gib": 1,
+  "measured_SELF_sha256": "3ce574a38faff96873bbf8581d59c5e374b48419c6410559cce4ca0d857e7fe9",
+  "measured_profile_header_sha256": "9529b42892a158ca5c0dd142a9d61c98ea9705a463fdcd13774ba57fd54fdec6",
+  "production_admission": false,
+  "restored_uninstrumented_SELF_sha256": "66015a326606bde03773b3db3e48a6d59cb9875516b1228b77dcd217bb943dd0",
+  "source_label_note": "After measurements only, actual split_k_reduce/fa_split_k_reduce names were added to reduction classification; host metadata test1638 passed. These recorded tables preserve measured original other labels and were not relabelled after the fact.",
+  "measurements": [
+    {
+      "size": 256,
+      "generation_seconds": 69.118352,
+      "sampled_complete_DiT_graphs": 2,
+      "sampled_CPU_wall_seconds": 1.554018954,
+      "summed_GPU_dispatch_interval_seconds": 1.4497932800000002,
+      "intervals": 4088,
+      "timestamp_period_ns": 10.0,
+      "parent_classes": {
+        "add": {
+          "intervals": 14,
+          "ticks": 24960,
+          "seconds": 0.0002496,
+          "percent_sampled_GPU_intervals": 0.017216247546684722
+        },
+        "attention": {
+          "intervals": 84,
+          "ticks": 7605636,
+          "seconds": 0.07605636000000002,
+          "percent_sampled_GPU_intervals": 5.24601410761126
+        },
+        "cast": {
+          "intervals": 168,
+          "ticks": 279304,
+          "seconds": 0.00279304,
+          "percent_sampled_GPU_intervals": 0.192650913653014
+        },
+        "contiguous": {
+          "intervals": 686,
+          "ticks": 2916812,
+          "seconds": 0.02916812,
+          "percent_sampled_GPU_intervals": 2.011881307657875
+        },
+        "copy": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "fused_lora_add": {
+          "intervals": 252,
+          "ticks": 2222248,
+          "seconds": 0.022222480000000003,
+          "percent_sampled_GPU_intervals": 1.5328033524889837
+        },
+        "fused_lora_pack": {
+          "intervals": 84,
+          "ticks": 899560,
+          "seconds": 0.0089956,
+          "percent_sampled_GPU_intervals": 0.6204746651881293
+        },
+        "fused_norm_mod": {
+          "intervals": 168,
+          "ticks": 549268,
+          "seconds": 0.00549268,
+          "percent_sampled_GPU_intervals": 0.3788595295461708
+        },
+        "fused_qk_rope": {
+          "intervals": 168,
+          "ticks": 1651356,
+          "seconds": 0.01651356,
+          "percent_sampled_GPU_intervals": 1.1390285930970792
+        },
+        "fused_residual": {
+          "intervals": 168,
+          "ticks": 643148,
+          "seconds": 0.00643148,
+          "percent_sampled_GPU_intervals": 0.4436135888283328
+        },
+        "fused_situ": {
+          "intervals": 84,
+          "ticks": 815060,
+          "seconds": 0.008150600000000001,
+          "percent_sampled_GPU_intervals": 0.5621904938061238
+        },
+        "layout": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "lora_down_f32": {
+          "intervals": 1008,
+          "ticks": 4746276,
+          "seconds": 0.04746276000000001,
+          "percent_sampled_GPU_intervals": 3.2737605184650875
+        },
+        "lora_up_f32": {
+          "intervals": 504,
+          "ticks": 8515148,
+          "seconds": 0.08515148,
+          "percent_sampled_GPU_intervals": 5.8733531997058215
+        },
+        "mul": {
+          "intervals": 4,
+          "ticks": 53540,
+          "seconds": 0.0005354,
+          "percent_sampled_GPU_intervals": 0.03692940279044472
+        },
+        "other": {
+          "intervals": 4,
+          "ticks": 8240,
+          "seconds": 8.24e-05,
+          "percent_sampled_GPU_intervals": 0.005683568901629892
+        },
+        "other_matmul": {
+          "intervals": 18,
+          "ticks": 116360,
+          "seconds": 0.0011636,
+          "percent_sampled_GPU_intervals": 0.08025971813029785
+        },
+        "q4_ffn_down": {
+          "intervals": 84,
+          "ticks": 26483308,
+          "seconds": 0.26483308,
+          "percent_sampled_GPU_intervals": 18.266954582656084
+        },
+        "q4_ffn_up_gate": {
+          "intervals": 84,
+          "ticks": 47600584,
+          "seconds": 0.47600584,
+          "percent_sampled_GPU_intervals": 32.83266977206571
+        },
+        "q4_o": {
+          "intervals": 84,
+          "ticks": 9705464,
+          "seconds": 0.09705464,
+          "percent_sampled_GPU_intervals": 6.694377835714619
+        },
+        "q4_other": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "q4_qkv": {
+          "intervals": 84,
+          "ticks": 27385012,
+          "seconds": 0.27385012,
+          "percent_sampled_GPU_intervals": 18.888908079364246
+        },
+        "rms_norm": {
+          "intervals": 338,
+          "ticks": 2758044,
+          "seconds": 0.027580440000000005,
+          "percent_sampled_GPU_intervals": 1.9023705227823928
+        },
+        "rope": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "scale": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        }
+      },
+      "shader_groups": {
+        "pointwise": {
+          "intervals": 20,
+          "ticks": 78852,
+          "seconds": 0.00078852,
+          "percent_sampled_GPU_intervals": 0.054388443571762174
+        },
+        "attention": {
+          "intervals": 84,
+          "ticks": 7605636,
+          "seconds": 0.07605636000000002,
+          "percent_sampled_GPU_intervals": 5.24601410761126
+        },
+        "conversion_copy": {
+          "intervals": 858,
+          "ticks": 3198880,
+          "seconds": 0.031988800000000005,
+          "percent_sampled_GPU_intervals": 2.2064387000055623
+        },
+        "moss_fused": {
+          "intervals": 924,
+          "ticks": 6780640,
+          "seconds": 0.0678064,
+          "percent_sampled_GPU_intervals": 4.67697022295482
+        },
+        "matrix": {
+          "intervals": 1356,
+          "ticks": 124359216,
+          "seconds": 1.2435921600000002,
+          "percent_sampled_GPU_intervals": 85.77720542338284
+        },
+        "other": {
+          "intervals": 508,
+          "ticks": 198060,
+          "seconds": 0.0019806,
+          "percent_sampled_GPU_intervals": 0.1366125796913612
+        },
+        "rms_norm": {
+          "intervals": 338,
+          "ticks": 2758044,
+          "seconds": 0.027580440000000005,
+          "percent_sampled_GPU_intervals": 1.9023705227823928
+        }
+      },
+      "baseline_PNG_identical": true,
+      "all_four_finite_DiT_outputs": true,
+      "Q4_F32_recordings": 672,
+      "applied_LoRA_tensors": 504,
+      "extra_waits": 0,
+      "extra_submissions": 0,
+      "scope": "bounded sampled dispatch timestamp intervals attributed to graph node classes, including conversion/reduction dispatches; inserted timestamps may perturb scheduling; not an exclusive whole-model decomposition",
+      "full_generation_extrapolation": null,
+      "graphs": [
+        {
+          "ordinal": 4,
+          "nodes": 2390,
+          "recorded_nodes": 1789,
+          "tokens": 362,
+          "intervals": 2044,
+          "queries_written": 4088,
+          "queries_available": 4088,
+          "zero_intervals": 0,
+          "invalid_intervals": 0,
+          "overflow": 0,
+          "CPU_wall_seconds": 0.769426422,
+          "submits": 370,
+          "fences": 370,
+          "canonical_layer_count": 42,
+          "q4_main_nodes": [
+            42,
+            42,
+            42,
+            42
+          ],
+          "lora_down_nodes": 252,
+          "lora_up_nodes": 252
+        },
+        {
+          "ordinal": 5,
+          "nodes": 2390,
+          "recorded_nodes": 1789,
+          "tokens": 362,
+          "intervals": 2044,
+          "queries_written": 4088,
+          "queries_available": 4088,
+          "zero_intervals": 0,
+          "invalid_intervals": 0,
+          "overflow": 0,
+          "CPU_wall_seconds": 0.784592532,
+          "submits": 370,
+          "fences": 370,
+          "canonical_layer_count": 42,
+          "q4_main_nodes": [
+            42,
+            42,
+            42,
+            42
+          ],
+          "lora_down_nodes": 252,
+          "lora_up_nodes": 252
+        }
+      ],
+      "query_pool_bytes": 131072,
+      "CPU_fixed_profile_bytes": 293592,
+      "owned_direct_peak_bytes": 4858265600,
+      "owned_direct_end_bytes": 4725997568
+    },
+    {
+      "size": 1024,
+      "generation_seconds": 47.777175,
+      "sampled_complete_DiT_graphs": 2,
+      "sampled_CPU_wall_seconds": 20.108488389,
+      "summed_GPU_dispatch_interval_seconds": 19.83154764,
+      "intervals": 3582,
+      "timestamp_period_ns": 10.0,
+      "parent_classes": {
+        "add": {
+          "intervals": 14,
+          "ticks": 350612,
+          "seconds": 0.00350612,
+          "percent_sampled_GPU_intervals": 0.0176795077401231
+        },
+        "attention": {
+          "intervals": 84,
+          "ticks": 503963208,
+          "seconds": 5.0396320800000005,
+          "percent_sampled_GPU_intervals": 25.41219763320499
+        },
+        "cast": {
+          "intervals": 168,
+          "ticks": 3561748,
+          "seconds": 0.03561748,
+          "percent_sampled_GPU_intervals": 0.1796001030608421
+        },
+        "contiguous": {
+          "intervals": 686,
+          "ticks": 37914900,
+          "seconds": 0.37914900000000007,
+          "percent_sampled_GPU_intervals": 1.9118477633851476
+        },
+        "copy": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "fused_lora_add": {
+          "intervals": 252,
+          "ticks": 25321216,
+          "seconds": 0.25321216,
+          "percent_sampled_GPU_intervals": 1.2768149243646223
+        },
+        "fused_lora_pack": {
+          "intervals": 84,
+          "ticks": 10694612,
+          "seconds": 0.10694612,
+          "percent_sampled_GPU_intervals": 0.5392726878475733
+        },
+        "fused_norm_mod": {
+          "intervals": 168,
+          "ticks": 6423300,
+          "seconds": 0.064233,
+          "percent_sampled_GPU_intervals": 0.3238930272413172
+        },
+        "fused_qk_rope": {
+          "intervals": 168,
+          "ticks": 25373844,
+          "seconds": 0.25373844,
+          "percent_sampled_GPU_intervals": 1.2794686759000722
+        },
+        "fused_residual": {
+          "intervals": 168,
+          "ticks": 7067524,
+          "seconds": 0.07067524,
+          "percent_sampled_GPU_intervals": 0.35637783436250264
+        },
+        "fused_situ": {
+          "intervals": 84,
+          "ticks": 9597208,
+          "seconds": 0.09597208,
+          "percent_sampled_GPU_intervals": 0.4839364115306132
+        },
+        "layout": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "lora_down_f32": {
+          "intervals": 504,
+          "ticks": 47668628,
+          "seconds": 0.47668628,
+          "percent_sampled_GPU_intervals": 2.4036766502203255
+        },
+        "lora_up_f32": {
+          "intervals": 504,
+          "ticks": 78679508,
+          "seconds": 0.7867950800000001,
+          "percent_sampled_GPU_intervals": 3.9673912207085826
+        },
+        "mul": {
+          "intervals": 4,
+          "ticks": 268696,
+          "seconds": 0.0026869600000000004,
+          "percent_sampled_GPU_intervals": 0.01354891735519639
+        },
+        "other": {
+          "intervals": 4,
+          "ticks": 84552,
+          "seconds": 0.00084552,
+          "percent_sampled_GPU_intervals": 0.004263509915356258
+        },
+        "other_matmul": {
+          "intervals": 16,
+          "ticks": 383232,
+          "seconds": 0.00383232,
+          "percent_sampled_GPU_intervals": 0.019324361716834725
+        },
+        "q4_ffn_down": {
+          "intervals": 84,
+          "ticks": 272589872,
+          "seconds": 2.72589872,
+          "percent_sampled_GPU_intervals": 13.745264713994858
+        },
+        "q4_ffn_up_gate": {
+          "intervals": 84,
+          "ticks": 523653920,
+          "seconds": 5.2365392,
+          "percent_sampled_GPU_intervals": 26.405096037174435
+        },
+        "q4_o": {
+          "intervals": 84,
+          "ticks": 99535460,
+          "seconds": 0.9953546000000001,
+          "percent_sampled_GPU_intervals": 5.019046511490518
+        },
+        "q4_other": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "q4_qkv": {
+          "intervals": 84,
+          "ticks": 297596928,
+          "seconds": 2.97596928,
+          "percent_sampled_GPU_intervals": 15.00623821207733
+        },
+        "rms_norm": {
+          "intervals": 338,
+          "ticks": 32425796,
+          "seconds": 0.32425796,
+          "percent_sampled_GPU_intervals": 1.6350612967087625
+        },
+        "rope": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        },
+        "scale": {
+          "intervals": 0,
+          "ticks": 0,
+          "seconds": 0.0,
+          "percent_sampled_GPU_intervals": 0.0
+        }
+      },
+      "shader_groups": {
+        "pointwise": {
+          "intervals": 20,
+          "ticks": 619676,
+          "seconds": 0.00619676,
+          "percent_sampled_GPU_intervals": 0.03124698138788325
+        },
+        "attention": {
+          "intervals": 84,
+          "ticks": 503963208,
+          "seconds": 5.0396320800000005,
+          "percent_sampled_GPU_intervals": 25.41219763320499
+        },
+        "conversion_copy": {
+          "intervals": 858,
+          "ticks": 41517920,
+          "seconds": 0.41517919999999997,
+          "percent_sampled_GPU_intervals": 2.0935289949967815
+        },
+        "moss_fused": {
+          "intervals": 924,
+          "ticks": 84477704,
+          "seconds": 0.84477704,
+          "percent_sampled_GPU_intervals": 4.2597635612467
+        },
+        "matrix": {
+          "intervals": 1356,
+          "ticks": 1320066276,
+          "seconds": 13.20066276,
+          "percent_sampled_GPU_intervals": 66.56395657883209
+        },
+        "other": {
+          "intervals": 2,
+          "ticks": 84184,
+          "seconds": 0.0008418400000000001,
+          "percent_sampled_GPU_intervals": 0.004244953622792497
+        },
+        "rms_norm": {
+          "intervals": 338,
+          "ticks": 32425796,
+          "seconds": 0.32425796,
+          "percent_sampled_GPU_intervals": 1.6350612967087625
+        }
+      },
+      "baseline_PNG_identical": true,
+      "all_four_finite_DiT_outputs": true,
+      "Q4_F32_recordings": 672,
+      "applied_LoRA_tensors": 504,
+      "extra_waits": 0,
+      "extra_submissions": 0,
+      "scope": "bounded sampled dispatch timestamp intervals attributed to graph node classes, including conversion/reduction dispatches; inserted timestamps may perturb scheduling; not an exclusive whole-model decomposition",
+      "full_generation_extrapolation": null,
+      "graphs": [
+        {
+          "ordinal": 4,
+          "nodes": 2390,
+          "recorded_nodes": 1789,
+          "tokens": 4202,
+          "intervals": 1791,
+          "queries_written": 3582,
+          "queries_available": 3582,
+          "zero_intervals": 0,
+          "invalid_intervals": 0,
+          "overflow": 0,
+          "CPU_wall_seconds": 10.047225605000001,
+          "submits": 391,
+          "fences": 391,
+          "canonical_layer_count": 42,
+          "q4_main_nodes": [
+            42,
+            42,
+            42,
+            42
+          ],
+          "lora_down_nodes": 252,
+          "lora_up_nodes": 252
+        },
+        {
+          "ordinal": 5,
+          "nodes": 2390,
+          "recorded_nodes": 1789,
+          "tokens": 4202,
+          "intervals": 1791,
+          "queries_written": 3582,
+          "queries_available": 3582,
+          "zero_intervals": 0,
+          "invalid_intervals": 0,
+          "overflow": 0,
+          "CPU_wall_seconds": 10.061262784,
+          "submits": 391,
+          "fences": 391,
+          "canonical_layer_count": 42,
+          "q4_main_nodes": [
+            42,
+            42,
+            42,
+            42
+          ],
+          "lora_down_nodes": 252,
+          "lora_up_nodes": 252
+        }
+      ],
+      "query_pool_bytes": 131072,
+      "CPU_fixed_profile_bytes": 293592,
+      "owned_direct_peak_bytes": 6107971584,
+      "owned_direct_end_bytes": 4749066240
+    }
+  ]
+}

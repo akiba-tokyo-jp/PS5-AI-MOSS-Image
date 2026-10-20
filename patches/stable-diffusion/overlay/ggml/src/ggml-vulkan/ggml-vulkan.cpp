@@ -112,6 +112,9 @@ struct MossGPUProfileRuntime {
     ps5_ai_ggml_dispatch_stats before{};
     ps5_ai_moss_gpu_query_value values[PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES]{};
     unsigned char classes[PS5_AI_MOSS_GPU_PROFILE_MAX_NODES]{};
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+    unsigned char shader_classes[PS5_AI_MOSS_GPU_PROFILE_MAX_NODES]{};
+#endif
     uint64_t jobs{}, device_generation{}, wall_begin{}, open_command{}, previous_successful_end{};
     unsigned mode{}, count{}, current_class{PS5_AI_GPU_OTHER}, open_cookie{};
     bool collecting{}, reset_recorded{}, gate_verified{}, node_scope_active{}, node_had_dispatch{};
@@ -141,6 +144,23 @@ static unsigned ps5_ai_moss_gpu_actual_node_class(const ggml_tensor *node) {
     if(node->op==GGML_OP_FLASH_ATTN_EXT)return PS5_AI_GPU_ATTENTION;
     if(node->op==GGML_OP_SCALE)return PS5_AI_GPU_SCALE;
     if(node->op==GGML_OP_ADD)return PS5_AI_GPU_ADD;
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+    if(node->op==GGML_OP_RMS_NORM)return PS5_AI_GPU_RMS;
+    if(node->op==GGML_OP_CPY||node->op==GGML_OP_CONT||node->op==GGML_OP_DUP){
+        if(node->src[0]&&node->src[0]->type!=node->type)return PS5_AI_GPU_CAST;
+        return node->op==GGML_OP_CPY?PS5_AI_GPU_COPY:PS5_AI_GPU_CONT;
+    }
+    if(node->op==GGML_OP_RESHAPE||node->op==GGML_OP_VIEW||node->op==GGML_OP_PERMUTE||node->op==GGML_OP_TRANSPOSE)return PS5_AI_GPU_LAYOUT;
+    if(node->op==GGML_OP_ROPE||node->op==GGML_OP_ROPE_APPLY)return PS5_AI_GPU_ROPE;
+    if(node->op==GGML_OP_MUL)return PS5_AI_GPU_MUL;
+    const unsigned fused=moss_dit_opt::kind(node);
+    if(fused==moss_dit_opt::SITU)return PS5_AI_GPU_SITU;
+    if(fused==moss_dit_opt::NORM_MOD0||fused==moss_dit_opt::NORM_MOD3)return PS5_AI_GPU_NORM_MOD;
+    if(fused==moss_dit_opt::GATED_RESIDUAL)return PS5_AI_GPU_RESIDUAL;
+    if(fused==moss_dit_opt::QK_WEIGHT_ROPE)return PS5_AI_GPU_QK_ROPE;
+    if(fused==moss_dit_opt::LORA_ADD1)return PS5_AI_GPU_LORA_ADD;
+    if(fused==moss_dit_opt::LORA_PACK2||fused==moss_dit_opt::LORA_PACK3)return PS5_AI_GPU_LORA_PACK;
+#endif
     return PS5_AI_GPU_OTHER;
 }
 static ps5_ai_moss_gpu_coverage moss_gpu_profile_actual_graph_coverage(const ggml_cgraph *graph) {
@@ -199,7 +219,11 @@ static int moss_gpu_profile_begin(unsigned mode) {
     if(s.mode||s.collecting||s.open_cookie||!s.pool||!s.device||!owned.hardware_verified||owned.work_pending ||
        (mode==2&&(!s.gate_verified||s.jobs>=PS5_AI_MOSS_GPU_PROFILE_JOBS)))return 0;
     const double period=s.report.timestamp_period_ns;const uint32_t bits=s.report.timestamp_valid_bits;
-    s.report={};s.report.schema=2;s.report.enabled=1;s.report.active=1;s.report.startup_gate=mode==1;
+    s.report={};s.report.schema=2;
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+    s.report.schema=3;
+#endif
+    s.report.enabled=1;s.report.active=1;s.report.startup_gate=mode==1;
     s.report.gate_verified=s.gate_verified;s.report.timestamp_period_ns=period;s.report.timestamp_valid_bits=bits;
     s.report.query_pool_queries=PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES;s.report.query_pool_bytes=uint64_t(PS5_AI_MOSS_GPU_PROFILE_MAX_QUERIES)*8;
     s.report.cpu_fixed_bytes=sizeof(s);s.report.device_generation=s.device_generation;
@@ -274,6 +298,11 @@ static void moss_gpu_profile_graph_end(ggml_backend_vk_context *ctx) {
         uint64_t ticks=0;
         if((i && s.values[2*i].ticks<s.values[2*i-1].ticks) ||
            !ps5_ai_moss_gpu_pair_ticks(&s.values[2*i],&s.values[2*i+1],&ticks)||
+           s.classes[i]>=PS5_AI_MOSS_GPU_PROFILE_CLASSES||
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+           s.shader_classes[i]>=PS5_AI_MOSS_GPU_SHADER_CLASSES||
+           !ps5_ai_moss_gpu_accumulate(&g.shader_classes[s.classes[i]][s.shader_classes[i]],ticks)||
+#endif
            !ps5_ai_moss_gpu_accumulate(&g.classes[s.classes[i]],ticks)){
             ++g.invalid_intervals;++s.report.invalid_intervals;moss_gpu_profile_fail();continue;
         }
@@ -304,6 +333,13 @@ extern "C" unsigned ps5_ai_moss_gpu_profile_dispatch_begin(uint64_t command_buff
     command.writeTimestamp(vk::PipelineStageFlagBits::eAllCommands,vk::QueryPool(s.pool),2*s.count);
     s.open_command=command_buffer;s.open_cookie=s.count+1;return s.open_cookie;
 }
+#if PS5_AI_MOSS_DIT_GPU_PROFILE
+extern "C" unsigned ps5_ai_moss_gpu_profile_dispatch_begin_named(uint64_t command_buffer,const char *pipeline_name) {
+    const unsigned cookie=ps5_ai_moss_gpu_profile_dispatch_begin(command_buffer);
+    if(cookie)moss_gpu_profile.shader_classes[cookie-1]=(unsigned char)ps5_ai_moss_gpu_shader_class(pipeline_name);
+    return cookie;
+}
+#endif
 extern "C" void ps5_ai_moss_gpu_profile_dispatch_end(uint64_t command_buffer,unsigned cookie) {
     auto &s=moss_gpu_profile;if(!cookie)return;
     if(!s.collecting||cookie!=s.open_cookie||command_buffer!=s.open_command){moss_gpu_profile_fail();return;}

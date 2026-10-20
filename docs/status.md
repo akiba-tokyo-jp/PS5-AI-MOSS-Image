@@ -1,6 +1,8 @@
 # MOSS Imageの検証状態
 
-2026-10-20。最新の検証済み速度基準は**Turbo4＋bounded upload＋DiT不変計算再利用・F32融合**です。256初回モデル読込込み69.275742秒、同じプロセスでの256後1024初回47.760891秒でした。同じcoreの最適化なし71.354991／51.146425秒と比較し、1024は約6.62%短縮しました。両PNGは先行Turbo4版と全バイト一致し、PNGを目視確認しました。各1回の観測で、統計的な速度差・長期安定性や全promptの品質を証明しません。
+2026-10-21。最新の検証済み速度基準は**Turbo4＋bounded upload＋DiT不変計算再利用・F32融合**です。256初回モデル読込込み69.275742秒、同じプロセスでの256後1024初回47.760891秒でした。同じcoreの最適化なし71.354991／51.146425秒と比較し、1024は約6.62%短縮しました。両PNGは先行Turbo4版と全バイト一致し、PNGを目視確認しました。各1回の観測で、統計的な速度差・長期安定性や全promptの品質を証明しません。
+
+現行Turbo4のGPU timestampを追加測定し、1024はFFN40.15%、Attention25.41%、QKV15.01%でした。これは採取した完全forward2回のGPU区間割合です。計測なし版の速度基準は維持し、測定後に同版とAPIへ復帰しました。[GPU計測](moss-dit-gpu-profile-20261021.md)。
 
 ## 採用判断と任意実験
 
@@ -39,6 +41,7 @@ bounded uploadはworkerあたり8MiBの一時host stagingを制限します。F1
 
 ## 保存したMOSS検証資料
 
+- [現行Turbo4のGPU時間特定](moss-dit-gpu-profile-20261021.md) / [外部実装の適用評価](moss-dit-reference-evaluation-20261021.md)
 - [最新DiT融合・不変計算再利用](moss-dit-fusion-20261020.md)
 - [前段Turbo4／メモリ比較](moss-turbo-memory-options-20261020.md)
 - [先行Turbo4単独試験](moss-turbo4-results-20261020.md)
