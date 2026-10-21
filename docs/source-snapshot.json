@@ -15,8 +15,8 @@
     },
     {
       "file": "AGENTS.md",
-      "published_bytes": 6645,
-      "published_sha256": "2ae2e13bf346747b248eb1cde445a63624b62dc768a56173f8ea89094d4998f2"
+      "published_bytes": 7338,
+      "published_sha256": "3690c2716dc62abe4e4caf3ff307c2da048a89ded80319eecd7d3533d8efc34c"
     },
     {
       "file": "LICENSE",
@@ -200,13 +200,13 @@
     },
     {
       "file": "docs/api.md",
-      "published_bytes": 7085,
-      "published_sha256": "0c4fc6df4c4b6a21d6fc9231425d7ff3c510dbb445a09c31b25732abd842bd28"
+      "published_bytes": 7495,
+      "published_sha256": "d39f94c953283257c864c29aa9f966826a76273f75a3ec0c7f8f1eb5dd4163fc"
     },
     {
       "file": "docs/build.md",
-      "published_bytes": 4534,
-      "published_sha256": "809d20dd2bfe4b627918cebd5c52fef1237eaca97ad05fc096a1d8ba87433b0c"
+      "published_bytes": 4575,
+      "published_sha256": "bbdcfa45ff1e01880f8a9e7f26198f20556e721d002b36bf57b9349e495c5ef4"
     },
     {
       "file": "docs/dashboard.md",
@@ -435,8 +435,8 @@
     },
     {
       "file": "docs/status.md",
-      "published_bytes": 2983,
-      "published_sha256": "7c2cfaccecbce477d3b4231186a70a4eaf8a994dbe1196a4aa4c9d65edcd7834"
+      "published_bytes": 3524,
+      "published_sha256": "78c2e320e71bbb71348c7f490ee75fa12d3f4f315a1742d8dbc29d5d7ae8965d"
     },
     {
       "file": "docs/verification.json",
@@ -640,8 +640,8 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "published_bytes": 106901,
-      "published_sha256": "e6a7c04abd8015074b4b05901f06c8a564565d021993fe1536630645808d6707"
+      "published_bytes": 107369,
+      "published_sha256": "2172538ccb435fb25fa51f12e4e818f9a86a76d605260c72fc6406b76c398bf0"
     },
     {
       "file": "native/app/host_shim.h",

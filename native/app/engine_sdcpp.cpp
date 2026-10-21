@@ -1444,8 +1444,13 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         write_event({{"event","moss_dit_optimization_completed"},{"mask",dit_mask},{"cache_graph_hits",moss_dit_opt::cache_hits.load()},{"cache_graph_misses",moss_dit_opt::cache_misses.load()},{"rope_builds",moss_dit_opt::rope_builds.load()},{"scale_elisions",moss_dit_opt::scale_elisions.load()},{"GPU_recordings_kinds1_to8",fused_receipts},{"finite_DiT_outputs",precision_dit_outputs.load()},{"nonfinite",precision_nonfinite.load()}});
 #if PS5_AI_MOSS_DIT_KERNEL_TRIAL
         nlohmann::json kr=nlohmann::json::array();for(auto& v:moss_kernel::records)kr.push_back(v.load());
-        for(unsigned bit=1,index=0;bit<=8;bit<<=1,++index)if((PS5_AI_MOSS_DIT_KERNEL_MASK&bit)&&!moss_kernel::records[index].load())throw std::runtime_error("Selected kernel path not exercised");
-        write_event({{"event","moss_dit_kernel_completed"},{"kernel_mask",PS5_AI_MOSS_DIT_KERNEL_MASK},{"path_selection_records",kr},{"RMS_GPU_records",{moss_dit_opt::GPU_recordings[9].load(),moss_dit_opt::GPU_recordings[10].load(),moss_dit_opt::GPU_recordings[11].load()}},{"F32_accumulation",true}});
+        unsigned unused_kernel_mask=0;
+        for(unsigned bit=1,index=0;bit<=8;bit<<=1,++index)if((PS5_AI_MOSS_DIT_KERNEL_MASK&bit)&&!moss_kernel::records[index].load())unused_kernel_mask|=bit;
+        // Path coverage is a diagnostic requirement. Runtime shape selection may
+        // legitimately use the existing GPU fallback; numeric/completion gates
+        // above and startup readbacks remain mandatory in ordinary service.
+        if(!PS5_AI_MOSS_SERVICE_MODE && unused_kernel_mask)throw std::runtime_error("Selected kernel path not exercised");
+        write_event({{"event","moss_dit_kernel_completed"},{"kernel_mask",PS5_AI_MOSS_DIT_KERNEL_MASK},{"path_selection_records",kr},{"unused_kernel_mask",unused_kernel_mask},{"all_selected_paths_required",!bool(PS5_AI_MOSS_SERVICE_MODE)},{"RMS_GPU_records",{moss_dit_opt::GPU_recordings[9].load(),moss_dit_opt::GPU_recordings[10].load(),moss_dit_opt::GPU_recordings[11].load()}},{"F32_accumulation",true}});
         moss_kernel::reset(0);
 #endif
         moss_dit_opt::end_completed();

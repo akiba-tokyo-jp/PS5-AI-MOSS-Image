@@ -24,7 +24,7 @@ wrapperはgatewayをbuildしてschemaを生成した後、checkout内のGit管�
 
 既存の完全な[freeze形式](../config/moss-source-freeze.json.example)を自分で管理する場合は`--source-freeze PRIVATE_JSON`を指定できます。build中にsourceを変更しないでください。public source snapshotと実際に消費したdependency closureの記録は別です。
 
-`--prepare-only`はgatewayをbuildし、freezeと75-object core planを検査して終了します。nativeやcoreのcompile成功・実機成功を意味しません。今回の実機artifactはwrapperの下位build commandsで構築し、75 compile、native24 constructors／6 runtime providers、全量SELF readbackを確認しました。後から追加したwrapper自動freeze経路はprepare-onlyまで確認しています。
+`--prepare-only`はgatewayをbuildし、freezeと75-object core planを検査して終了します。nativeやcoreのcompile成功・実機成功を意味しません。今回の実機artifactはwrapperの下位build commandsで構築し、75 compile、native24 constructors／6 runtime providers、全量SELF readbackを確認しました。その後、wrapper自動freezeから全75 core／native／gatewayの完全buildとPS5起動・1024生成まで確認しました。
 
 ## 配備と検証
 

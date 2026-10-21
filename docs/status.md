@@ -17,6 +17,8 @@
 | マスク/inpainting/IP-Adapter/ControlNet/任意LoRA | 未対応 |
 | 人物同一性固定・強い実写変換 | 保証なし。実写化は未達 |
 
+追加の任意文章1024試験で、GPU計算が完了しても最適化kernelの全使用を要求するdiagnostic判定が返却を拒否する例を修正しました。通常版はshapeに応じた既存GPU fallbackを許可し、数値・容量・GPU完了検査は保持します。修正版をfresh75 coreと通常build wrapperから作り直し、PS5で新しいキャラクターの1024 PNG取得を確認しました（モデル読込込み124.476684秒）。新旧はpromptが異なるため速度比較ではありません。
+
 Turbo4 profileはEuler4／CFG1、作者sigmas、NSFW0.7＋Turbo1 F32 rank144/runtime1。これは通常利用でも維持するモデル構成です。固定sample文章や試行capとは別です。Direct予約10GiB／推論予算9.5GiB、元14＋Turbo3＋upload＋fusion16＋kernel20の読み戻し・数値・容量・所有権検査を保持します。全5件のDiT有限値とGPU完了、168×実forwardのQ4 F32 records、LoRA504適用を照合しました。
 
 旧`production_runtime_admitted:false`は継承した低水準ABIの状態です。通常利用の受理は独立した`service_mode:true`で行います。旧diagnostic buildの試行制限は残し、過去の比較結果を改変していません。[API](api.md)と[通常版build入口](build.md)を使用してください。

@@ -16,6 +16,8 @@
 
 文章・被写体・negativeを自動追加しません。CFG1ではnegative側のDiT forwardを行いません。Turbo4 adapterに合わせたsampling条件は明示的なモデルprofileとして固定し、別steps／CFG／samplerへの自動変更はしません。HTTPでモデルファイルや任意LoRAを差し替える機能はありません。
 
+通常版では、文章長・tensor形状によって一部の最適化kernelを選ばず既存GPU経路へ戻ることを許可します。全kernelの使用実績を要求するのはdiagnostic buildだけです。起動時GPU読み戻し、実forward数、Q4 F32累積、有限値・GPU完了・容量の検査は通常版でも必須で、実際の選択数と未使用maskをログへ記録します。
+
 ## 認証・状態
 
 全APIはBearer認証、private IPv4の同じ/24内に限定します。tokenをURL、ログ、ソースへ入れないでください。署名画像URLはそのURL自体が画像専用アクセス権を持ちます。両processへ同じ値を別の一時ファイルで渡す[起動手順](deployment.md)を使用します。
