@@ -1,6 +1,6 @@
 # Additional DiT references observed 2026-10-21
 
-2026-10-21追記：下記の評価を参考にFFN、Attention、QKV/LoRA、RMSの4項目を実装し、PS5の1024で検証しました。[実測と採用判断](moss-dit-kernels-20261021.md)。以下は調査時点の評価です。
+2026-10-21 update: using this evaluation, 4 changes for FFN, Attention, QKV/LoRA, and RMS were implemented and verified at 1024 on PS5. [Measurements and decisions](moss-dit-kernels-20261021.md). The following records the investigation-stage evaluation.
 
 These are source-code findings, not PS5 benchmarks or adopted math changes.
 
@@ -14,18 +14,18 @@ These are source-code findings, not PS5 benchmarks or adopted math changes.
 The existing4-step authored schedule, F32 accumulation, selectedrank144 adapter and numerical gates stay unchanged during timestamp identification. No external reference implementation is executed on the Windows client or imported into PS5 inference in this measurement pass.
 
 
-## Spectrum-MOSSを再確認した結果
+## Spectrum-MOSS reassessment
 
-[Rkkss/ComfyUI-Spectrum-MOSS](https://github.com/Rkkss/ComfyUI-Spectrum-MOSS/tree/3fde0674b29342565e7f42a0674af48d65aabc4a) のmainを2026-10-21に再確認しました。先の50-step調査で参照したものと同じrevisionでした。READMEの検証条件は50 steps／Euler＋sgm_uniformで、記載の約2～2.5倍は作者の条件での報告です。PS5・Turbo4の実測値としては使いません。
+Rechecked main of [Rkkss/ComfyUI-Spectrum-MOSS](https://github.com/Rkkss/ComfyUI-Spectrum-MOSS/tree/3fde0674b29342565e7f42a0674af48d65aabc4a) on 2026-10-21: the revision matched the earlier 50-step investigation. README testing uses 50 steps/Euler + sgm_uniform; approximately 2–2.5× is the author's reported result under their conditions, not a PS5/Turbo4 measurement.
 
-[nodes.py](https://github.com/Rkkss/ComfyUI-Spectrum-MOSS/blob/3fde0674b29342565e7f42a0674af48d65aabc4a/nodes.py) は最後のTransformer blockのhidden stateを履歴として保存し、予測したhidden stateへ時刻に依存する出力headを適用します。Transformerの一部の呼出しを近似で置き換える方式です。現在優先しているFFNやAttentionのkernel単体を速くする変更ではありません。
+[nodes.py](https://github.com/Rkkss/ComfyUI-Spectrum-MOSS/blob/3fde0674b29342565e7f42a0674af48d65aabc4a/nodes.py) stores the final Transformer block's hidden-state history and applies a time-dependent output head to predicted hidden states. This approximately replaces some Transformer calls; it does not directly accelerate the FFN/Attention kernels currently prioritized.
 
-- 既定warmup8、tail2。4-stepでは全4回がwarmupに入り、forecastは0回です。
-- 既定Chebyshev次数4で、ready判定には過去の実計算5回が必要です。warmupだけ短くしても、新しい4-step生成内の履歴は予測判定時に最大3回なので不足します。次数などを変える場合は別の精度・画質比較が必要です。
-- Adaptiveのdetail guardと局所token誤差p95/p99によるhorizon調整は、将来、多数stepの近似高速化を評価する際の参考です。予測の正確さや画像品質の保証ではありません。
-- hidden-state履歴は現PS5 latent予測と異なります。形状をB1×4096 image tokens×3072、履歴8と仮定すると、履歴payloadだけでF32は384MiB、F16は192MiB／branchです。これは形状からの見積りで、このComfyUI版のPS5実測peakではありません。
-- 予測値のNaN/Inf置換やclampを行う箇所があり、PS5版の非有限値を拒否する条件と差があります。ライセンスはGPL-3.0-onlyです。丸ごと導入したり検証条件を弱めたりしていません。
+- Default warmup 8/tail 2: all 4 of 4 steps fall within warmup, with 0 forecasts.
+- Default Chebyshev degree 4 requires 5 actual-history computations for readiness. Even shorter warmup gives at most 3 past computations at prediction time within a fresh 4-step generation, insufficient for readiness. Changing degree or related settings needs separate accuracy/quality comparison.
+- Adaptive detail guards and local token-error p95/p99 horizon adjustment are useful references for future many-step approximate acceleration, not guarantees of prediction accuracy or image quality.
+- Hidden-state history differs from the current PS5 latent predictor. Assuming B1×4096 image tokens×3072 and history 8, history payload alone is 384MiB F32 or 192MiB F16 per branch. This is shape-based estimation, not this ComfyUI version's measured PS5 peak.
+- Some paths replace NaN/Inf predictions or clamp values, differing from PS5's nonfinite rejection. License: GPL-3.0-only. The full implementation was not imported and verification conditions were not weakened.
 
-以前PS5で試した[50-step latent Spectrum](moss-sampler-spectrum-memory-20261020.md)は、1024で1023.859406秒→617.938351秒（39.65%短縮）でした。こちらはSD.cppのlatent境界で30回の実CFG step＋20回の予測を使う別実装で、ComfyUIのhidden-state版そのものの成功・同一画質を証明しません。現在のTurbo4へは有効化していません。
+The earlier PS5 [50-step latent Spectrum](moss-sampler-spectrum-memory-20261020.md) reduced 1024 from 1023.859406 to 617.938351 seconds (39.65%). It is a distinct SD.cpp latent-boundary implementation with 30 actual CFG steps +20 predictions; it does not prove success/equal quality for ComfyUI's hidden-state version. It is disabled in current Turbo4.
 
-今回行ったのはREADME・実コード・既存実装との照合と設定条件の確認です。PS5への接続、追加生成、アプリ／driver／memory設定の変更はありません。現在の優先対象は実測に基づくFFN GEMMとFlash Attentionのままです。
+This reassessment compared README/code/existing implementation and configuration requirements only. No PS5 connection, additional generation, or app/driver/memory-setting change occurred. Measured FFN GEMM and Flash Attention remain the priorities.

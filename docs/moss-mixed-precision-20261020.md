@@ -1,62 +1,62 @@
-# MOSSのFP16データ経路とFP32累積による短縮
+# MOSS speedup using FP16 data paths and FP32 accumulation
 
-> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+> Historical test record. See [Turbo4/memory comparisons](moss-turbo-memory-options-20261020.md) and [verification status](status.md) for the currently adopted candidate and latest times.
 
-2026-10-20 JST。PS5本体で同条件の256×256と1024×1024を生成し、WindowsからOpenAI互換APIでPNGを取得しました。FP16データ経路と明示的FP32累積を組み合わせた版では、1024のPS5内生成時間が1219.096190秒から1064.248911秒へ短縮しました。各構成1回の測定で、熱・クロック・OSキャッシュを統制した反復試験ではありません。
+2026-10-20 JST. PS5 generated same-condition 256×256/1024×1024 images; Windows retrieved PNGs through the OpenAI-compatible API. Combining FP16 data paths with explicit FP32 accumulation reduced 1024 PS5 generation from 1219.096190 to 1064.248911 seconds. Each configuration was measured 1 time, without repeated temperature/clock/OS-cache control.
 
-## 比較条件と結果
+## Comparison conditions and results
 
-MOSS-Image-SFT Q4_K、Qwen3.5-9B Q4_K_M、FLUX.2 small VAE、指定rank16 LoRA 0.7、50steps、CFG3、Euler、flow shift5、seed20261020、同一promptを維持しました。Direct pool10GiB、推論予算9.5GiB、pool外reserve1GiB、RADVも変更していません。推論はPS5のCPUテキスト処理とVulkan DiT/VAEで行い、Windowsはクライアントです。
+Preserved MOSS-Image-SFT Q4_K, Qwen3.5-9B Q4_K_M, FLUX.2 small VAE, selected rank 16 LoRA 0.7,50steps, CFG 3, Euler, flow shift 5, seed 20261020, and prompt. Direct pool 10GiB, budget 9.5GiB, outside reserve 1GiB, and RADV unchanged. PS5 CPU text encoding and Vulkan DiT/VAE perform inference; Windows is the client.
 
-| PS5 `generation_seconds` | FP32基準 | 提出調整・限定fusion FP32 | FP16データ＋FP32累積 |
+| PS5 `generation_seconds` | FP32 baseline | Submission tuning/limited fusion FP32 | FP16 data + FP32 accumulation |
 |---|---:|---:|---:|
-| 256初回、モデル読込込み | 153.972336秒 | 152.631656秒 | **145.839851秒** |
-| 同processの256生成後、1024初回 | 1219.096190秒 | 1214.444805秒 | **1064.248911秒** |
+| First 256 incl. loading | 153.972336 s | 152.631656 s | **145.839851 s** |
+| First 1024 after 256, same process | 1219.096190 s | 1214.444805 s | **1064.248911 s** |
 
-FP32基準比で256は8.132485秒（5.28%）、1024は154.847279秒（12.70%）短縮しました。1024は約20分19秒から約17分44秒です。提出調整・限定fusion版に対しても1024は150.195894秒短縮しました。
+Against FP32,256 saved 8.132485 seconds (5.28%);1024 saved 154.847279 seconds (12.70%), at 1024 about 20 min 19 s→17 min 44 s. Against submission tuning/limited fusion, 1024 saved 150.195894 seconds.
 
-1024はモデルをまだ読んでいないprocessでの初回でも、1024を連続生成した2回目でもありません。256生成後にサイズを変更した最初の1024で、サイズ変更に伴うCPU conditioningを含みます。以前の[1024 cold/warm](moss-1024-cold-warm-20261020.md)とは条件が異なります。
+This 1024 was neither the first request in an unloaded process nor run 2 at 1024. It was the first 1024 after 256, including size-change CPU conditioning. Conditions differ from the earlier [1024 cold/warm](moss-1024-cold-warm-20261020.md) comparison.
 
-## ログで特定した時間のかかる場所
+## Bottleneck identified in logs
 
-| 1024の計測区間 | FP32基準 | FP16データ＋FP32累積 |
+| 1024 interval | FP32 baseline | FP16 data + FP32 accumulation |
 |---|---:|---:|
-| DiT graph call、内部待ちを含む | 1169.098366秒 | 1014.144911秒 |
-| other runners graph total | 46.107206秒 | 46.183293秒 |
-| DiT dispatch記録回数 | 310300 | 310300 |
-| DiT submit / fence回数 | 64691 | 64691 |
+| DiT graph calls incl. internal waits | 1169.098366 s | 1014.144911 s |
+| Other runners graph total | 46.107206 s | 46.183293 s |
+| DiT dispatch records | 310300 | 310300 |
+| DiT submit / fence calls | 64691 | 64691 |
 
-元の生成時間の約95.9%をDiT graph callが占め、今回の短縮もほぼこの区間に現れました。API通信や記録量の削減による差としては扱いません。これらは包含関係のあるCPU wall timeです。fence waitはGPUの実行待ちを含み、全時間を除去可能な同期オーバーヘッドと呼んだり、親子区間を足したりしません。純粋なGPUハードウェアtimestampや個別kernelの所要時間は未計測です。
+DiT graph calls occupied about 95.9% of baseline generation; nearly all savings appeared there, not API communication or reduced recording. These CPU wall intervals are nested. Fence waits include GPU execution; they are not wholly removable synchronization overhead, and parent/child intervals must not be summed. Pure GPU timestamps and individual kernel durations were unmeasured.
 
-## 実装した変更
+## Implemented changes
 
-- MOSSのLinear生成とruntime LoRAのLinearでFP32累積を明示しました。他モデルの既定precisionを変更しません。
-- FP16版の起動では`GGML_VK_DISABLE_F16`を変数ごと解除し、実ログ`fp16: 1`と16bit capabilityを確認しました。
-- 実際にcommandを記録したQ4行列pipelineの累積方式を集計します。各生成でF32累積16600、F16累積0、invalid0を確認しました。GPU完了は別のwitnessで確認します。
-- core75オブジェクトを再構築し、nativeのcompile定義と一致することを検証しました。既存の容量・scratch・ownership・数値ゲートを維持しています。
+- Explicit FP32 accumulation in MOSS Linear construction/runtime LoRA Linear; other models' default precision unchanged.
+- FP16 startup removes `GGML_VK_DISABLE_F16` entirely; actual logs confirm `fp16: 1` and 16bit capabilities.
+- Accumulation modes are counted for Q4 matrix pipelines actually recording commands. Every generation confirmed F32 accumulation 16600, F16 accumulation 0, invalid 0. Separate witnesses confirm GPU completion.
+- Rebuilt 75 core objects and checked matching native compile definitions. Capacity, scratch, ownership, and numeric gates remain.
 
-最初のFP16候補はQ4_K N9ゲートで41/153値が許容値を超え、生成前に拒否されました。今回の版は累積方式を修正して通したもので、許容値を緩めたものではありません。Q4 N9/N304は既存のabs0.001＋rel0.01基準でmismatch0です。VAEは直接畳込みを使用し、未使用im2col診断のmismatch1/7は合格としていません。FP16有効ログは全演算がFP16になるという意味ではありません。
+The first FP16 candidate exceeded tolerance for 41/153 Q4_K N9 values and was rejected before generation. The adopted version fixes accumulation, without relaxed tolerances. Q4 N9/N304 passed mismatch 0 at existing abs 0.001 + rel 0.01. VAE uses direct convolution; the unused im 2col diagnostic's mismatch 1/7 was not counted as passing. An FP16-enabled log does not mean every operation is FP16.
 
-## 実機の画像・メモリ確認
+## Hardware images and memory
 
-256では103返却出力・3,964,928値、1024では151返却出力・62,554,112値を確認し、NaN/Infは0でした。各画像でLoRA504 loaded/matched/used、skipped0、DiT/VAEのGPU完了を確認しました。両PNGを開き、正常なアニメ画像であることを確認しています。native GETとOpenAI互換APIのPNGは全バイト一致しました。FP32版とのpixel一致は主張しません。
+Checked 256:103 returned outputs/3,964,928 values; 1024:151 outputs/62,554,112 values; NaN/Inf 0. Each image had LoRA 504 loaded/matched/used, skipped 0, and completed GPU DiT/VAE. Both PNGs were opened and showed normal anime images; native/OpenAI-compatible PNGs were byte-identical. Pixel equality with FP32 is not claimed.
 
-1024 PNGのSHA256は`97ff9462ebd81b772bb313a8d8bbc71212b83b0c4d34b655ba8393b81f7b9aab`、2,496,438 bytesです。APIのCPU peakは11,787,223,040B、GPU-labelled peakは8,403,091,456Bでした。後者はCPUテキスト重みも含む共有Direct poolの生涯peakとdriver arenaからなる上界です。両peakを足して物理使用量やGPU専用VRAMと扱いません。Direct peak8,369,520,640B、生成後used3,559,440,384B、CPUテキストDirect live0、fault retainedなしを確認しました。
+1024 PNG SHA 256: `97ff9462ebd81b772bb313a8d8bbc71212b83b0c4d34b655ba8393b81f7b9aab`,2,496,438 bytes. API CPU peak 11,787,223,040B; GPU-labeled peak 8,403,091,456B. The latter is an upper bound comprising lifetime shared-Direct peaks, including CPU text weights, and driver arena. Do not sum peaks as physical memory/dedicated VRAM. Direct peak 8,369,520,640B, final used 3,559,440,384B, CPU text Direct live 0, no retained faults.
 
-native/gatewayは通常APIで終了し、両PID不在と独立observerのidleを確認しました。この試験ではproduction admission0と最大4試行の実験契約を維持しました。12GiB確保、長期安定性、他prompt、最小steps、再現性は今回の成功だけでは確定しません。
+Normal API shutdown plus absent PIDs and independent idle were verified. This experiment retained production admission 0 and maximum 4 attempts. It does not establish 12GiB allocation, long-term stability, other prompts, minimum steps, or repeatability.
 
-![今回の混合精度版でPS5が生成した1024画像](images/moss-mixed-1024-20261020.png)
+![1024 generated on PS5 with mixed precision](images/moss-mixed-1024-20261020.png)
 
-## 追加候補の調査で分かったこと
+## Findings from another candidate
 
-FFN upgateを既存のmedium64タイルへ変更する案も実装して独立GPUゲートまで試しました。実機の数値結果はmismatch0、非有限値0でしたが、明示選択の確認は拒否され、画像POSTは0でした。
+A candidate forcing FFN upgate to the existing medium 64 tile reached independent GPU gates. Numeric checks had mismatch 0/nonfinite 0, but explicit-selection verification rejected it; image POSTs 0.
 
-原因は実機NAVI21の非coopmat構成ではlarge候補が除外され、small/mediumの2候補になるのに、追加selectorが3候補を仮定していたことです。さらに既存selectorは今回のFFNサイズで既に同じmedium64を選びます。したがって候補数判定だけを直しても実行タイルは変わらず、高速化にはなりません。この案は採用せず、速度結果を捏造しません。nativeはGPUのquietと空のpoolを確認して通常OS終了し、独立observerでidleを確認しました。
+Actual non-coopmat NAVI21 excludes large, leaving 2 small/medium candidates, while the added selector assumed 3. Existing selection already chooses medium 64 for this FFN shape; fixing candidate-count detection alone would not change tiles or improve speed. The candidate was rejected without invented timing. Native verified quiet GPU/empty pool, used normal OS shutdown, and independent observation confirmed idle.
 
-その後、成功した上記の混合精度版と同じSELFへ戻し、全文読み戻しで一致を確認しました。再起動したnativeとgatewayがreadyとなり、必須14起動ゲート、6 MOSSゲート、4性能ゲートを元の許容値で再確認しました。この復元確認で画像POSTは追加していません。両APIを通常終了して両PID不在を確認し、独立observerでもGPUタイトル不在・idleを確認しました。現在は改善版を配置済みで停止しています。FW・システム領域・既存タイトルへの変更はありません。
+Restored the successful mixed-precision SELF above with full readback equality. Restarted native/gateway became ready and rechecked 14 startup gates, 6 MOSS gates, and 4 performance gates at original tolerances. No extra image POST was sent. Normal API shutdown confirmed both PIDs absent and independent no-GPU-title/idle. The improved version was deployed but stopped. Firmware, system areas, and other titles were unchanged.
 
-## 証拠の所在
+## Evidence location
 
-残る候補には、F32を維持したruntime LoRAのscale/add融合、MOSS固有のCFG batch化、実shapeに限定したattention調整があります。現在のログはQ4行列・attention・LoRAのGPU時間を分離していないため、その寄与や短縮率は未確定です。submit API自体は約1.09秒であり、ここだけを減らして大幅短縮とは見積もりません。大きなkernel改修前には、対応が確認できた方法で演算単位の計測と小さな数値・時間比較が必要です。
+Remaining candidates include F32 runtime-LoRA scale/add fusion, MOSS-specific CFG batching, and shape-limited Attention tuning. Logs at this stage do not separate Q4/Attention/LoRA GPU time, so contributions/savings are unknown. Submit API calls themselves take about 1.09 seconds, insufficient alone for a large improvement. Before major kernel work, use verified operation-level timing and small numeric/time comparisons.
 
-元の実測・source／artifact照合・数値・終了確認の記録は非公開の検証資料へ保存しています。生ログ、モデル、認証情報、private diagnostic JSONはGitへ含めません。
+Original measurements, source/artifact checks, numeric results, and shutdown evidence remain private. Raw logs, models, credentials, and private diagnostic JSON are excluded from Git.

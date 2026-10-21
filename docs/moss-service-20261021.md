@@ -1,58 +1,58 @@
-# 通常API版のPS5実機検証 — 2026-10-21
+# Ordinary API PS5 hardware verification —2026-10-21
 
-ユーザーの指示により、検証専用の「256を先に1回」「固定prompt/negative/seed」「native1起動最大4試行」を通常版から撤去しました。任意の文章とseed、ランダムseed、長方形、初回1024、img2imgを受理します。各辺64～1024・16刻みの受理範囲を設け、実容量や数値の検査は維持します。
+At user request, ordinary service removes the test-only first 256 request (1 preceding image), fixed prompt/negative/seed, and maximum 4 attempts per 1 native launch. It accepts arbitrary text/seeds, random seeds, rectangles, first 1024, and img2img. Each dimension accepts 64–1024 in 16-pixel increments; actual-capacity/numeric checks remain.
 
-Turbo4のEuler4／CFG1／flow5／sigmas[1,.910,.717,.024,0]、NSFW0.7＋Turbo1 rank144 F32/runtime1はモデル構成として明示しています。別samplingや任意LoRAの機能ではありません。通常版では`service_mode:true`、`requires_256_first:false`、`max_generation_attempts:null`です。継承した低水準のproduction admission macro0を、通常APIの受理状態と混同しません。
+The model profile explicitly specifies Turbo4 Euler 4/CFG 1/flow 5/sigmas[1,.910,.717,.024,0], NSFW0.7 + Turbo1 rank 144 F32/runtime 1. It does not provide arbitrary sampling/LoRA. Service reports `service_mode:true`, `requires_256_first:false`, `max_generation_attempts:null`. Do not confuse inherited low-level production admission macro 0 with ordinary API admission.
 
-## 実際に送った5件
+## The 5 actual requests
 
-FW12.40、RADV NAVI21、Direct10GiB／推論予算9.5GiB。同じnative owner・gatewayで公開PowerShell clientを使用し、生成POSTを各1回だけ送信しました。モデルは最初の要求でlazy loadしています。数値はPS5内部の`generation_seconds`です。
+FW 12.40, RADV NAVI21, Direct 10GiB/budget 9.5GiB. Public PowerShell client used the same native owner/gateway, sending 1 generation POST each. The first lazy-loaded the model. Values are PS5 `generation_seconds`.
 
-| 順序 | 要求 | seed指定 | 実forward | 秒 |
+| Order | Request | Seed input | Actual forwards | Seconds |
 |---|---|---|---:|---:|
-| 1 | text-to-image 1024×1024、先行256なし・読込込み | 20261020 | 4 | 110.459715 |
-| 2 | 別文章・negative空、512×768 | 17 | 4 | 42.180063 |
-| 3 | img2img 512×512、strength0.5 | 12345 | 3 | 35.473797 |
-| 4 | img2img 256×256、strength1 | -1→新規選択 | 4 | 31.132021 |
-| 5 | text-to-image 256×256、4と同じ庭の文章 | -1→別seed | 4 | 3.513742 |
+| 1 | text-to-image 1024×1024, no preceding 256, incl. loading | 20261020 | 4 | 110.459715 |
+| 2 | Different text, empty negative, 512×768 | 17 | 4 | 42.180063 |
+| 3 | img2img 512×512, strength0.5 | 12345 | 3 | 35.473797 |
+| 4 | img2img 256×256, strength 1 | -1→new selection | 4 | 31.132021 |
+| 5 | text-to-image 256×256, same garden text as 4 | -1→different seed | 4 | 3.513742 |
 
-5件目も再起動せずに成功し、4回capの撤去を実機で確認しました。最初の1024 PNGは以前の採用kernel版の同条件PNGと全byte一致しています。任意seedの例、ランダム2件の解決済みseed、実際のprompt/negative、PNG size/SHA、各指標は[JSON](moss-service-20261021.json)へ記録しました。入力のimg2imgは既存の公開benchmark PNGを用い、個人の添付画像は含めません。
+Request 5 succeeded without restart, verifying removal of the 4-attempt cap on hardware. First 1024 PNG matched the earlier adopted-kernel same-condition PNG. [JSON](moss-service-20261021.json) records arbitrary-seed examples, 2 resolved random seeds, actual prompts/negatives, PNG sizes/SHAs, and metrics. Img2img used an existing public benchmark PNG, not personal attachments.
 
-![任意文章・別seed・長方形](images/moss-service-aspect-512x768-20261021.png)
+![Arbitrary text, different seed, rectangular output](images/moss-service-aspect-512x768-20261021.png)
 
-![512 img2img・strength0.5](images/moss-service-edit-512-20261021.png)
+![512 img2img, strength 0.5](images/moss-service-edit-512-20261021.png)
 
-![256 img2img・strength1](images/moss-service-edit-full-256-20261021.png)
+![256 img2img, strength 1](images/moss-service-edit-full-256-20261021.png)
 
-![同一起動5件目・ランダムseed](images/moss-service-fifth-256-20261021.png)
+![Request 5 in the same launch, random seed](images/moss-service-fifth-256-20261021.png)
 
-img2imgの`An ink drawing.`要求でも強い墨画化は示せず、アニメ調が残りました。img2img経路の機械的な動作確認と、画風転換の達成は別です。strength1はsigma1により参照latentの寄与が0になるため、庭の再サンプリングになっています。人物固定や実写化の成功を主張しません。
+Img2img with `An ink drawing.` did not strongly convert to ink drawing; anime styling remained. Mechanical img2img operation and successful style conversion are separate. At strength 1, sigma 1 sets reference-latent contribution to 0, resampling the garden. Character locking or photorealism is not claimed.
 
-## GPU・メモリ・終了の確認
+## GPU, memory, and shutdown checks
 
-元14＋Turbo3＋bounded upload＋fusion16＋kernel20の起動時GPU読み戻しを保持し、全て合格しました。各5件でGPU DiT/attention/decoder完了、有限DiT出力4/4/3/4/4、Q4 F32 records672/672/504/672/672、F16累積records0、nonfinite0、adapter504 tensors適用、graph cache miss1/hit実forward-1を照合しました。img2img2件はGPU VAE encode完了と入力hash、sigma suffixを確認しています。
+All startup readbacks passed: original 14 + Turbo3 + bounded upload + fusion 16 + kernel 20. Across 5 jobs, verified GPU DiT/Attention/decoder completion, finite DiT outputs 4/4/3/4/4, Q4 F32 records 672/672/504/672/672, F16-accumulation records 0, nonfinite 0,504 applied adapter tensors, and graph-cache miss 1/hits actual-forwards−1. The 2 img2img jobs confirmed GPU VAE encode, input hashes, and sigma suffixes.
 
-nativeから取得したPNGとgateway/clientのPNGは全byte一致し、全画像decode・寸法・画素変化・目視を確認しました。rawログとtoken、個人のprocess識別子は公開しません。
+Native PNGs matched gateway/client bytes; all images passed decoding, dimension/pixel-variation checks, and visual inspection. Raw logs, tokens, and personal process identifiers are private.
 
-owned Directの累積高水位は最終9,629,646,848 bytes（約8.97GiB）、4/5件目の終了時は4,897,161,216 bytesで同値でした。これはprocess全体のhighwaterで、各job単独のピークではありません。RSSやGPUラベル付き値と足し合わせません。5件だけでは長期の断片化・安定性を証明できません。
+Final cumulative owned Direct high-water was 9,629,646,848 bytes (about 8.97GiB). Final usage for jobs 4/5 matched at 4,897,161,216 bytes. This is process-wide, not per-job peak; do not add RSS/GPU-labeled values.5 jobs cannot establish long-term fragmentation/stability.
 
-正常shutdown後に独立observerで両owner不在と同boot/servicesを確認し、全量readback済み同SELFを再起動しました。初期GPUゲートを再び確認し、nativeとgatewayはmodel未読込・空queueのready状態に戻しています。system領域、firmware、GPU driverやメモリ設定を変更していません。
+Normal shutdown plus independent absent-owner/same-boot/service observation preceded restart of the fully readback-verified same SELF. Initial GPU gates passed again; native/gateway returned ready, empty queues, unloaded model. System areas, firmware, GPU driver, and memory settings were unchanged.
 
-## 公開buildとhost検査
+## Public build and host checks
 
-fresh75 core objects、native24 constructors／6 runtime providers、SELF転送後全byte readbackを確認しました。通常policyのhost contract60,015検査、service HTTP55検査（40件連続mock、画像推論なし）、legacy HTTP134検査が通過しています。quota拒否はhostで確認し、実機では保存枠内の5件を確認しました。8GiBまでディスクを埋める試験は行いません。
+Verified fresh 75 core objects, 24 native constructors/6 runtime providers, and complete post-transfer SELF readback. Passed 60,015 host-contract checks, 55 service-HTTP checks (40 consecutive mocks, no inference), and 134 legacy-HTTP checks. Quota rejection was host-tested; hardware completed 5 in-quota jobs. No disk-fill test to 8GiB was performed.
 
-通常build入口は`tools/build_service.py`、設定は`config/moss-service.json.example`です。gateway build後の共通header変更は説明commentのみで、記録hashを再構成し実行token列が同一であることを確認しました。後から加えた自動freeze wrapperはprepare-only（gateway build＋75-object plan）まで確認し、実測nativeは同じ下位build commandsで作成しています。cloneだけで依存SDKやnativeタイトル登録まで自動導入するものではありません。[build](build.md)、[owner/token・起動手順](deployment.md)、[API](api.md)。
+Ordinary build entry:`tools/build_service.py`; config:`config/moss-service.json.example`. Shared-header changes after gateway build were comments only; reconstructed hashes and executable token sequences matched. The later automatic-freeze wrapper was verified through prepare-only (gateway build +75-object plan); measured native used the same lower-level commands. Cloning does not automatically install SDKs or register titles. See [build](build.md), [owner/token/startup](deployment.md), [API](api.md).
 
-## 計測範囲
+## Measurement scope
 
-今回の5件はprompt、寸法、encode、conditioning cache状態が異なり、相互の速度比較ではありません。3.51秒を1024の速度や通常の新prompt生成時間として扱わないでください。旧同条件1024平均45.127473秒は[以前の速度比較](moss-dit-kernels-20261021.md)です。全寸法・全promptのメモリ適合、2048入力や全PNG/JPEG形式の実生成、長期安定性は未検証です。
+These 5 jobs differ in prompts, dimensions, encoding, and conditioning-cache state, so they are not mutual speed comparisons.3.51 seconds is neither 1024 timing nor typical new-prompt generation. Earlier identical-condition 1024 mean 45.127473 seconds is in the [speed comparison](moss-dit-kernels-20261021.md). All dimensions/prompts' memory fit, actual 2048 inputs/all PNG/JPEG formats, and long-term stability remain unverified.
 
-通常版はprivate LAN自動bind（明示IP override可）、Bearer認証、直列GPU生成、既定8GiB output/jobs保存枠を使います。保存枠は実filesystem空きの測定ではありません。32MiB/jobの予約を見込み507で受理を止め、生成物を自動削除しません。初回256や回数制限の代わりに、これらの実容量・セキュリティ・完了検査を維持します。
+Service uses private-LAN auto-bind (explicit override available), Bearer authentication, serialized GPU generation, and default 8GiB output/jobs allowance. This does not measure physical free space.32MiB/job accounting returns 507 before exceeding the allowance; outputs are not automatically deleted. These capacity/security/completion checks remain without first 256/attempt restrictions.
 
-## 公開検証画像の一覧
+## Public verification images
 
-以下は[verification.json](verification.json)の新旧画像です。過去のtrial結果は当時のprofileとして保持します。
+The following are old/new images from [verification.json](verification.json). Historical trial results retain their original profiles.
 
 - [moss-dit-kernels-1024-20261021.png](images/moss-dit-kernels-1024-20261021.png)
 - [moss-dit-kernels-256-20261021.png](images/moss-dit-kernels-256-20261021.png)

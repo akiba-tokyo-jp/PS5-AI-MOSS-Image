@@ -1,39 +1,39 @@
-# MOSS Turbo4の実機結果（2026-10-20）
+# MOSS Turbo4 hardware results (2026-10-20)
 
-> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+> Historical test record. See [Turbo4/memory comparisons](moss-turbo-memory-options-20261020.md) and [verification status](status.md) for the currently adopted candidate and latest times.
 
-このページはbounded uploadを使わない先行Turbo4単独試験です。後続の[併用版・FFN分割・F16 storage比較](moss-turbo-memory-options-20261020.md)は別の実測として記録しています。
+This page records the earlier Turbo4-only trial without bounded upload. Subsequent [combined/FFN-chunking/F16-storage comparisons](moss-turbo-memory-options-20261020.md) are separate measurements.
 
-PS5上の専用trialで、MOSS-Image-SFT Q4_KとNSFW0.7＋Turbo1.0の合成rank144 F32 adapterを使い、256／1024画像を生成してOpenAI Images互換APIから取得しました。WindowsはAPIクライアントです。text encodingはPS5 CPU、DiT・Flash Attention・VAEはPS5 Vulkanで処理します。
+A dedicated PS5 trial generated 256/1024 with MOSS-Image-SFT Q4_K and combined rank 144 F32 NSFW0.7 + Turbo1.0 adapter, retrieving PNGs through the OpenAI Images-compatible API. Windows is the client; PS5 CPU performs text encoding and PS5 Vulkan performs DiT/Flash Attention/VAE.
 
-| PS5内の生成時間 | 50-step基準キャッシュ版 | Turbo4専用trial |
+| PS5 generation time | 50-step baseline cache version | Dedicated Turbo4 trial |
 |---|---:|---:|
-| 256×256初回、lazy load込み | 146.016289秒 | **71.564874秒** |
-| 同processの256後、1024×1024初回 | 1023.859406秒 | **51.133430秒** |
+| First 256×256 incl. lazy load | 146.016289 s | **71.564874 s** |
+| First 1024×1024 after 256, same process | 1023.859406 s | **51.133430 s** |
 
-単回差は256で50.99%、1024で95.01%の短縮です。正のpromptとseedは揃えましたが、steps50→4、CFG3→1、adapterとsigmasも変わります。同画質・同一PNGの比較ではなく、同一モデルのkernelだけを20倍速くした意味でもありません。各条件1回でOS disk cache未flush、温度・clockは統制していません。1024は単独coldでも2回目の1024でもなく、256を生成した同processでの最初の1024です。
+Single-observation reductions were 50.99% at 256 and 95.01% at 1024. Positive prompt/seed matched, but steps 50→4, CFG 3→1, adapter, and sigmas changed. This is neither equal-quality/identical-PNG comparison nor 20× acceleration of the same model's kernels alone. Each condition was observed 1 time with no OS-cache flush or temperature/clock control.1024 is first after 256, not standalone cold 1024 or run 2 at 1024.
 
-## 固定した条件と実機確認
+## Fixed conditions and hardware checks
 
-- 4-step Euler、CFG1、seed20261020。already-shifted sigmas `[1.0, 0.910, 0.717, 0.024, 0.0]`にflow shift5を二重適用しません。CFG1はnegative-conditioning forwardを実行しません。
-- rank16のNSFW係数0.7とrank128 Turbo係数1.0を、独立q/k/vを保ってrank144へ合成しました。runtime multiplierは1.0です。[入力revision・全体SHA・converter・notice](moss-turbo4-reproduction.md)を固定し、元rank16も別に保持します。
-- FP16データ／FP32累積を維持します。既存14数値ゲート＋3つのrank144 GPU合成／読み戻しゲートに加え、各画像で4つの有限DiT出力、Q4のF32累積記録672／F16累積0／invalid0／nonfinite0、LoRA504 loaded/matched/used・skip0を確認しました。
-- native GETとOpenAI互換APIのPNGは各画像で全バイト一致しました。256／1024とも目視で大きな破綻がないことを確認しました。各要求は1POST・自動再送0です。これは多様なpromptの画質評価や長時間連続運用の保証ではありません。
+- 4-step Euler, CFG 1, seed 20261020. Already-shifted sigmas `[1.0, 0.910, 0.717, 0.024, 0.0]` receive no second flow shift 5. CFG 1 skips negative-conditioning forwards.
+- Combined rank 16 NSFW coefficients 0.7 and rank 128 Turbo coefficients 1.0 into rank 144, preserving independent q/k/v; runtime multiplier 1.0. [Input revisions/full SHAs/converter/notices](moss-turbo4-reproduction.md) are fixed; original rank 16 is retained separately.
+- FP16 data/FP32 accumulation retained. Existing 14 numeric gates +3 rank 144 GPU composition/readback gates passed. Each image verified 4 finite DiT outputs, 672 Q4 F32-accumulation records/0 F16/0 invalid/0 nonfinite, LoRA 504 loaded/matched/used/skip 0.
+- Native/OpenAI PNG bytes matched for each image; 256/1024 visual checks found no major defects. Each used 1 POST/0 retries. This is not broad prompt-quality or long-running stability evidence.
 
-1024のDiT graph処理は4回・44.542630秒、他runnerは49回・5.987196秒でした。これはnested CPU wallで、純GPU timestampや加算可能な内訳ではありません。完全な現行ログの対応区間で、256のcache hitは0件、1024ではpositive conditioningのcache hitを1件確認しました。CFG1のためnegative forwardはありません。
+1024 recorded 4 DiT graph calls/44.542630 seconds and 49 other-runner calls/5.987196 seconds. These are nested CPU wall times, not GPU timestamps or additive intervals. Complete current-log sections showed 0 cache hits at 256 and 1 positive-conditioning hit at 1024. CFG 1 has no negative forward.
 
-![PS5実機のTurbo4専用trialで生成した1024×1024・4stepsの画像](images/moss-turbo4-upload-1024-20261020.png)
+![1024×1024,4steps generated in the dedicated PS5 Turbo4 trial](images/moss-turbo4-upload-1024-20261020.png)
 
-生成後にnativeとgatewayを通常APIで終了し、別のprocess観測で両方の不在を確認しました。さらに独立した新規observerで、同boot・既存サービス／syscore／shellcore、GPU titleなし、3タイトルの登録と選択5モデルのmetadata維持を確認しました。強制signalと手動GPU解放は0です。
+Normal native/gateway API shutdown preceded separate absent-process observations. A fresh independent observer confirmed same boot, existing services/syscore/shellcore, no GPU title, 3 title registrations, and 5 selected models' metadata preserved. Forced signals/manual GPU releases: 0.
 
-## メモリについて言える範囲
+## Memory interpretation
 
-物理Direct予約は基準・Turbo4とも10GiBです。APIのGPU-labelled高水位は、1024で基準4,868,833,280B（約4.53GiB）に対しTurbo4は5,968,183,296B（約5.56GiB）でした。共有Directとdriver arena由来の上界で、純粋なVRAM使用量ではありません。API CPU値もprocessの累積高水位を含み、両値を加算できません。この1024生成のowned Direct data使用量は高水位5,934,579,712B、生成後4,749,066,240Bで、物理予約10,737,418,240Bそのものとは区別します。
+Both baseline/Turbo4 physically reserved 10GiB Direct.1024 API GPU-labeled high-water: baseline 4,868,833,280B (about 4.53GiB), Turbo4 5,968,183,296B (about 5.56GiB). These are shared-Direct/driver upper bounds, not pure VRAM. API CPU values also include cumulative process peaks and cannot be summed. This 1024 owned Direct data peaked 5,934,579,712B and ended 4,749,066,240B, distinct from physical reservation 10,737,418,240B.
 
-合成rank144の係数payloadは1,337,720,832Bで、rank16より1,189,085,184B（約1.11GiB）増えます。このstorage差は物理RAM／VRAM増分の実測ではありません。転送・temporary workspace・解像度・highwaterが重なるため、係数サイズだけから実メモリ量を算出しません。
+Combined rank 144 coefficient payload is 1,337,720,832B, 1,189,085,184B (about 1.11GiB) above rank 16. This storage difference is not measured physical RAM/VRAM growth. Transfers, temporary workspace, resolution, and high-water timing overlap; coefficient size alone cannot determine actual memory.
 
-別の[bounded-upload試験](moss-bounded-weight-upload-20261020.md)では、workerあたり最大8MiB（3workerなら可能上限24MiB）のgrow-to-fit stagingで、同じ256条件のAPI `ru_maxrss × 1024`高水位が216.6875MiB下がりました。Direct予約・Direct高水位・GPU-labelled高水位は同じで、物理RAM／VRAM削減の証明ではありません。**Turbo4ではbounded-uploadを無効にしているため、この削減をTurbo4の結果へ足し合わせません。**
+A separate [bounded-upload trial](moss-bounded-weight-upload-20261020.md) capped grow-to-fit staging at 8MiB/worker (potential 24MiB with 3 workers), lowering same 256 API `ru_maxrss × 1024` by 216.6875MiB. Direct reservation/peak/GPU-labeled peak stayed equal, not proof of physical RAM/VRAM reduction. **Bounded upload was disabled for Turbo4 here (Turbo4); do not add those savings to this result.**
 
-BF16重みのGPU読み戻しゲートは合格しており、backendの`bf16: 0`表示だけでBF16不可とは判断しません。一方、現行BF16 matrix経路のRHS丸めと、rank144合成係数がすべてBF16-exactではない点は残ります。現在のF32契約を変更するには別の数値・画像比較が必要です。
+BF16-weight readback gates passed, so backend `bf16: 0` alone does not imply BF16 is unusable. However, BF16 matrix RHS rounding and non-BF16-exact rank 144 coefficients remain concerns. Changing the F32 contract requires separate numeric/image comparisons.
 
-前段の[30-step sampler／Spectrum](moss-sampler-spectrum-memory-20261020.md)、[text cache](moss-additional-optimization-20261020.md)の結果は保存しています。今回も開発時のguarded trialでproduction admission0、12GiB予約目標は未達です。
+Earlier [30-step sampler/Spectrum](moss-sampler-spectrum-memory-20261020.md) and [text-cache](moss-additional-optimization-20261020.md) results remain. This was also a guarded development trial, production admission 0; the 12GiB target remains unmet.

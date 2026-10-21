@@ -21,3 +21,12 @@ User-authorized img2img extension (2026-10-21): implement an explicit default-OF
 Current ordinary service (2026-10-21): first1024 cold110.459715s;512x76842.180063s;img512 strength.5/3forward35.473797s;img256 strength1/4forward31.132021s;fifth text2563.513742s, all on the same owner. These differ in conditioning and image paths, not a speed comparison. No prior256 or generation cap. Host contract60015, serviceHTTP55 checks/40 serial mock jobs, legacyHTTP134. Retain Turbo4 authored model recipe; arbitrary text/seed/aspect policy64..1024/16grid. Default output+job quota8GiB per process, no automatic output deletion; private LAN auto bind. Public entry tools/build_service.py, config/moss-service.json.example. Its prepare-only convenience path is host-checked; actual measured artifacts were built by the underlying commands. Normal shutdown, independent idle proof and full-readback restart were verified. No claim of all-shape capacity or long-run stability.
 
 Ordinary service follow-up: GPU path-selection coverage is diagnostic, not a numerical admission criterion. Valid tensor/prompt shapes may use the existing baseline GPU path, especially flash-attention tuning. Service mode logs unused_kernel_mask and all_selected_paths_required:false; legacy diagnostic builds retain the all-path coverage check. Preserve original startup readbacks, exact forward/Q4 counts, finite values and completion/capacity/ownership checks. Fully rebuilt via tools/build_service.py with fresh75; native24 constructors/6 providers and startup all gates passed. New arbitrary-character cold1024 PNG retrieved124.476684s. This different prompt is not a speed comparison.
+
+## Repository language
+
+Write project-authored README files, documentation, diagrams, code comments,
+user-facing messages, and new commit/PR descriptions in English. Keep technical
+identifiers, API contracts, measurements, and third-party license/attribution
+text intact. Translate documentation without changing runtime behavior or
+claiming new hardware verification. Existing historical commits and pinned
+experiment baselines remain immutable.

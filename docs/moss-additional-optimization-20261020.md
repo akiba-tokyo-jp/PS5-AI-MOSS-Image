@@ -1,6 +1,6 @@
 # Additional MOSS optimization investigation (2026-10-20)
 
-> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+> Historical test record. See [Turbo4/memory comparisons](moss-turbo-memory-options-20261020.md) and [verification status](status.md) for the currently adopted candidate and latest times.
 
 The reviewed cache version completed matched PS5 256×256 and 1024×1024 generations with baseline-identical PNG files and normal visual review. The same-prompt 1024 request after 256 was 40.389505 s faster in this single observation. The recovered uninterrupted current engine log confirms the expected cache hits, and normal exit plus an independent fresh idle check passed. This was an experimental development run; current release status is in status.md.
 

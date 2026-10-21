@@ -1,79 +1,79 @@
-# MOSS実機の小画像試験と画質原因の比較（2026-10-19 JST）
+# MOSS small-image hardware test and quality-cause comparison (2026-10-19 JST)
 
-> 過去の試験記録です。現在の採用候補・最新の秒数は[Turbo4・メモリ比較](moss-turbo-memory-options-20261020.md)と[検証状態](status.md)を参照してください。
+> Historical test record. See [Turbo4/memory comparisons](moss-turbo-memory-options-20261020.md) and [verification status](status.md) for the currently adopted candidate and latest times.
 
-**PS5でMOSS＋指定LoRAの256×256・50steps画像を正常な画質で生成し、WindowsがOpenAI Images互換APIから取得しました。PS5生成時間は初回モデル読込を含み148.133782秒です。**
+**PS5 generated a normal-quality 256×256,50steps image using MOSS plus the specified LoRA; Windows retrieved it through the OpenAI Images-compatible API. PS5 generation took 148.133782 seconds including initial loading.**
 
-最初の4steps画像にあった強い色縞は、同一SELF・同一設定でstepsだけ50へ増やした比較で解消しました。この条件では**4stepsのsampling不足が原因**と判断します。全prompt・解像度の品質保証や最小必要stepsの特定ではありません。当時は明示的な個別実験としてproduction runtime admission0を維持しました。
+Strong color stripes in the initial 4steps image disappeared when only steps increased to 50 using the same SELF/settings. Under these conditions, **insufficient 4steps sampling caused the issue**. This does not guarantee all-prompt/resolution quality or establish minimum steps. This explicit individual experiment retained production runtime admission 0.
 
-## 原因を特定した比較
+## Comparison establishing the cause
 
-両試験でnative SELF、モデル、LoRA、prompt、seed、sampler、CFG、flow shift、driver、pool、reserveを固定しました。各試験は新しいnative processで1回だけPOSTし、自動再送0。4stepsの後に通常終了と所有者不在を確認してから、同じSELFをfresh launchして50stepsを生成しました。
+Both tests fixed native SELF, model, LoRA, prompt, seed, sampler, CFG, flow shift, driver, pool, and reserve. Each used 1 POST in a new native process, 0 automatic retries. After 4steps, normal shutdown/owner absence preceded fresh launch of the same SELF for 50steps.
 
-| 項目 | 4steps再現 | 50steps比較 |
+| Item | 4steps reproduction | 50steps comparison |
 |---|---:|---:|
 | PS5 generation_seconds | 68.525607 | **148.133782** |
-| 画像 | 強い細かな色縞を再現 | **色縞解消、今回の正常画質を確認** |
+| Image | Strong fine color stripes reproduced | **Stripes eliminated; normal quality verified for this case** |
 | PNG bytes | 196,962 | 194,931 |
-| 4px周期のhighpass phase mean span | 0.11117244 | 0.00619342 |
+| 4px-period highpass phase mean span | 0.11117244 | 0.00619342 |
 | LoRA loaded / matched / used / skipped | 504 / 504 / 504 / 0 | 504 / 504 / 504 / 0 |
 
-4steps再現画像のSHA256は元のcorrected4steps画像と完全に一致しました。追加したGPU数値ゲートと試験契約の変更が、元の4steps出力を変えていないことも確認しています。4px周期指標は94.43%減りました。これは目視比較を補助する記述的なpixel指標で、一般的な画質合格基準ではありません。
+The reproduced 4steps SHA 256 exactly matched the original corrected 4steps (4steps) image, confirming added GPU gates/test-contract changes did not alter it. The 4px metric fell 94.43%. This descriptive pixel metric supports visual comparison; it is not a general quality-acceptance standard.
 
-通常のnative／gateway／PowerShellクライアントの既定stepsは**元から50**です。4は初回smoke契約だけの値で、通常既定値を4から50へ修正したわけではありません。品質比較用profileは256×256・4または50stepsだけを明示的に許可し、1processにつき1件のatomic claimを維持します。旧4steps専用profileとproduction admission0は変更していません。
+Ordinary native/gateway/PowerShell defaults were **already 50 steps**.4 applied only to initial smoke contracts; ordinary defaults were not changed 4→50. The quality-comparison profile explicitly permits only 256×256 at 4 or 50steps, with 1 atomic claim per 1 process. Old 4steps-only profiles and production admission 0 remain unchanged.
 
-## 50stepsの実測条件と結果
+## 50steps conditions and results
 
-| 項目 | 実測・固定条件 |
+| Item | Measurement/fixed condition |
 |---|---|
-| 実機 | PS5 FW12.40、Title ID `PPSA99190`、RADV NAVI21 |
-| エンジン | MOSS-Image-SFT Q4_K、Qwen3.5-9B Q4_K_M、FLUX.2 small VAE、外部Qwen tokenizer |
-| 指定adapter | `axiomofmind/Moss-image-nsfw-uncensored-lora`、rank16をexact F32変換、runtime strength0.7 |
-| 推論配置 | Qwen text encodingはPS5 CPU、DiTとVAEはPS5 Vulkan。WindowsはAPIクライアント |
-| リクエスト | 256×256、50steps、Euler、CFG3、flow shift5、seed20261019、negative CFG skip layers `[22]` |
-| Native job | `6ad6269b000001b00000000100000001`、`completed`、実GPU完了の観測あり |
-| PS5生成時間 | **148.133782秒**。初回モデル読込を含む、このprocess最初の生成 |
-| OpenAI互換応答 | HTTP200、149.406秒。Windows側の全処理150.859秒 |
-| PNG | RGB、256×256、194,931 bytes、全decode成功。native GETとOpenAI応答のPNGはbytes一致 |
+| Hardware | PS5 FW 12.40, Title ID `PPSA99190`, RADV NAVI21 |
+| Engine | MOSS-Image-SFT Q4_K, Qwen3.5-9B Q4_K_M, FLUX.2 small VAE, external Qwen tokenizer |
+| Selected adapter | `axiomofmind/Moss-image-nsfw-uncensored-lora`, rank 16 converted exactly to F32, runtime strength 0.7 |
+| Inference placement | Qwen text encoding: PS5 CPU; DiT/VAE: PS5 Vulkan. Windows: API client |
+| Request | 256×256,50steps, Euler, CFG 3, flow shift 5, seed 20261019, negative CFG skip layers `[22]` |
+| Native job | `6ad6269b000001b00000000100000001`, `completed`, actual GPU completion observed |
+| PS5 generation time | **148.133782 s**, first generation in this process including initial loading |
+| OpenAI-compatible response | HTTP200,149.406 s; full Windows processing 150.859 s |
+| PNG | RGB, 256×256,194,931 bytes, fully decoded; native-GET/OpenAI PNGs byte-identical |
 | PNG SHA256 | `8e14a3df612932dcef0bbdef38eb3a7cbafd964b87329e8c5a6c7bf55bc07a65` |
-| LoRA適用 | loaded/matched/used各504、skipped0、`application_verified=true` |
+| LoRA application | loaded/matched/used 504 each, skipped 0, `application_verified=true` |
 
-![PS5 MOSS 256×256・50stepsの正常出力](images/moss-256-50step-20261019.png)
+![Normal PS5 MOSS256×256,50steps output](images/moss-256-50step-20261019.png)
 
-warm生成、1024画像、連続生成、最小必要stepsは測定していません。148.1秒をモデル読込済みの時間として扱いません。
+Warm generation, 1024 images, continuous generation, and minimum steps were not measured.148.1 seconds is not a warm-model time.
 
-## GPUと有限値の証拠
+## GPU and finite-value evidence
 
-実機でDiTの行列演算、Flash Attention、VAE decoder完了後の観測を取得しました。50steps逐次CFGのDiT出力100件、VAE出力1件、textを含む計3,854,336値を確認し、nonfinite0でした。限定した観測と有限値だけで、全GPU演算の数値正しさを証明するものではありません。
+Observed completed DiT matrix operations, Flash Attention, and VAE decoder on hardware.50-step sequential CFG checked 100 DiT outputs, 1 VAE output, 3,854,336 values including text, with nonfinite 0. Limited witnesses/finite values do not prove numeric correctness of every GPU operation.
 
-初期化時の6つのGPU読み戻しゲートもPASSしました。Q4_Kのvectorに加えN9 matrixとK3072/M3072/N304 matrix、Flash Attention、BF16 N7 vector／N9 matrixを検査しています。大matrixは99 edge/interior値を独立CPU double oracleで比較し、全出力の有限値を確認します。各ゲートでCPU fallbackなし、dispatch/submit/fence増分、mismatch0・nonfinite0を確認しました。BF16 N7は119値、N9は153値です。
+All 6 initialization GPU-readback gates passed: Q4_K vector, N9 matrix, K3072/M3072/N304 matrix, Flash Attention, BF16 N7 vector/N9 matrix. The large matrix compares 99 edge/interior values against an independent CPU-double oracle and checks all output finiteness. Each gate confirmed no CPU fallback, dispatch/submit/fence increments, mismatch 0/nonfinite 0. BF16 N7 covers 119 values; N9 covers 153.
 
-driver表示は`fp16:0 / bf16:0`、FP16演算は無効です。BF16 storageをソフトウェア側の経路で扱えた限定試験であり、hardware BF16演算対応とは主張しません。
+Driver reports `fp16:0 / bf16:0`; FP16 arithmetic is disabled. This limited test handled BF16 storage through a software path, not proven hardware BF16 arithmetic support.
 
-## メモリの意味と12GiB目標
+## Memory interpretation and 12GiB target
 
-人が許可した別の専用trialでDirect pool **10,737,418,240 bytes＝10GiB**を確保しました。pool外working reserve1GiB、推論予算`Vulkan0=9.5`、1region/claim上限1GiBです。native contextのDirect総量報告は**12,280,922,112 bytes＝11.4375GiB**で、要求されたproductionのpool12GiB＋reserve1GiBは容量判定を通りません。**12GiB目標は未達**です。
+A separately authorized dedicated trial allocated Direct pool **10,737,418,240 bytes＝10GiB**. Outside-pool working reserve 1GiB, inference budget `Vulkan0=9.5`, 1-region/claim limit 1GiB. Native context reports **12,280,922,112 bytes＝11.4375GiB** total Direct, so production pool 12GiB + reserve 1GiB fails admission. **The 12GiB target remains unmet.**
 
-| 記録値 | bytes | 解釈 |
+| Recorded value | bytes | Interpretation |
 |---|---:|---|
-| API `peak_cpu_bytes` | 11,769,872,384 | process peak RSS。独立したCPU専用メモリ量ではない |
-| API `peak_gpu_bytes` | 4,867,227,648 | driver arenaとDirect data各owned poolピークの合計上界。ピーク時刻は同一とは限らない |
-| Direct data peak | 4,835,262,464 | 約4.503GiB、CPU text weightsも含む共有poolのピーク |
-| 生成後Direct data used | 3,536,896,000 | 約3.294GiB |
-| CPU text weights peak | 4,835,246,080 | 同じDirect pool内。conditioning後のliveは0 |
+| API `peak_cpu_bytes` | 11,769,872,384 | Process peak RSS, not separate CPU-only memory |
+| API `peak_gpu_bytes` | 4,867,227,648 | Sum upper bound of driver-arena/Direct-data owned-pool peaks; peak times may differ |
+| Direct data peak | 4,835,262,464 | About 4.503GiB, shared-pool peak including CPU text weights |
+| Post-generation Direct data used | 3,536,896,000 | About 3.294GiB |
+| CPU text weights peak | 4,835,246,080 | Within the same Direct pool; live 0 after conditioning |
 
-APIのGPUピークは純粋なVRAM使用量ではなく、CPU/GPU値を加算できません。独立global GPU memory measurementは`unavailable`です。小画像の結果から最大解像度や長時間のメモリ余裕を推定しません。
+API GPU peak is not pure VRAM usage; CPU/GPU figures cannot be added. Independent global GPU memory measurement is `unavailable`. Small-image results do not establish maximum resolution or long-running memory headroom.
 
-## 修正履歴と正常終了
+## Fix history and normal shutdown
 
-最初の試験は、BF16左辺の行列積17nodeをscratch admissionが未分類として拒否し、モデルGPU dispatch前で停止しました。BF16の行列左辺だけへtype/shape/stride/32-bit span検査を追加し、既存4B/elementの保守的scratch上界を維持しました。admission無効化やpool拡大はしていません。実42-layer graphのhost metadata試験と独立上界検証を経て、core75 sourceを新規compile、旧object流用0で再構築しました。
+The first test rejected 17 BF16-left matrix nodes as unclassified scratch admission, before model GPU dispatch. Type/shape/stride/32-bit-span checks were added only for BF16 matrix left operands, retaining the conservative 4B/element scratch bound. Admission was not disabled and the pool was not enlarged. Actual 42-layer host metadata tests and independent bounds verification preceded fresh compilation of 75 core sources, with 0 old objects reused.
 
-corrected初回4stepsは68.704665秒でGPU PNG/APIの技術的成功を確認しましたが、色縞のため品質は未合格でした。その後の上記4対50比較で、今回の画質原因を切り分けました。offlineの一次source照合ではMOSS本体、FLOW/shift5、FLUX.2 VAEのBN丸め、2×2 unpack、DiT軸順の明確な不一致は特定していません。これはそれらの普遍的な無欠陥証明ではありません。
+The corrected first 4steps took 68.704665 seconds and technically produced a GPU PNG/API result, but stripes failed quality acceptance. The 4-versus 50 comparison above isolated this case's quality cause. Offline primary-source comparison found no clear mismatch in MOSS, FLOW/shift 5, FLUX.2 VAE BN rounding, 2×2 unpacking, or DiT axis order. This is not universal proof of defect-free behavior.
 
-品質比較SELFのSHA256は`cf61a7190e4e0f79b7aedb12038fdeb1d529dd90cf92a5a26185ce73cf3cabe5`です。core archiveは`c9809e6bbb04ef3a09044d7c5036e113004c37bc616541ca5d808d4c53acaab4`を維持しました。新しい品質契約と数値ゲートはnative側だけの変更で、全75 compiler dependency記録を監査し、coreの消費入力が変わらないことを別receiptで確認しています。旧core manifestのhashを書き換えていません。
+Quality-comparison SELF SHA 256: `cf61a7190e4e0f79b7aedb12038fdeb1d529dd90cf92a5a26185ce73cf3cabe5`. Core archive remained `c9809e6bbb04ef3a09044d7c5036e113004c37bc616541ca5d808d4c53acaab4`. New quality contracts/numeric gates changed native only; all 75 compiler-dependency records were audited and a separate receipt confirmed unchanged consumed core inputs. Old core-manifest hashes were not rewritten.
 
-50steps後、native／gatewayを通常のidle API終了で閉じました。受理202だけを証拠にせず、別process取得で両PID不在、独立observerでGPU titleなしを確認しました。追加生成や録画はしていません。
+After 50steps, native/gateway closed through normal idle shutdown APIs. Beyond 202 acceptance, separate process reads confirmed both PIDs absent and an independent observer confirmed no GPU title. No additional generation or recording occurred.
 
-## 記録の範囲
+## Record scope
 
-元ログ、private diagnostic receipts、重み、秘密、失敗画像はGitへ含めません。公開するのは条件・集約値と正常50-step出力PNGです。実際のsource／build／request／通常終了／独立idle証拠は開発時の非公開記録へ保存しています。
+Original logs, private diagnostic receipts, weights, secrets, and failed images are excluded from Git. Public material contains conditions, aggregates, and the successful 50-step PNG. Actual source/build/request/shutdown/independent-idle evidence remains in private development records.

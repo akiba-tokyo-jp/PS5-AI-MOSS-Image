@@ -1,35 +1,35 @@
-# MOSS Imageをソースからビルドする
+# Build MOSS Image from source
 
-通常API版の入口は`tools/build_service.py`です。固定prompt・seed・256先行・最大4試行を撤去したservice profileをnativeとgatewayの両方へ適用します。[実機検証](moss-service-20261021.md)。過去の資料にある低水準trial用コマンドは診断buildの記録です。
+The ordinary API entry point is `tools/build_service.py`. It applies a service profile to native and gateway builds, removing fixed prompts/seeds, the first 256 prerequisite, and the maximum 4 attempts. [Hardware verification](moss-service-20261021.md). Historical low-level trial commands describe diagnostic builds.
 
-## 依存と設定
+## Dependencies and configuration
 
-Windows x64でcross compileします。[dependencies.lock.json](../dependencies.lock.json)、[native profile](../build-profiles/native.json)、[core profile](../build-profiles/moss-core.json)の固定revisionを揃え、[build設定例](../config/build.json.example)をprivate作業ディレクトリへコピーします。SDK、LLVM、PS5 Mesa/RADV、Vulkan-Headers、SD.cpp、shader toolchain、dependency archives、native packagerの実際の場所を指定します。
+Cross-compile on Windows x64. Match pinned revisions in [dependencies.lock.json](../dependencies.lock.json), [native profile](../build-profiles/native.json), and [core profile](../build-profiles/moss-core.json), then copy the [build configuration example](../config/build.json.example) to a private workspace. Specify actual paths for SDK, LLVM, PS5 Mesa/RADV, Vulkan-Headers, SD.cpp, shader toolchain, dependency archives, and native packager.
 
-SDK・library・weights・生成済みshaderはGitに含みません。clone直後にそれらまで自動取得するinstallerではありません。nativeとCPU gatewayのSDK ABIを混在させず、16KiB page、emulated TLS、`GGML_MAX_NAME=160`、constructor/importを一致させます。公開overlayと固定baseを使用し、既存core archiveの名前だけを流用しません。[モデル準備](moss-models.md)、[adapter再現](moss-turbo4-reproduction.md)、[第三者通知](../THIRD_PARTY_NOTICES.md)。
+SDKs, libraries, weights, and generated shaders are excluded from Git. This is not an installer that automatically downloads them after cloning. Do not mix native and CPU-gateway SDK ABIs; match 16KiB pages, emulated TLS, `GGML_MAX_NAME=160`, constructors, and imports. Use the public overlay and pinned base, not merely an existing core archive's filename. See [model preparation](moss-models.md), [adapter reproduction](moss-turbo4-reproduction.md), and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
-## 通常版
+## Ordinary service build
 
-新しい出力先を指定します。依存configとbuild生成物をソースcheckout外の容量に余裕があるドライブへ置いてください。
+Choose a new output directory. Store dependency configuration and build artifacts outside the source checkout on a drive with sufficient capacity.
 
 ```powershell
 python -B tools/build_service.py --config D:/ps5-dev/build.json --out D:/ps5-dev/build/moss-service --jobs 2
 ```
 
-wrapperはgatewayをbuildしてschemaを生成した後、checkout内のGit管理対象・非ignoredファイルの入力一覧をprivate freezeへ記録し、75 core objectsをfresh compileしてnativeをbuildします。低水準のprofile名にtrialという語が残っていても、`--service-mode`で生成回数制限・256条件は無効です。
+The wrapper builds the gateway and generates its schema, records tracked/non-ignored checkout inputs in a private freeze, freshly compiles 75 core objects, and builds native. Even where low-level profile names still contain trial, `--service-mode` disables attempt limits and the 256 prerequisite.
 
-選択する構成はF32 accumulation、Turbo4、bounded weight upload、DiT optimization mask15、kernel mask15、FA shared-KV occupancy調整、img2img、10GiB Direct pool／9.5GiB推論予算です。FFN chunk2048、F16 LoRA storage、GPU profiler、別sampling候補は混ぜません。モデルはrank144 F32 adapter、runtime multiplier1です。数値・容量・GPU完了・owner guardは維持します。
+Selected configuration: F32 accumulation, Turbo4, bounded weight uploads, DiT optimization mask 15, kernel mask 15, FA shared-KV occupancy adjustment, img2img, Direct pool 10GiB / inference budget 9.5GiB. Do not mix in FFN chunk 2048, F16 LoRA storage, GPU profiling, or alternate sampling candidates. The model uses a rank 144 F32 adapter with runtime multiplier 1. Numeric, capacity, GPU-completion, and owner guards remain.
 
-生成物は`native/title/PPSA99190/eboot.bin`、gateway build directory内のCPU ELF、各manifest、`moss-service.json.example`です。exact ELF pathはgateway manifestの`artifact.path`を参照します。これはビルドであり、PS5へは接続・配備・起動しません。
+Outputs include `native/title/PPSA99190/eboot.bin`, the CPU ELF in the gateway build directory, manifests, and `moss-service.json.example`. See gateway manifest `artifact.path` for the exact ELF path. Building does not connect, deploy, or launch on PS5.
 
-既存の完全な[freeze形式](../config/moss-source-freeze.json.example)を自分で管理する場合は`--source-freeze PRIVATE_JSON`を指定できます。build中にsourceを変更しないでください。public source snapshotと実際に消費したdependency closureの記録は別です。
+If managing an existing complete [freeze format](../config/moss-source-freeze.json.example), specify `--source-freeze PRIVATE_JSON`. Do not modify source during building. The public source snapshot and records of actually consumed dependency closure are separate.
 
-`--prepare-only`はgatewayをbuildし、freezeと75-object core planを検査して終了します。nativeやcoreのcompile成功・実機成功を意味しません。今回の実機artifactはwrapperの下位build commandsで構築し、75 compile、native24 constructors／6 runtime providers、全量SELF readbackを確認しました。その後、wrapper自動freezeから全75 core／native／gatewayの完全buildとPS5起動・1024生成まで確認しました。
+`--prepare-only` builds the gateway, checks the freeze and 75-object core plan, then exits. It does not establish native/core compilation or hardware success. The hardware artifact was built with the wrapper's lower-level commands, verifying 75 compiles, native 24 constructors /6 runtime providers, and complete SELF readback. Subsequently, the wrapper's automatic freeze also completed all 75 core/native/gateway builds, PS5 startup, and 1024 generation.
 
-## 配備と検証
+## Deployment and verification
 
-通常版設定は[config/moss-service.json.example](../config/moss-service.json.example)です。旧`moss-native.json.example`は過去の12GiB／rank16構成であり、通常版へそのまま使わないでください。設定JSONのみでcompiled pool/VAを変えることはできません。
+Use [config/moss-service.json.example](../config/moss-service.json.example). The old `moss-native.json.example` describes a historical 12GiB/rank 16 configuration and must not be reused unchanged. Configuration JSON alone cannot change compiled pool/VA layout.
 
-[配置・起動手順](deployment.md)に従い、native Homebrewタイトルとして起動します。数値読み戻し後にAPI ready、最初の生成時にモデルをlazy loadします。初回1024をそのまま指定できます。host policy/HTTP試験やcompile成功はPS5 GPU実行の代わりにはなりません。[今回のPNGと計測](moss-service-20261021.md)を参照してください。
+Follow [deployment/startup](deployment.md) and launch as a native Homebrew title. API readiness follows numeric readback; the model lazy-loads on the first image request. The first request can specify 1024 directly. Host policy/HTTP tests and compilation do not replace PS5 GPU execution. See [PNGs and measurements](moss-service-20261021.md).
 
-過去のdefault-OFF診断は独立して保持しています。[DiT kernel比較](moss-dit-kernels-20261021.md)、[GPU時間測定](moss-dit-gpu-profile-20261021.md)、[メモリ案の比較](moss-turbo-memory-options-20261020.md)の固定要求と試行上限を、通常版へ持ち込まないでください。
+Historical default-OFF diagnostics remain independent. Do not import fixed requests/attempt caps from [DiT kernel comparisons](moss-dit-kernels-20261021.md), [GPU timing](moss-dit-gpu-profile-20261021.md), or [memory-option comparisons](moss-turbo-memory-options-20261020.md) into ordinary service mode.

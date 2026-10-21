@@ -1,32 +1,32 @@
 # MOSS Image API
 
-通常版は`--service-mode`でビルドします。任意prompt・seed、長方形、img2imgを受け付け、生成回数上限と初回256の条件はありません。[実機結果](moss-service-20261021.md)。推論は同じPS5のnative engineで実行します。
+Build the ordinary service with `--service-mode`. It accepts arbitrary prompts/seeds, rectangular images, and img2img, without attempt limits or a first 256 prerequisite. [Hardware results](moss-service-20261021.md). Inference runs in the same PS5's native engine.
 
-| 項目 | 現在の値 |
+| Item | Current value |
 |---|---|
-| OpenAI Images互換部分 | `http://<PS5_IP>:8193/v1` |
-| native非同期API | `http://<PS5_IP>:8192` |
+| OpenAI Images compatibility | `http://<PS5_IP>:8193/v1` |
+| Native asynchronous API | `http://<PS5_IP>:8192` |
 | model | `moss-image-sft` |
-| 出力 | PNG、1要求1枚。各辺64～1024、16の倍数。長方形可 |
-| prompt／negative_prompt | 各4096 UTF-8 bytes以下。prompt必須、negative省略時空文字 |
-| seed | -1または0～9223372036854775807。省略／-1はnativeが新規選択 |
-| Turbo4 profile | Euler、4 steps、CFG1、flow_shift5 |
-| 専用sigmas | `[1,0.910,0.717,0.024,0]`、二重のflow shiftなし |
-| adapter | NSFW0.7＋Turbo1.0合成rank144 F32、runtime multiplier1 |
+| Output | PNG, 1 image per 1 request. Each dimension 64–1024, multiple of 16; rectangles supported |
+| prompt / negative_prompt | At most 4096 UTF-8 bytes each. Prompt required; negative defaults to empty |
+| seed | -1 or 0–9223372036854775807. Omitted/-1 selects a new native seed |
+| Turbo4 profile | Euler, 4 steps, CFG1, flow_shift5 |
+| Dedicated sigmas | `[1,0.910,0.717,0.024,0]`, without double flow shift |
+| Adapter | Combined NSFW0.7 + Turbo1.0, rank 144 F32, runtime multiplier 1 |
 
-文章・被写体・negativeを自動追加しません。CFG1ではnegative側のDiT forwardを行いません。Turbo4 adapterに合わせたsampling条件は明示的なモデルprofileとして固定し、別steps／CFG／samplerへの自動変更はしません。HTTPでモデルファイルや任意LoRAを差し替える機能はありません。
+No text, subject, or negative instructions are inserted automatically. CFG 1 skips the negative DiT forward. Sampling compatible with the Turbo4 adapter is fixed as an explicit model profile; other steps/CFG/samplers are not selected automatically. HTTP cannot replace model files or arbitrary LoRAs.
 
-通常版では、文章長・tensor形状によって一部の最適化kernelを選ばず既存GPU経路へ戻ることを許可します。全kernelの使用実績を要求するのはdiagnostic buildだけです。起動時GPU読み戻し、実forward数、Q4 F32累積、有限値・GPU完了・容量の検査は通常版でも必須で、実際の選択数と未使用maskをログへ記録します。
+Ordinary service mode permits existing GPU fallbacks when text length/tensor shapes do not select some optimized kernels. Full kernel-path coverage is required only by diagnostic builds. Startup GPU readback, actual forward counts, Q4 F32 accumulation, finite values, GPU completion, and capacity checks remain mandatory; actual selections and the unused mask are logged.
 
-## 認証・状態
+## Authentication and status
 
-全APIはBearer認証、private IPv4の同じ/24内に限定します。tokenをURL、ログ、ソースへ入れないでください。署名画像URLはそのURL自体が画像専用アクセス権を持ちます。両processへ同じ値を別の一時ファイルで渡す[起動手順](deployment.md)を使用します。
+All APIs require Bearer authentication and the same private IPv4 /24. Do not put tokens in URLs, logs, or source. A signed image URL itself grants image-only access. Follow the [startup procedure](deployment.md), passing the same token value to both processes through separate temporary files.
 
-`GET /health`で`service_mode: true`、`requires_256_first: false`、`max_generation_attempts: null`、`model_profile: turbo4`を確認できます。`status: ready`はモデル読込済みという意味ではなく、`model_loaded`を別に確認します。`features.img2img`、`running_jobs`、`queued_jobs`も返します。
+`GET /health` reports `service_mode: true`, `requires_256_first: false`, `max_generation_attempts: null`, and `model_profile: turbo4`. `status: ready` does not mean the model is loaded; check `model_loaded` separately. It also reports `features.img2img`, `running_jobs`, and `queued_jobs`.
 
 ## text-to-image
 
-`POST /v1/images/generations`へJSONを送ります。初回から1024を指定できます。
+Send JSON to `POST /v1/images/generations`. The first request can specify 1024.
 
 ```json
 {
@@ -43,11 +43,11 @@
 }
 ```
 
-成功時は`created`、`data[0].b64_json`にPNGを返します。`response_format: url`は画像専用HMAC署名URL（最大1時間）です。`X-PS5-Native-Job-ID`と`X-PS5-Seed`ヘッダーからnative jobと実際のseedを取得できます。seedは64bit整数なので、JavaScript等では文字列として保持し、精度を落とさないでください。
+Success returns `created` and PNG data in `data[0].b64_json`. `response_format: url` returns an image-only HMAC-signed URL valid for at most 1 hour. Headers `X-PS5-Native-Job-ID` and `X-PS5-Seed` expose the native job and actual seed. Seeds are 64bit integers; preserve them as strings in JavaScript and similar environments to avoid precision loss.
 
-`GET /v1/models`、`GET /v1/models/moss-image-sft`、`GET /openapi.json`も利用できます。OpenAI Images互換はこの部分実装を指します。`seed`、`steps`、`cfg_scale`、`negative_prompt`、`flow_shift`、`sampler`は独自拡張です。streamingや全OpenAIモデルへの互換性を意味しません。`quality: auto/standard`でモデルを切り替えません。
+Also available: `GET /v1/models`, `GET /v1/models/moss-image-sft`, and `GET /openapi.json`. OpenAI Images compatibility refers to this partial implementation. `seed`, `steps`, `cfg_scale`, `negative_prompt`, `flow_shift`, and `sampler` are extensions. It does not imply streaming or compatibility with every OpenAI model. `quality: auto/standard` does not switch models.
 
-[Windows client](../scripts/Invoke-MossOpenAI.ps1)の例です。PowerShellから実際に5件の生成とPNG取得を確認しました。
+Example using the [Windows client](../scripts/Invoke-MossOpenAI.ps1). Actual PowerShell verification completed 5 generations and PNG downloads.
 
 ```powershell
 ./scripts/Invoke-MossOpenAI.ps1 -BaseUrl http://<PS5_IP>:8193/v1 -TokenFile D:/ps5-private/api-token -Prompt 'An anime illustration of an adult woman reading a book in a sunny library.' -Width 512 -Height 768 -Seed 17 -OutputDirectory D:/moss-output
@@ -55,26 +55,26 @@
 
 ## img2img
 
-`POST /v1/images/edits`、`multipart/form-data`にPNG/JPEGの`image`1個と`prompt`、上記のsamplingフィールド、`reference_mode: img2img`、`denoise_strength`を送ります。入力は8MiB以下、各辺2048以下。PS5で出力寸法へresizeし、PS5 Vulkan VAEでencodeします。外部URL入力、複数画像、マスク、inpainting、IP-Adapter、ControlNetは未対応です。
+Send `POST /v1/images/edits` as `multipart/form-data`, with 1 PNG/JPEG `image`, `prompt`, the sampling fields above, `reference_mode: img2img`, and `denoise_strength`. Input is limited to 8MiB and 2048 per dimension. PS5 resizes to output dimensions and encodes with PS5 Vulkan VAE. External URLs, multiple images, masks, inpainting, IP-Adapter, and ControlNet are unsupported.
 
-`denoise_strength`は0.01～1、既定0.5。4stepのsuffix選択で、連続的なnoise強度の調整ではありません。floatで[0.01,0.25)は実1 forward、[0.25,0.5)は2、[0.5,0.75)は3、[0.75,1]は4です。**0.75以上は初期sigma1で参照latentの寄与が0になり、実質的な再サンプリングになります。** 元画像の保持には0.75未満を使ってください。各区間内では同じsigma suffixです。
+`denoise_strength` ranges from 0.01 to 1, default 0.5. It selects a suffix of the 4step schedule, not a continuous noise-strength adjustment. Floating-point intervals [0.01,0.25), [0.25,0.5), [0.5,0.75), and [0.75,1] perform 1, 2, 3, and 4 forwards respectively. **At 0.75 or above, initial sigma 1 gives the reference latent 0 contribution, effectively resampling.** Use values below 0.75 to retain source content. Each interval uses the same sigma suffix.
 
 ```powershell
 ./scripts/Invoke-MossOpenAI.ps1 -BaseUrl http://<PS5_IP>:8193/v1 -TokenFile D:/ps5-private/api-token -Prompt 'An ink drawing.' -ReferenceImage D:/images/reference.png -DenoiseStrength 0.5 -Width 512 -Height 512 -Seed 12345 -OutputDirectory D:/moss-output
 ```
 
-結果の人物同一性や実写変換を保証する機能ではありません。[今回の出力](moss-service-20261021.md)、[前段のimg2img結果](moss-img2img-20261021.md)。
+This does not guarantee identity preservation or photorealistic conversion. See [current outputs](moss-service-20261021.md) and [earlier img2img results](moss-img2img-20261021.md).
 
-## native非同期API
+## Native asynchronous API
 
-`POST /api/generate`では`prompt`、`negative_prompt`、`width`、`height`、`steps`、`cfg_scale`、`seed`、`sampler`、`flow_shift`を受け付けます。202応答の`job_id`と解決済みseedを保存してください。`GET /api/jobs/{job_id}`はqueued/running/completed/failed、エラー、`generation_seconds`、実際の`actual_steps`、seed、寸法、メモリ指標、画像URL等を返します。`GET /api/images/{job_id}`でPNGを取得できます。
+`POST /api/generate` accepts `prompt`, `negative_prompt`, `width`, `height`, `steps`, `cfg_scale`, `seed`, `sampler`, and `flow_shift`. Save the `job_id` and resolved seed from the 202 response. `GET /api/jobs/{job_id}` returns queued/running/completed/failed, errors, `generation_seconds`, actual `actual_steps`, seed, dimensions, memory metrics, image URL, and other metadata. `GET /api/images/{job_id}` retrieves PNG data.
 
-img2imgは認証付き`POST /api/inputs`へPNG/JPEGのraw bodyを送り、201の`image_id`を`init_image_id`に指定します。`denoise_strength`も渡します。jobに`init_image_sha256`、`init_encode_seconds`を記録します。手動入力は参照数0・job完了後に`DELETE /api/inputs/{image_id}`で削除できます。gatewayは自分が作った入力を処理後にcleanupします。HTTPでローカルfile pathを受け付けません。
+For img2img, send raw PNG/JPEG data to authenticated `POST /api/inputs`, then use the 201 `image_id` as `init_image_id` and supply `denoise_strength`. Jobs record `init_image_sha256` and `init_encode_seconds`. After job completion with 0 references, manual inputs can be removed with `DELETE /api/inputs/{image_id}`. The gateway cleans up inputs it creates after processing. HTTP does not accept local file paths.
 
-## 直列処理・保存量・エラー
+## Serialization, storage, and errors
 
-GPU生成は直列です。job tableは32 slotsで完了slotを再利用するため、32回の累積上限ではありません。clientは空queueを確認してから1件だけPOSTし、タイムアウト時は既存jobとhealthを確認します。自動で再送しないでください。未知・非対応パラメータは拒否します。[OpenAPI](openapi.json)を参照してください。
+GPU generation is serialized. The job table has 32 slots and reuses completed slots; this is not a cumulative 32-job limit. Clients should verify an empty queue and POST only 1 job, checking the existing job and health after a timeout. Do not retry automatically. Unknown/unsupported parameters are rejected. See [OpenAPI](openapi.json).
 
-通常版は各processの`output`＋`jobs`に既定8GiBの保存枠を設けます。新規jobおよび未完了jobごとに32MiBの余白を見込み、収まらなければ生成前に507を返します。`--storage-limit-mib`で変更可。これは実ディスク空き容量の測定ではなく、既存ファイルや他アプリの消費までは防ぎません。生成物を自動削除せず、退避後の管理は[配置資料](deployment.md)に従います。入力storeは別に128MiB／32件／24時間cleanup、[ログ](logging.md)はbounded rotationです。
+Ordinary service mode allocates a default 8GiB allowance to each process's `output` + `jobs`. It accounts for 32MiB per new/unfinished job and returns 507 before generation if it would not fit. Configure with `--storage-limit-mib`. This does not measure physical free space or prevent consumption by existing files/other apps. Generated files are not deleted automatically; follow [deployment guidance](deployment.md) after archiving. Input storage has separate 128MiB /32-item /24-hour cleanup; [logs](logging.md) use bounded rotation.
 
-物理Direct、RSS、GPUラベル付きピークは重複し、合算できません。容量・有限値・GPU完了の検査を満たさない生成は失敗として返します。回数制限の撤去は、任意の要求が必ずメモリ内に収まる保証ではありません。
+Physical Direct, RSS, and GPU-labeled peaks overlap and cannot be summed. Generations that fail capacity, finite-value, or GPU-completion checks are reported as failures. Removing attempt limits does not guarantee arbitrary requests fit memory.

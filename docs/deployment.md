@@ -1,10 +1,10 @@
-# MOSS Imageの配置・起動・終了
+# MOSS Image deployment, startup, and shutdown
 
-通常版はnativeタイトル`PPSA99190`、native API8192、CPU gateway8193です。native Homebrewを起動できる環境と、このタイトルの登録が必要です。FW12.40で検証しています。一般的なタイトル登録・jailbreak installerは含めません。SELFをWebSrvのELF loaderへ送ってもnativeタイトルの起動にはなりません。
+Ordinary service uses native title `PPSA99190`, native API 8192, and CPU gateway 8193. A native Homebrew launch environment and title registration are required. Verified on FW 12.40. No general-purpose title-registration/jailbreak installer is included. Sending a SELF to WebSrv's ELF loader does not launch a native title.
 
-## ファイル配置
+## File placement
 
-タイトルの実体は`/data/ai/native-moss-image-sft/PPSA99190`に配置し、既存native launcherのmount/登録を使います。system領域や他タイトルを上書きしません。
+Place title files at `/data/ai/native-moss-image-sft/PPSA99190`, using existing native-launcher mounts/registration. Do not overwrite system areas or other titles.
 
 ```text
 PPSA99190/
@@ -27,42 +27,42 @@ PPSA99190/
     output/
 ```
 
-[通常版config](../config/moss-service.json.example)を`ai-runtime/config.json`へ配置します。[モデルlock](../config/models.lock.json)と[adapter合成](moss-turbo4-reproduction.md)に従い、転送前後の全量size/SHAを確認します。runtime libraryの配布条件は別途確認してください。
+Deploy the [service configuration](../config/moss-service.json.example) as `ai-runtime/config.json`. Follow the [model lock](../config/models.lock.json) and [adapter composition](moss-turbo4-reproduction.md); verify full sizes/SHAs before and after transfer. Check runtime-library redistribution terms separately.
 
-物理Direct10GiB、内側予算9.5GiB、pool外reserve1GiB、F32 rank144 adapter/runtime1をcompiled配置と一致させます。旧12GiB/rank16設定を使い回さないでください。実行ファイルと設定をprivate backupへ保存し、転送済み完成ファイルを全量照合してから切り替えます。
+Match the compiled layout: physical Direct 10GiB, inner budget 9.5GiB, outside-pool reserve 1GiB, F32 rank 144 adapter/runtime 1. Do not reuse old 12GiB/rank 16 settings. Keep executables/configuration in a private backup and verify complete transferred files before switching.
 
-## 所有者確認とtokenの受け渡し
+## Owner verification and token handoff
 
-nativeはUID1のタイトルとして起動します。`ai-runtime`とそのconfig/logs/jobs/output等のdirectoryを実際のUID1所有・0700、config.jsonを0600にします。symlinkを使わず、既存launcher/管理shellで所有者と実体を確認します。native互換statのowner欄が取得できない場合、UID0という報告を実際のownerだと解釈しません。外部の信頼できる観測でUID1を確かめるbootstrapを保持します。
+Native starts as a UID 1 title. Set `ai-runtime` and its config/logs/jobs/output directories to actual UID 1 ownership and 0700; config.json to 0600. Avoid symlinks and verify ownership/real paths using the existing launcher/management shell. If native compatibility stat cannot report ownership, do not interpret a reported UID 0 as the actual owner. Retain bootstrap that verifies UID 1 through trusted external observation.
 
-1. Windows側のprivateファイルに十分な乱数tokenを作り、画面・ログ・URL・引数に出さず保持します。clientへ渡すtokenもこのファイルです。native/gatewayは同じ値を使用します。
-2. 他のGPUタイトルが終了済み、同じbootのownerと既存serviceが正常であることを確認します。**nativeの`ai-runtime/config/api-token`が存在しない状態で**登録済みnative launcherからタイトルを1回起動します。
-3. 新しく作られたPID/時刻付きbootstrap journalとowner witnessが今回のUID1/PPSA99190 processに属すること、runtime directoryのowner/mode、witnessの全byte identityを外部から照合します。token待機は最大5分で、まだGPU/APIを始めません。古いjournalやPIDだけで確認を省略しません。
-4. 確認できたprocess用に、同じtokenの一時ファイルを`ai-runtime/config/api-token`へUID1/0600で渡します。nativeが消費して削除し、memoryに保持します。起動前にtokenを置くとbootstrap条件に合いません。timeoutしたprocessへ繰り返し投入しないでください。
-5. 起動時のGPU readback、実pool確保、engine readyを確認します。初回のモデルlazy loadは画像要求時です。
+1. Generate a sufficiently random token in a private Windows file, without exposing it on screen, in logs, URLs, or arguments. The client reads this file too. Native and gateway use the same value.
+2. Confirm other GPU titles have exited and the current-boot owner/existing services are healthy. Launch the title 1 time through the registered native launcher **with no native `ai-runtime/config/api-token` file present**.
+3. Externally verify that the newly created PID/timestamped bootstrap journal and owner witness belong to this UID 1/PPSA99190 process, along with runtime ownership/mode and the witness's full byte identity. Token wait lasts at most 5 minutes; GPU/API work has not started. Do not skip checks based on an old journal or PID.
+4. For that verified process, hand off a temporary file containing the same token at `ai-runtime/config/api-token` with UID 1/0600. Native consumes/deletes it and retains it in memory. Placing the token before launch violates bootstrap conditions. Do not repeatedly supply it to a timed-out process.
+5. Verify startup GPU readback, actual pool allocation, and engine readiness. Initial model lazy-loading occurs on the image request.
 
-この手順には既存Homebrew環境のprocess/UID/起動・mount管理機能が必要です。個人環境用のPIDやnonce、root controllerを公開installerとして使い回すことはしません。所有者を検証できる管理機能がない場合は、owner guardを外すのでなく、その起動環境に合うprovisionerが必要です。
+This requires process/UID/startup/mount management in the existing Homebrew environment. Do not reuse personal PIDs/nonces or a root controller as a public installer. If the environment cannot verify ownership, provide a suitable provisioner rather than removing the owner guard.
 
 ## CPU gateway
 
-`/data/ai/moss-openai-gateway`にowner専用のconfig/logs/jobs/output等を用意し、`config/api-token`へnativeと同じ値をgateway owner/0600で配置します。gatewayは起動時に読み取って削除します。gatewayはGPUタイトルではなくCPU ELFなので、既存WebSrvの`/elfldr`からこのELFを1回だけ起動できます。
+Prepare owner-only config/logs/jobs/output directories at `/data/ai/moss-openai-gateway`; place the same token in `config/api-token` with gateway-owner/0600 permissions. Gateway reads/deletes it at startup. It is a CPU ELF, not a GPU title, so existing WebSrv `/elfldr` can launch this ELF 1 time.
 
 ```text
 <gateway.elf> --root /data/ai/moss-openai-gateway --bind auto --port 8193
 ```
 
-bindの既定はautoです。private IPv4を検出できなければ終了するので、`--bind <PS5_PRIVATE_IP>`を明示します。native/gatewayが同じLAN addressを使用する必要があります。gatewayはそのaddressの同じPS5 native8192へだけ転送し、生成POSTを再送しません。既存WebSrv8080は維持します。
+Bind defaults to auto. If private IPv4 detection fails, startup exits; specify `--bind <PS5_PRIVATE_IP>`. Native and gateway must use the same LAN address. Gateway forwards only to that address's same-PS5 native 8192 and never retries generation POSTs. Existing WebSrv 8080 is preserved.
 
-両`GET /health`をBearer認証で確認し、`service_mode:true`、`requires_256_first:false`、`max_generation_attempts:null`、ready・空queueを確認します。[client](../scripts/Invoke-MossOpenAI.ps1)から初回1024を直接生成できます。固定promptや先行256の操作はありません。
+Check both authenticated `GET /health` endpoints for `service_mode:true`, `requires_256_first:false`, `max_generation_attempts:null`, ready state, and empty queues. The [client](../scripts/Invoke-MossOpenAI.ps1) can request 1024 directly on the first run. No fixed prompt or preceding 256 operation is required.
 
-## 保存量と運用
+## Storage and operations
 
-通常版は各processのoutput＋jobsに既定8GiBの保存枠を設けます。`--storage-limit-mib`で起動時変更可。未完了jobと次jobごとに32MiBを予約計上し、収まらなければ生成前507です。物理空き容量の取得・保証ではありません。gateway側にもPNG copyとmetadataがあるため、両rootを管理してください。input storeと[bounded logs](logging.md)は別枠です。
+Each process has a default 8GiB allowance for output + jobs, configurable at startup with `--storage-limit-mib`. Accounting reserves 32MiB per unfinished/next job and returns 507 before generation if insufficient. This neither measures nor guarantees physical free space. Gateway also stores PNG copies/metadata; manage both roots. Input storage and [bounded logs](logging.md) are separate.
 
-PNGを自動削除しません。保存枠に近づいたらclientから新規要求を止め、job完了・空queueを確認し、必要なPNG/metadataをPC等へ全量取得してから、停止中に対象rootの古いoutput/job組だけを管理します。rootそのもの、現用token/config、他タイトルのデータを再帰削除しないでください。上限を引き上げる前にストレージ空きを確認します。
+PNGs are not deleted automatically. Near the allowance, stop new client requests, verify completion/empty queues, download required PNGs/metadata completely, then manage only old output/job pairs in the relevant root while stopped. Do not recursively delete the root itself, active token/configuration, or other titles' data. Check free space before raising limits.
 
-## 終了・復旧
+## Shutdown and recovery
 
-処理完了・空queue・GPU完了を確認し、認証付き`POST /api/admin/shutdown`をgateway、nativeへそれぞれ1回送ります。202は終了要求の受理であり、終了済みの証明ではありません。別のprocess観測で両owner不在と同bootのidle、既存serviceを確認します。次回は新しいowner検証と一時token受け渡しを行います。
+Verify processing finished, queues empty, and GPU completion; send authenticated `POST /api/admin/shutdown` 1 time each to gateway and native.202 acknowledges a shutdown request, not completed termination. Independently verify both owners absent, same-boot idle, and existing services. Next launch requires new owner verification and temporary-token handoff.
 
-タイムアウトしても自動再送せず、healthと既存jobを確認します。GPU状態不明・fault retention・終了拒否のときは、force freeやkillを正常終了の代用にしません。既存の信頼できるOS close/復旧経路を使い、別GPUタイトルを重ねません。今回の5件後は正常終了、両owner不在の独立観測、同artifactの再起動と全GPUゲートを確認しました。
+On timeout, check health/existing jobs without automatic retry. If GPU state is unknown, faults retained, or shutdown rejected, do not substitute force-free or kill for normal shutdown. Use trusted existing OS close/recovery and do not overlap another GPU title. After these 5 requests, normal shutdown, independent absence of both owners, same-artifact restart, and all GPU gates were verified.

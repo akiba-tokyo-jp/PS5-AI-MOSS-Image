@@ -1,78 +1,78 @@
-# DiTの不変計算再利用とF32 Vulkan融合
+# DiT invariant-computation reuse and F32 Vulkan fusion
 
-2026-10-20 JST。4項目を実装し、PS5実機で256→1024を生成しました。同じcoreから最適化を無効にした対照版も測り、**1024は51.146425秒→47.760891秒（6.62%短縮）**でした。両サイズとも、対照版・以前のTurbo4基準とPNGが全バイト一致しました。各構成・各サイズ1回の観測です。
+2026-10-20 JST.4 changes were implemented and generated 256→1024 on PS5. A control disabling optimizations in the same core measured **51.146425→47.760891 seconds at 1024 (6.62% reduction)**. Both sizes were byte-identical to the control and earlier Turbo4 baseline. Each configuration/size was observed 1 time.
 
-![実機256出力。今回の両構成とも同一PNG](images/moss-turbo4-upload-256-20261020.png)
+![Hardware 256 output; identical PNG for both configurations](images/moss-turbo4-upload-256-20261020.png)
 
-![実機1024出力。今回の両構成とも同一PNG](images/moss-turbo4-upload-1024-20261020.png)
+![Hardware 1024 output; identical PNG for both configurations](images/moss-turbo4-upload-1024-20261020.png)
 
-## 実装した処理
+## Implemented changes
 
-| 対象 | 変更と確認範囲 |
+| Target | Change and verification scope |
 |---|---|
-| DiT内部のtext projection・2 text-refine層・RoPE | 生成1件の最初に計算し、後の3 forwardでGPU上の結果を再利用。Qwen conditioning cacheとは別。時刻・画像で変わる42層の出力は再利用しない |
-| SiTU | 元の9個のpointwise graph操作をF32 Vulkan shaderへ統合。活性化の式・演算順序を維持 |
-| Norm・modulation・residual・Q/K RoPE | RMSのreduction自体は従来どおり。重み乗算＋modulation、gated residual、Q/K重み乗算＋RoPEの読み書きを融合 |
-| LoRA | 倍率1のSCALEを省略し、base出力へのADD、独立q/k/vのpacked出力を融合。Q4行列積本体のepilogue融合は未実装 |
+| DiT text projection, 2 text-refine layers, RoPE | Compute at the start of 1 generation and reuse GPU results for the next 3 forwards. Separate from Qwen conditioning cache. Outputs of 42 layers depending on time/image are not reused |
+| SiTU | Fuse the original 9 pointwise graph operations into an F32 Vulkan shader, preserving the activation formula and operation order |
+| Norm, modulation, residual, Q/K RoPE | RMS reduction stays unchanged. Fuse weight multiplication + modulation, gated residual, and Q/K weight multiplication + RoPE reads/writes |
+| LoRA | Omit SCALE at multiplier 1; fuse ADD into base output and packed output for independent q/k/v. Q4 matrix-product epilogue fusion remains unimplemented |
 
-cacheは同じrunner・モデル・adapter・backendの1生成内だけです。形状とconditioning値の完全一致を検査し、新しい生成の開始時とGPU完了確認後に破棄します。跨る要求の再利用、近似denoising cache、step省略、CPUへのDiT移動は行いません。
+The cache is limited to 1 generation with the same runner/model/adapter/backend. Shapes and conditioning values must match exactly. It is cleared at new-generation start and after verified GPU completion. No cross-request reuse, approximate denoising cache, skipped steps, or CPU DiT offload is used.
 
 ~~~mermaid
 flowchart LR
-  Q[PS5 CPU Qwen] --> T[Text projectionと2 refine層]
-  T --> C[1生成内のGPU cache]
-  R[1生成内で1回のRoPE] --> D[4 DiT forward]
+  Q[PS5 CPU Qwen] --> T[Text projection and 2 refine layers]
+  T --> C[GPU cache within 1 generation]
+  R[RoPE 1 time per 1 generation] --> D[4 DiT forwards]
   C --> D
-  D --> F[F32 SiTU・norm・residual・LoRA融合]
+  D --> F[F32 SiTU, norm, residual, LoRA fusion]
   F --> V[PS5 Vulkan VAE]
-  V --> P[PNGとOpenAI互換API]
+  V --> P[PNG and OpenAI-compatible API]
 ~~~
 
-## 同じ条件での測定
+## Identical-condition measurements
 
-MOSS-Image-SFT Q4_K、Qwen3.5-9B Q4_K_M、FLUX.2 small VAE、合成rank144 **F32** adapter、NSFW0.7＋Turbo1.0、runtime倍率1です。4 Euler steps／CFG1、seed20261020、固定prompt、author sigmas [1.0,0.910,0.717,0.024,0.0]、二重shiftなし。FFN分割・F16 LoRA storage・Spectrum・一般fusionはOFFです。全learned推論はPS5内で実行しています。
+MOSS-Image-SFT Q4_K, Qwen3.5-9B Q4_K_M, FLUX.2 small VAE, combined rank 144 **F32** adapter, NSFW0.7 + Turbo1.0, runtime multiplier 1. 4 Euler steps / CFG 1, seed 20261020, fixed prompt, author sigmas [1.0,0.910,0.717,0.024,0.0], no double shift. FFN chunking, F16 LoRA storage, Spectrum, and general fusion are OFF. All learned inference runs on PS5.
 
-| 計測項目 | 同じcoreの最適化なし | 4項目有効 | 差 |
+| Metric | Same core, optimizations disabled | All 4 enabled | Difference |
 |---|---:|---:|---:|
-| 256初回、モデルlazy load込み | 71.354991秒 | 69.275742秒 | −2.079249秒、−2.91% |
-| 同プロセスの256後1024初回 | 51.146425秒 | 47.760891秒 | −3.385534秒、−6.62% |
-| 1024 DiT graph | 44.557450秒 | 41.207966秒 | −3.349484秒、−7.52% |
-| 1024 other runners graph | 5.985294秒 | 5.994667秒 | ＋0.009373秒 |
-| 1024 DiTのdispatch記録呼出 | 12,556回 | 7,232回 | −5,324回 |
-| 1024 DiTのfence wait呼出 | 2,916回 | 1,867回 | −1,049回 |
+| First 256, including lazy loading | 71.354991 s | 69.275742 s | −2.079249 s, −2.91% |
+| First 1024 after 256 in the same process | 51.146425 s | 47.760891 s | −3.385534 s, −6.62% |
+| 1024 DiT graph | 44.557450 s | 41.207966 s | −3.349484 s, −7.52% |
+| 1024 other runners graph | 5.985294 s | 5.994667 s | ＋0.009373 s |
+| 1024 DiT dispatch-record calls | 12,556 | 7,232 | −5,324 |
+| 1024 DiT fence-wait calls | 2,916 | 1,867 | −1,049 |
 
-上2行はnative jobの生成時間です。graphとdriver呼出の時間はCPU wall計測で、包含関係があり加算できません。fence waitはGPU実行待ちを含み、その全量が削除可能な同期負担という意味ではありません。1024は単独coldでも2回目の1024でもありません。温度・clock、OS disk cacheを統制しておらず、平均・分散や各最適化単独の寄与は未測定です。
+The first 2 rows are native-job generation times. Graph/driver-call times are CPU wall measurements with nested relationships and cannot be added. Fence waits include GPU execution and are not entirely removable synchronization overhead.1024 was neither standalone cold nor a run 2 at 1024 run. Temperature/clocks/OS disk cache were uncontrolled; means, variance, and individual optimization contributions were not measured.
 
-## メモリ
+## Memory
 
-物理Direct予約10GiB、推論予算9.5GiB、pool外reserve1GiBを維持しました。今回の高速化で予約量は縮小していません。
+Physical Direct reservation 10GiB, inference budget 9.5GiB, and outside-pool reserve 1GiB were preserved. This speedup did not reduce reservation size.
 
-| 1024の記録 | 対照版 | 4項目有効 |
+| 1024 record | Control | All 4 enabled |
 |---|---:|---:|
-| owned Direct data高水位 | 5,934,579,712B | 6,107,971,584B |
-| 生成後owned Direct data | 4,749,066,240B | 4,749,066,240B |
-| API GPU-labelled高水位 | 5,968,183,296B | 6,137,233,408B |
-| API CPU/process RSS高水位 | 11,578,556,416B | 11,540,660,224B |
+| Owned Direct data high-water mark | 5,934,579,712B | 6,107,971,584B |
+| Post-generation owned Direct data | 4,749,066,240B | 4,749,066,240B |
+| API GPU-labeled high-water mark | 5,968,183,296B | 6,137,233,408B |
+| API CPU/process RSS high-water mark | 11,578,556,416B | 11,540,660,224B |
 
-owned peakは173,391,872B（165.359375MiB）増えました。融合出力の非in-place allocation等を含む構成全体の差で、cache単体の量ではありません。GPU完了後にcacheを破棄し、生成後の使用量は同値へ戻りました。CPU/GPU-labelled値とowned Directは重複する別の量で、足して物理RAM／専用VRAMにはできません。長期のメモリ安定性はこの2生成だけでは証明しません。
+Owned peak increased 173,391,872B (165.359375MiB). This is a whole-configuration difference including non-in-place fused-output allocation, not cache size alone. Cache was destroyed after GPU completion and final usage returned to the same value. CPU/GPU-labeled and owned Direct values overlap and cannot be summed as physical RAM/dedicated VRAM. These 2 generations do not establish long-term memory stability.
 
-## 数値と実行の検証
+## Numeric and execution verification
 
-- 既存14数値ゲート、Turbo3、bounded-uploadゲートを維持。追加の融合16ケースは125,436値を元のGPU graphと比較し、非有限値0・不一致0・最大絶対誤差0でした。許容差は従来どおりです。
-- Q/K RoPEの1ケースでは、別のVkBufferが同じGGML仮想アドレスを持つ配置を実際に使用しました。入出力の重なりは実VkBufferとbyte範囲で検査します。sentinelアドレスの一致だけでは重なりと判定しません。
-- 各生成で4つの有限DiT出力、Q4 F32記録672／F16累積0／invalid0、LoRA504 tensors適用／skip0、GPU DiT・flash attention・VAE完了を確認しました。
-- 各生成のcache miss1・hit3、RoPE構築1、SCALE省略1,008を記録しました。SiTU170、norm-modulation各168、residual336、Q/K RoPE340、LoRA ADD504、q/k/v pack168の実GPU記録があります。2枝packは合成fixtureで検証済みですが、この選定adapterの本番graphでは選ばれていません。
-- native GETとOpenAI互換APIのPNGを照合し、完全decodeと目視確認を行いました。256 SHAは be9e6ebad5da8ee7a4e536a40e905307a2aa24bcced8e86b600af9fa0aaa2ad7、1024 SHAは 9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a です。
-- ホスト検査はpolicy39、モデル形状graph6,913、storage重なり判定200,007項目。モデルweights・learned推論・GPU実行をホスト検査に使用していません。
+- Existing 14 numeric gates, Turbo3, and bounded-upload gates remained.16 added fusion cases compared 125,436 values with original GPU graphs: 0 nonfinite values, 0 mismatches, maximum absolute error 0. Existing tolerances were unchanged.
+- 1 Q/K RoPE case actually used different VkBuffers sharing the same GGML virtual address. Overlap is checked using actual VkBuffer identity and byte ranges, not sentinel-address equality alone.
+- Each generation verified 4 finite DiT outputs, 672 Q4 F32 records /0 F16 accumulation /0 invalid, 504 LoRA tensors applied /0 skipped, and completed GPU DiT/Flash Attention/VAE.
+- Each generation recorded cache miss 1/hit 3, RoPE construction 1, and 1,008 omitted SCALE operations. Actual GPU records include SiTU 170, each norm-modulation 168, residual 336, Q/K RoPE 340, LoRA ADD 504, and q/k/v pack 168. 2-branch packing passed synthetic fixtures but was not selected by this adapter's actual graph.
+- Native-GET/OpenAI-compatible PNGs were compared, fully decoded, and visually checked.256 SHA: be9e6ebad5da8ee7a4e536a40e905307a2aa24bcced8e86b600af9fa0aaa2ad7;1024 SHA:9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a.
+- Host checks covered policy 39, model-shape graph 6,913, and storage-overlap 200,007 cases. They used no model weights, learned inference, or GPU execution.
 
-両構成とも各要求1POST、自動再送0です。通常API終了後に独立観測でnative/gateway不在、同boot、既存サービス・登録・モデルmetadataの維持を確認しました。firmware更新、システム領域の変更、曖昧なGPU資源の手動解放はありません。
+Both configurations sent 1 POST per request with 0 automatic retries. After normal API shutdown, independent observation confirmed native/gateway absent, same boot, and preserved existing services, registration, and model metadata. No firmware update, system-area change, or manual release of ambiguous GPU resources occurred.
 
-## ビルドと残る範囲
+## Build and remaining scope
 
-[ビルド手順](build.md)のTurbo4＋upload＋F32 parentに、coreの --moss-dit-optimizations とnativeの --moss-dit-optimization-mask 15 を追加します。mask0は同じcoreでの対照版、1／3／7は累積した限定比較用です。既定はOFFで、production admission0・固定要求・最大4試行・実容量／有限値／GPU完了／所有権の条件は維持します。
+Add core --moss-dit-optimizations and native --moss-dit-optimization-mask 15 to the Turbo4 + upload + F32 parent in [build instructions](build.md). mask 0 is the same-core control; 1/3/7 are cumulative limited comparisons. Default is OFF. Production admission 0, fixed requests, maximum 4 attempts, actual capacity, finite values, GPU completion, and ownership conditions remain.
 
-実装箇所は [model/cache](../patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp)、[typed opsとstorage判定](../patches/stable-diffusion/overlay/src/model/diffusion/moss_dit_ops.hpp)、[Vulkan shader](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp)、[GPU数値検査](../native/app/moss_dit_gate.inc)、[LoRA](../patches/stable-diffusion/overlay/src/model/adapter/lora.hpp)です。
+Implementation: [model/cache](../patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp), [typed ops/storage checks](../patches/stable-diffusion/overlay/src/model/diffusion/moss_dit_ops.hpp), [Vulkan shader](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp), [GPU numeric checks](../native/app/moss_dit_gate.inc), and [LoRA](../patches/stable-diffusion/overlay/src/model/adapter/lora.hpp).
 
-設計参考はApache-2.0の [vLLM-Omni MOSS実装](https://github.com/vllm-project/vllm-omni/blob/942a5daa6c094615812ed89749ef07da96b8edab/vllm_omni/diffusion/models/mossimage/ops.py)と同revisionのtransformerです。CUDA/Triton・BF16コードの直接移植ではなく、現在のPS5 F32演算順序に合わせたGGML/GLSL実装です。KohakuMossTrainerとNunchakuのコードは取り込んでいません。[出典](moss-optimization-provenance.json)を参照してください。
+Design references are the Apache-2.0 [vLLM-Omni MOSS implementation](https://github.com/vllm-project/vllm-omni/blob/942a5daa6c094615812ed89749ef07da96b8edab/vllm_omni/diffusion/models/mossimage/ops.py) and same-revision transformer. This is GGML/GLSL matching current PS5 F32 operation order, not a direct CUDA/Triton/BF16 port. No KohakuMossTrainer or Nunchaku code was incorporated. See [provenance](moss-optimization-provenance.json).
 
-各項目単独の速度、任意prompt・形状、長時間の連続生成、Q4 GEMM epilogue統合は未検証または未実装です。今回の画像一致や6.62%をそれらへ一般化しません。
+Individual change timings, arbitrary prompts/shapes, long-running generation, and Q4 GEMM epilogue integration are unverified or unimplemented. PNG equality and 6.62% are not generalized to them.

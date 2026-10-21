@@ -1,23 +1,23 @@
-# 公開前の確認（2026-10-20）
+# Pre-publication checks (2026-10-20)
 
-2026-10-21通常版への更新：[service modeの実機5件](moss-service-20261021.md)で初回1024、任意文章・seed・長方形、img2img、5件目を確認しました。以下の固定要求・最大4試行は過去のdiagnostic buildの説明です。通常版は[API](api.md)と[build](build.md)を参照してください。新たな公開検査は389 staged files、388 source inventory files、19画像記録がPASSしました。
+2026-10-21 service update: [5 hardware requests](moss-service-20261021.md) verified first 1024, arbitrary text/seeds/rectangles, img2img, and generation 5. Fixed-request/max 4 limits below describe past diagnostics. Ordinary service uses [API](api.md)/[build](build.md). New publication checks passed 389 staged files, 388 source-inventory files, and 19 image records.
 
-2026-10-21追記：[DiT kernel4項目](moss-dit-kernels-20261021.md)を実装・実機検証し、READMEと検証JSONを更新しました。公開checkerはstaged368 files、source inventory367 files、画像の検証記録11件を確認し、公開file policy・Markdownリンク・埋込OpenAPI一致がPASSでした。tokenやそのhash、モデルweights、rawログ、SELFは公開treeに含めません。新policy94、公開C++ selector239、SPIR-V validationもPASSです。実機の生成・GPU数値・メモリ・正常終了／採用版の待機復帰はリンク先の範囲を参照してください。以下は前段時点の検査です。
+2026-10-21 update: implemented/verified [4 DiT kernel changes](moss-dit-kernels-20261021.md); README/verification JSON updated. Publication checker passed 368 staged files, 367 inventory files, 11 image records, file policy, Markdown links, and embedded OpenAPI equality. Tokens/their hashes, weights, raw logs, and SELF are excluded. New policy 94, public C++ selector 239, and SPIR-V validation passed. Hardware generation/numerics/memory/shutdown/adopted-idle scope is in the linked report. Below records earlier checks.
 
-公開するソースと資料の整合性を確認しました。以下はWindowsでのホスト検査で、モデル推論や新しいPS5生成テストではありません。PS5の生成時間・画像・メモリは[実測比較](moss-turbo-memory-options-20261020.md)と[検証記録](verification.json)を参照してください。
+Public source/document consistency was checked on Windows, without inference or new PS5 generation. PS5 times/images/memory are in [comparisons](moss-turbo-memory-options-20261020.md) and [verification](verification.json).
 
-| 検査 | 結果 |
+| Check | Result |
 |---|---|
-| native／OpenAI互換APIのloopback検査 | 134項目PASS。認証、モデル不一致の拒否、1回だけの転送、エラー伝達、埋込OpenAPI一致を確認 |
-| Turbo4＋bounded uploadのbuild contract | 5テストPASS |
-| FFN分割のprofile／recipe検査 | 90項目PASS |
-| F16 storageのpolicy／receipt検査 | policy61項目、F32／F16各42項目PASS。GPU実行を含まない |
-| dashboard／backend health | 描画領域guardと応答parser10項目PASS |
-| DiT policy・形状・storage判定 | policy39、実モデル形状graph6,913、storage重なり200,007項目PASS。ホストでlearned推論・GPU実行なし |
-| staged公開ファイル検査 | 機密情報・個人path・モデル／実行binaryの混入、source inventory、PNG、Markdownリンク、埋込schemaを確認 |
+| Native/OpenAI-compatible loopback | 134 passed: authentication, model mismatch rejection, 1-time forwarding, error propagation, embedded OpenAPI equality |
+| Turbo4 + bounded-upload build contract | 5 tests passed |
+| FFN-chunk profile/recipe | 90 passed |
+| F16-storage policy/receipts | Policy 61; F32/F16 42 each passed; no GPU execution |
+| Dashboard/backend health | Rendering-region guards and 10 parser checks passed |
+| DiT policy/shapes/storage | Policy 39, actual-shape graph 6,913, overlap 200,007 passed; no host inference/GPU execution |
+| Staged publication files | Checked secrets/personal paths/model/executable exclusion, source inventory, PNGs, Markdown links, embedded schema |
 
-[公開検査ツール](../tools/check_publication.py)は作業ファイルだけでなくGitのstaged blobを読みます。[source inventory](source-snapshot.json)は公開ファイルのsize／SHA一覧です。実行ファイルのビルド証明や、消費したSDK／依存header全体のfreezeとは区別します。
+The [publication checker](../tools/check_publication.py) reads staged Git blobs, not just working files. [Source inventory](source-snapshot.json) lists public file sizes/SHAs, distinct from executable build proof or full consumed SDK/header freezes.
 
-公開対象は固定条件の10GiB Turbo4＋upload trialです。任意prompt向けの通常運用試作は初回要求をHTTP507で生成前に拒否したため除外しました。試作は通常APIで終了し、独立した読み取り観測でGPUアプリ不在・既存サービスと登録・モデルmetadata維持を確認しました。ファームウェア更新やシステム領域の変更は行っていません。
+This historical release targets fixed-condition 10GiB Turbo4 + upload trials. An arbitrary-prompt prototype was excluded after its first request received HTTP507 before generation. Normal API shutdown and independent read-only observation confirmed no GPU app and preserved services/registration/model metadata. No firmware/system-area changes occurred.
 
-追加DiT最適化の実機検証は[専用資料](moss-dit-fusion-20261020.md)へ記録しました。同coreのON/OFF双方で256→1024各1枚、既存ゲートと追加16ケース、PNG一致、通常終了後の独立観測を確認しています。
+Additional DiT hardware verification is in the [dedicated report](moss-dit-fusion-20261020.md): same-core ON/OFF each generated 1 image per 256→1024, passed existing gates/16 added cases, matched PNGs, and confirmed independent idle after normal shutdown.

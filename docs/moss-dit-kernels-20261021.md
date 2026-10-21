@@ -1,62 +1,62 @@
-# DiT kernel 4項目の実装と1024実機比較
+# 4 DiT kernel changes and 1024 hardware comparison
 
-2026-10-21 JST。4項目を実装し、PS5で256→1024→1024を各構成で生成しました。**1024平均は47.481390秒→45.127473秒、4.96%短縮**しました。採用構成は既存DiT optimization mask15に、新しいkernel mask15とAttention occupancy調整を加えた版です。通常終了・process不在の独立観測後、同じ検証済みSELFを新しいプロセスで起動し、全数値検査とジョブなしのnative／OpenAI互換gatewayを確認しました。復帰後の追加生成POSTはありません。
+2026-10-21 JST. Implemented 4 changes and generated 256→1024→1024 for each configuration on PS5. **Mean 1024 time decreased from 47.481390 to 45.127473 seconds, 4.96%.** The adopted configuration adds new kernel mask 15 and Attention occupancy adjustment to existing DiT optimization mask 15. After normal shutdown and independently verified process absence, the same verified SELF launched in a new process; all numeric checks and idle native/OpenAI-compatible gateway were confirmed. No generation POST followed restoration.
 
-![採用版のPS5 1024出力](images/moss-dit-kernels-1024-20261021.png)
+![Adopted PS5 1024 output](images/moss-dit-kernels-1024-20261021.png)
 
-## 実装と採用判断
+## Implementation and adoption decisions
 
-| 優先 | 変更 | 判断 |
+| Priority | Change | Decision |
 |---|---|---|
-| 1 FFN | Q4_Kを既存F16 scratchへGEMMごとに一度展開し、F32累積の行列積で再利用。元のQ4 weightsは維持 | 採用。対照平均47.481390秒→46.543395秒 |
-| 2 Attention | head128・F16 K/V・F32累積の限定形状で既存shared-KV shaderを選択。さらにこの経路だけAMD向けの未使用LDS occupancy制限を除去 | 元の制限を残した案は平均51.578863秒へ悪化し不採用。調整版はRMS版45.739973秒→45.127473秒となり採用 |
-| 3 QKV／LoRA | QKV/OもQ4 predecode。独立q/k/vを保ち、LoRA加算・packを4要素/threadで処理 | 採用。FFN版46.543395秒→46.126669秒 |
-| 4 RMS／変換 | 512-lane F32 RMS reductionとweight／modulationまたはQK RoPEを融合。epsilon1e-6とreduction topologyを維持 | 採用。QKV版46.126669秒→45.739973秒 |
+| 1 FFN | Decode Q4_K once per GEMM into existing F16 scratch; reuse with F32-accumulating matrix products. Preserve original Q4 weights | Adopted: control mean 47.481390→46.543395 seconds |
+| 2 Attention | Select existing shared-KV shader for limited head 128/F16 K/V/F32-accumulation shapes, then remove unused AMD LDS occupancy padding only on this path | Original-limit candidate slowed to 51.578863 seconds mean and was rejected. Adjusted version improved RMS version 45.739973→45.127473 seconds and was adopted |
+| 3 QKV/LoRA | Q4 predecode for QKV/O; retain independent q/k/v; process LoRA addition/packing with 4 elements/thread | Adopted: FFN version 46.543395→46.126669 seconds |
+| 4 RMS/conversion | Fuse 512-lane F32 RMS reduction with weight/modulation or QK RoPE; retain epsilon 1e-6 and reduction topology | Adopted: QKV version 46.126669→45.739973 seconds |
 
-上の寄与は累積構成同士の比較です。全組合せの独立寄与や統計的な有意差ではありません。Attentionのoccupancy調整は対象shaderのworkgroup資源に限定し、GPU driver・OSメモリ枠・物理Direct予約を変更しません。
+These contributions compare cumulative configurations, not independent contributions across all combinations or statistical significance. Attention occupancy adjustment is limited to the target shader's workgroup resources; it does not change the GPU driver, OS memory allowance, or physical Direct reservation.
 
-## 同条件の計測
+## Identical-condition timing
 
-MOSS-Image-SFT Q4_K、PS5 CPU Qwen3.5-9B Q4_K_M、Vulkan DiT／small VAE、合成rank144 **F32** adapter（NSFW0.7＋Turbo1.0、runtime1.0）。固定prompt・seed20261020、4 Euler steps／CFG1、author sigmas [1.0,0.910,0.717,0.024,0.0]、二重shiftなしです。FFN chunk、F16 LoRA storage、Spectrum、近似denoising cache、一般fusionはOFFです。
+MOSS-Image-SFT Q4_K, PS5 CPU Qwen3.5-9B Q4_K_M, Vulkan DiT/small VAE, combined rank 144 **F32** adapter (NSFW0.7 + Turbo1.0, runtime 1.0). Fixed prompt/seed 20261020,4 Euler steps / CFG 1, author sigmas [1.0,0.910,0.717,0.024,0.0], no double shift. FFN chunks, F16 LoRA storage, Spectrum, approximate denoising cache, and general fusion are OFF.
 
-| 構成 | 256初回・lazy load込み | 256後1024初回 | 同プロセス1024の2回目 | 1024の2回平均 |
+| Configuration | First 256 incl. lazy load | First 1024 after 256 | Run 2 at 1024, same process | Mean of 2 runs at 1024 |
 |---|---:|---:|---:|---:|
-| 従来のDiT融合版（今回の対照） | 69.111579 | 47.800313 | 47.162467 | 47.481390 |
+| Previous DiT fusion version (control) | 69.111579 | 47.800313 | 47.162467 | 47.481390 |
 | FFN predecode | 69.561725 | 46.836615 | 46.250174 | 46.543395 |
-| FFN＋Attention shared KV・元のoccupancy制限 | 69.471026 | 51.873448 | 51.284278 | 51.578863 |
+| FFN + Attention shared KV, original occupancy limit | 69.471026 | 51.873448 | 51.284278 | 51.578863 |
 | FFN＋QKV／LoRA | 69.778932 | 46.429972 | 45.823365 | 46.126669 |
 | FFN＋QKV／LoRA＋RMS | 69.641481 | 46.068369 | 45.411577 | 45.739973 |
-| 4項目＋Attention occupancy調整 | 69.449735 | 45.415880 | 44.839066 | 45.127473 |
+| All 4 changes + Attention occupancy adjustment | 69.449735 | 45.415880 | 44.839066 | 45.127473 |
 
-すべてPS5内のgeneration_secondsです。1024単独coldではありません。各構成は新しいnative processで256から開始し、生成POSTは1回ずつ・自動再送0です。各1024の2枚は同じPNGでした。温度・clock・OS disk cacheを統制した交互A/Bではなく、順次測定の2観測平均です。256の初回は僅かに増えており、すべてのサイズ・初回loadが高速化したという主張はしません。
+All values are PS5 generation_seconds, not standalone cold 1024. Each configuration started a new native process at 256; each request used 1 POST and 0 automatic retries. The 2 PNGs at 1024 matched within each configuration. These are sequential means of 2 observations, not alternating A/B tests controlling temperature/clocks/OS disk cache. First 256 time increased slightly; no claim is made that every size or first load improved.
 
-1024 DiT graphのCPU wall平均は40.906064秒→38.558765秒です。waitを含むCPU wallであり純GPU timestampではありません。other runnersは約6秒で、主な短縮はDiT側でした。[集約値](moss-dit-kernels-20261021.json)、[前段のGPU timestamp内訳](moss-dit-gpu-profile-20261021.md)を参照してください。
+Mean 1024 DiT graph CPU wall decreased 40.906064→38.558765 seconds. This includes waits and is not a pure GPU timestamp. Other runners stayed near 6 seconds; most savings were in DiT. See [aggregate values](moss-dit-kernels-20261021.json) and [earlier GPU timestamps](moss-dit-gpu-profile-20261021.md).
 
-## 数値・画像・メモリ
+## Numeric, image, and memory checks
 
-- 元の14数値ゲート、Turbo3、upload、既存融合16ケースを維持。採用版は追加20ケースもPS5で読み戻し、不一致0・非有限値0、所有buffer解放・完了fenceを確認しました。Q4行列積は従来のabs0.001／rel0.01、融合とAttentionはabs2e-5／rel2e-5のままです。
-- 追加検査はFFN4、QKV2、Attention2、LoRA vec4の連続／strided6、RMSの連続／strided6です。行列積は実際のM/Kとtokens4,202を分けたfixtureで確認し、実生成では全42層を実行しました。fixture時間はshader compilationを含み、生成の速度指標にしません。
-- 生成ごとに有限DiT出力4、Q4 F32記録672／F16累積0／invalid0、LoRA504適用／skip0、GPU DiT・Attention・VAE完了を確認しました。selected pathのreceiptも検査しています。Windows側でlearned推論は行っていません。
-- OpenAI互換APIとnative GETのPNGが一致し、完全decodeと目視を確認しました。採用版の1024は2回とも全byte一致しました。
-- **旧版と採用版のPNGは一致しません。** Q4→F16一時展開や融合の丸め差がdenoisingで広がります。1024比較のMAEは3.5000/255、PSNRは28.91dBでした。目立つ破綻は見られませんでしたが、この値や1promptの目視で同画質・全prompt品質を保証しません。NaN置換・clamp、step省略、低精度累積で結果を隠していません。
+- Retained original 14 numeric gates, Turbo3, upload, and 16 fusion cases. The adopted version also read back 20 added cases on PS5:0 mismatches, 0 nonfinite values, owned-buffer release and completed fences confirmed. Q4 products retain abs 0.001/rel 0.01; fusion/Attention retain abs 2e-5/rel 2e-5.
+- Added cases: FFN 4, QKV 2, Attention 2, LoRA vec 4 contiguous/strided 6, RMS contiguous/strided 6. Matrix fixtures separately tested actual M/K and tokens 4,202; real generation executed all 42 layers. Fixture timing includes shader compilation and is not a generation-speed metric.
+- Every generation confirmed 4 finite DiT outputs, 672 Q4 F32 records/0 F16 accumulation/0 invalid, 504 LoRA applications/0 skipped, and completed GPU DiT/Attention/VAE. Selected-path receipts were checked. Windows performed no learned inference.
+- OpenAI-compatible/native-GET PNGs matched and passed full decoding/visual checks. The 2 adopted 1024 outputs were byte-identical.
+- **Old and adopted PNGs are not identical.** Rounding changes from Q4→F16 temporary decoding/fusion propagate during denoising. At 1024, MAE was 3.5000/255 and PSNR 28.91dB. No obvious defects were seen, but these metrics and 1 prompt's visual inspection do not guarantee equal quality or all-prompt quality. NaN replacement/clamping, skipped steps, or low-precision accumulation were not used to hide results.
 
-| owned Direct data（1024） | 対照 | 採用版 |
+| Owned Direct data (1024) | Control | Adopted |
 |---|---:|---:|
-| 生成高水位 | 6,107,971,584B | 6,208,634,880B |
-| 生成後 | 4,749,066,240B | 4,849,729,536B |
+| Generation high-water mark | 6,107,971,584B | 6,208,634,880B |
+| Post-generation | 4,749,066,240B | 4,849,729,536B |
 
-高水位・生成後とも96MiB増えました。採用版の高水位は約5.78GiBで、2回目に累積していません。物理Direct10GiB、推論予算9.5GiB、pool外reserve1GiBは維持しています。owned pool、APIのGPU-labelled値、CPU/process RSSは重複する別の量で加算できません。長時間安定性は未確認です。
+Both high-water and final usage rose 96MiB. The adopted high-water mark was approximately 5.78GiB without accumulation on run 2. Physical Direct 10GiB, inference budget 9.5GiB, and outside-pool reserve 1GiB remained. Owned pool, API GPU-labeled values, and CPU/process RSS overlap and cannot be added. Long-term stability is unverified.
 
-![採用版256](images/moss-dit-kernels-256-20261021.png)
+![Adopted 256 output](images/moss-dit-kernels-256-20261021.png)
 
-対照は以前の公開PNGと一致しました：[対照256](images/moss-turbo4-upload-256-20261020.png)／[対照1024](images/moss-turbo4-upload-1024-20261020.png)。履歴の[verification](verification.json)も保持しています。
+Controls matched previous public PNGs: [control 256](images/moss-turbo4-upload-256-20261020.png) / [control 1024](images/moss-turbo4-upload-1024-20261020.png). Historical [verification](verification.json) is retained.
 
-## 再現・変更範囲
+## Reproduction and change boundaries
 
-[ビルド手順](build.md)のTurbo4＋upload＋F32 parentに、coreの --moss-dit-optimizations --moss-dit-kernels、nativeの --moss-dit-optimization-mask 15 --moss-dit-kernel-mask 15 --moss-fa-shmem-no-limit を明示します。古いoptimization maskと新しいkernel maskは別です。新kernel bitsはFFN=1、Attention=2、QKV/LoRA=4、RMS=8。occupancy調整にはAttention bit2が必要です。未指定はOFFです。
+Add core --moss-dit-optimizations --moss-dit-kernels and native --moss-dit-optimization-mask 15 --moss-dit-kernel-mask 15 --moss-fa-shmem-no-limit to the [Turbo4 + upload + F32 parent build](build.md). Old optimization mask and new kernel mask are distinct. New bits: FFN=1, Attention=2, QKV/LoRA=4, RMS=8. Occupancy adjustment requires Attention bit 2. Omitted options are OFF.
 
-fresh75 core、24 initializer／6 runtime providers、source-freezeと依存closureの前後hashを確認しました。測定に使ったソースbyteとSELFを私有作業領域へ保存し、公開source inventoryは文書更新後の公開treeとして別管理します。ホストpolicy94・selector239・既存parent39・storage overlap200,007・F32 recipe93検査、SPIR-V validationを通過しました。ホスト検査は実機推論を代替しません。
+Verified fresh 75 core objects, 24 initializers/6 runtime providers, and source-freeze/dependency-closure hashes before/after. Measured source bytes/SELF remain private; the public source inventory separately describes the tree after documentation updates. Passed host policy 94, selector 239, parent 39, storage overlap 200,007, F32 recipe 93 checks, and SPIR-V validation. Host checks do not replace hardware inference.
 
-実装：[Vulkan](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp)、[RMS shader](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_rms.comp)、[LoRA vec4 shader](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp)、[GPU検査](../native/app/moss_kernel_gate.inc)、[行列積／Attention検査](../native/app/moss_kernel_matrix_gate.inc)、[policy](../tools/moss_kernel_policy.py)、[host selector試験](../tests/moss_kernel_selection.cpp)。既存GGML Vulkan kernelsを選択・接続し、RMS/LoRAをGLSLで実装しています。CUDA/Triton・ComfyUI runtimeを実行したものではありません。[出典とshader provenance](moss-optimization-provenance.json)を保持しています。
+Implementation: [Vulkan](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/ggml-vulkan.cpp), [RMS shader](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_rms.comp), [LoRA vec 4 shader](../patches/stable-diffusion/overlay/ggml/src/ggml-vulkan/vulkan-shaders/moss_dit_fused.comp), [GPU checks](../native/app/moss_kernel_gate.inc), [matrix/Attention checks](../native/app/moss_kernel_matrix_gate.inc), [policy](../tools/moss_kernel_policy.py), [host selector tests](../tests/moss_kernel_selection.cpp). Existing GGML Vulkan kernels are selected/integrated; RMS/LoRA use GLSL. This does not execute CUDA/Triton or the ComfyUI runtime. [Source/shader provenance](moss-optimization-provenance.json) is retained.
 
-production admission0、固定prompt・seed・256／1024、最大4試行（失敗を含む）の境界を維持します。FW、システム領域、既存登録、GPU driverの変更や、不確かなGPU資源の手動解放は行っていません。kernel epilogueの更なる統合、任意prompt・長時間運用、温度／clockを統制した比較は残る範囲です。
+Retains production admission 0, fixed prompt/seed/256/1024, and maximum 4 attempts including failures. No firmware/system-area/registration/GPU-driver changes or manual release of uncertain GPU resources occurred. Further epilogue integration, arbitrary prompts, long-running operation, and temperature/clock-controlled comparisons remain.

@@ -11,7 +11,7 @@
   },
   "variants": [
     {
-      "variant": "従来のDiT融合版（今回の対照）",
+      "variant": "Previous DiT fusion version (control for this comparison)",
       "kernel_mask": null,
       "FA_no_occupancy_limiter": false,
       "adopted": false,
@@ -61,7 +61,7 @@
       "repeat1024_PNG_identical": true
     },
     {
-      "variant": "FFN＋Attention shared KV・元のoccupancy制限",
+      "variant": "FFN + Attention shared KV, original occupancy limit",
       "kernel_mask": 3,
       "FA_no_occupancy_limiter": false,
       "adopted": false,
@@ -136,7 +136,7 @@
       "repeat1024_PNG_identical": true
     },
     {
-      "variant": "4項目＋Attention occupancy調整",
+      "variant": "All 4 changes + Attention occupancy adjustment",
       "kernel_mask": 15,
       "FA_no_occupancy_limiter": true,
       "adopted": true,
