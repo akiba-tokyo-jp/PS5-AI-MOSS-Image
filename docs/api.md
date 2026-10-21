@@ -69,7 +69,42 @@ PowerShellでは[`Invoke-MossOpenAI.ps1`](../scripts/Invoke-MossOpenAI.ps1)を�
 
 promptの構文上限は空でない4096 UTF-8 bytes以下、negative promptは4096 UTF-8 bytes以下です。構文としての文字列受理と、任意promptでの生成品質・通常運用の実証は別です。公開の成功例は上記canonical requestです。CFG1ではnegative側のDiT forwardを行いません。
 
-MOSSはtext-to-imageのみです。参照画像、img2img、IP-Adapter、ControlNet、マスク、inpainting、画像編集は非対応です。画像入力キーは`null`でも拒否します。継承ABIの無効値として`manga_strength: 0`と`manga_monochrome: false`だけを受け付けますが、漫画LoRAや自動白黒化を有効にする機能ではありません。HTTPから任意のモデルパスやLoRAをupload・選択する機能もありません。
+通常buildはtext-to-imageのみです。両buildに`--moss-img2img-trial`を明示すると、下記のimg2imgが有効になります。IP-Adapter、ControlNet、マスク、inpaintingは非対応で、これらのキーは`null`でも拒否します。継承ABIの無効値として`manga_strength: 0`と`manga_monochrome: false`だけを受け付けますが、漫画LoRAや自動白黒化を有効にする機能ではありません。HTTPから任意のモデルパスやLoRAをupload・選択する機能もありません。
+
+## 参照画像から生成するimg2img
+
+2026-10-21にPS5実機で確認した、明示的default-OFFの限定trialです。[実測・元画像と結果](moss-img2img-20261021.md)。既存の最大4試行をtext-to-imageと共有し、無制限運用には切り替わりません。`GET /health`の`features.img2img`がtrueであることを両portで確認してください。
+
+OpenAI形式は`POST /v1/images/edits`、Content-Typeは`multipart/form-data`です。`image`にPNG/JPEGファイルを1個、`prompt`にtext、他はgenerationsと同じ固定条件を渡します。`reference_mode: img2img`、`denoise_strength`は独自拡張です。URL、mask、reference_image、IP-Adapterモード、複数画像は受け付けません。成功時はgenerationsと同じbase64 PNGとnative job IDを返します。
+
+入力fileは最大8MiB、**img2img推論に渡す元画像は各辺1024以下**にしてください。共通upload storeは2048までdecodeできますが、本trialのengineでは1024を超える入力を拒否します。今回検証した入力は1024×1024 RGB PNGです。PS5上の共通前処理で出力寸法へresizeし、Vulkan VAEで初期latentへ変換します。1024から256への入力変換も確認しました。
+
+`denoise_strength`既定0.5。有限doubleとfloatの双方で0.01以上、floatで0.75未満が必要です。既存SD.cppのstep-fractionなので、requestの`steps: 4`に対し実forwardは1〜3です。floatで[0.01,0.25)は1、[0.25,0.5)は2、[0.5,0.75)は3。各区間内では同じsigma suffixです。`actual_steps`を参照し、全4forwardと誤認しないでください。0.75以上は参照latentを消すsigma1から始まるため拒否します。
+
+PowerShell 7の例です。`$editPrompt`は[実測JSONのrequest.prompt](moss-img2img-20261021.json)と同じ文章を使います。既存の`Invoke-MossOpenAI.ps1`はtext-to-image専用です。
+
+```powershell
+$origin = 'http://<PS5_IP>:8193'
+$headers = @{ Authorization = 'Bearer ' + [IO.File]::ReadAllText('<private-token-file>').Trim() }
+$health = Invoke-RestMethod "$origin/health" -Headers $headers
+if (-not $health.features.img2img -or $health.running_jobs -ne 0 -or $health.queued_jobs -ne 0) { throw 'Img2img gateway must be ready and idle' }
+$form = @{
+    image = Get-Item -LiteralPath '<reference.png>'
+    model = 'moss-image-sft'; prompt = $editPrompt
+    negative_prompt = 'low quality, blurry'
+    size = '256x256'; n = '1'; response_format = 'b64_json'
+    steps = '4'; cfg_scale = '1'; flow_shift = '5'
+    seed = '20261020'; sampler = 'euler'
+    reference_mode = 'img2img'; denoise_strength = '0.25'
+}
+# One POST. On timeout inspect native health/jobs; do not automatically retry.
+$result = Invoke-RestMethod "$origin/v1/images/edits" -Method Post -Headers $headers -Form $form -TimeoutSec 1800 -MaximumRedirection 0
+[IO.File]::WriteAllBytes('<new-output.png>', [Convert]::FromBase64String($result.data[0].b64_json))
+```
+
+最初は256で出力を確認し、空queue確認後に1024へ進めます。今回の1024はstrength0.5／実3forwardで40.833333秒でした。参照元の構図・色を反映しましたが、実写化promptでもアニメ調を強く残しました。人物同一性の固定や高度なスタイル変換を保証しません。
+
+native非同期経路では、認証付き`POST /api/inputs`へPNG/JPEGのraw bodyを送ります（Content-Typeは`image/png`／`image/jpeg`）。201の`image_id`を`POST /api/generate`の`init_image_id`に指定し、`denoise_strength`を加えます。指定なしは0.5。`GET /api/jobs/{id}`の`mode: img2img`、`init_image_sha256`、`init_encode_seconds`、`actual_steps`で照合できます。HTTPにはfile pathを渡しません。手動uploadの入力はjob完了・reference count0確認後に`DELETE /api/inputs/{image_id}`で削除できます。gatewayは自分が作成した一時inputを既存の完了後cleanupで削除します。
 
 ## native非同期APIと再送
 
@@ -81,6 +116,6 @@ CPU/GPUは物理メモリを共有します。Direct予約、プロセスRSS、A
 
 ## ソースの仕様説明と実行中プロセス
 
-OpenAPI JSONと[`native/gateway/openapi_schema.inc`](../native/gateway/openapi_schema.inc)は同じ内容を保持します。今回の変更は仕様説明・schema・公開clientの更新であり、実行中のgatewayを再ビルド・差し替えたという主張ではありません。以前のプロセスの`/openapi.json`には古い説明文が残る場合があります。実際の受理条件は`/health`のコンパイル済みtrial policyと照合してください。
+OpenAPI JSONと[`native/gateway/openapi_schema.inc`](../native/gateway/openapi_schema.inc)は同じ内容を保持します。img2imgではnativeとgatewayを再ビルドし、実機のedits応答を検証しています。実際の受理条件は`/health`のコンパイル済みtrial policyと照合してください。画像編集の成功はこの限定img2imgの範囲であり、OpenAI Images API全機能への準拠を意味しません。
 
 モデル重み、認証情報、raw診断ログ、ビルド済みバイナリはリポジトリに含みません。

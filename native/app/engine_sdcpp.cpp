@@ -8,6 +8,10 @@
 #endif
 #include "engine.h"
 #include "reference_image.h"
+#include "moss_img2img_trial.h"
+extern "C" {
+#include "sha256.h"
+}
 #include "precision_mode.h"
 #include <cmath>
 #include "ggml.h"
@@ -555,6 +559,9 @@ struct InferenceObservation {
     uint64_t gpu_ip_math_nodes;
     const ggml_tensor* requested_ip;
     bool init_encoded;
+    bool wants_init=false;
+    uint64_t gpu_vae_encoder_math_nodes=0;
+    const ggml_tensor* requested_encoder=nullptr;
     bool wants_controlnet=false;
     uint64_t gpu_controlnet_math_nodes=0;
     const ggml_tensor* requested_controlnet=nullptr;
@@ -608,6 +615,13 @@ static const char* vae_weight_name(const ggml_tensor* tensor) {
     return nullptr;
 }
 
+static const char* vae_encoder_weight_name(const ggml_tensor* tensor) {
+    if(!tensor || (tensor->op!=GGML_OP_MUL_MAT && tensor->op!=GGML_OP_CONV_2D && tensor->op!=GGML_OP_CONV_3D))return nullptr;
+    const ggml_tensor* w=tensor->src[0];
+    for(unsigned depth=0;w&&depth<8;++depth){const char* name=ggml_get_name(w);if(name&&!std::strncmp(name,"first_stage_model.encoder.",26))return name;w=w->view_src;}
+    return nullptr;
+}
+
 static const char* controlnet_weight_name(const ggml_tensor* tensor){
     if(!tensor || (tensor->op!=GGML_OP_MUL_MAT && tensor->op!=GGML_OP_CONV_2D))return nullptr;
     const ggml_tensor* weight=tensor->src[0];
@@ -642,7 +656,7 @@ static uint64_t moss_ffn_chunk_expected(const InferenceObservation& o) noexcept 
 #if PS5_AI_MOSS_FFN_TOKEN_CHUNK_TRIAL
     return o.ffn_chunk.proof(moss_ffn_token_chunk::configured_tokens).expected_q4;
 #else
-    (void)o;return 672;
+    return uint64_t(o.requested_steps)*168;
 #endif
 }
 
@@ -660,6 +674,7 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
         }
 #endif
         if (!is_gpu_math_tensor(tensor)) return false;
+        if(observation->wants_init && !observation->gpu_vae_encoder_math_nodes && !observation->requested_encoder && vae_encoder_weight_name(tensor)){observation->requested_encoder=tensor;return true;}
         if(observation->wants_controlnet && !observation->gpu_controlnet_math_nodes && !observation->requested_controlnet && controlnet_weight_name(tensor)){
             observation->requested_controlnet=tensor;return true;
         }
@@ -679,33 +694,36 @@ static bool observe_graph(ggml_tensor* tensor, bool ask, void* data) noexcept {
            weight && std::strstr(weight,".to_k_ip.weight")){
             observation->requested_ip=tensor;return true;
         }
-        if (!observation->gpu_flash_attention_nodes && !observation->requested_flash && tensor->op == GGML_OP_FLASH_ATTN_EXT) {
+        if (observation->gpu_dit_math_nodes && !observation->gpu_flash_attention_nodes && !observation->requested_flash && tensor->op == GGML_OP_FLASH_ATTN_EXT) {
             observation->requested_flash = tensor;
             return true;
         }
         return false;
     }
+    const bool encoder = tensor == observation->requested_encoder && !observation->gpu_vae_encoder_math_nodes;
     const bool dit = tensor == observation->requested_dit && !observation->gpu_dit_math_nodes;
     const bool vae = tensor == observation->requested_vae && !observation->gpu_vae_math_nodes;
     const bool flash = tensor == observation->requested_flash && !observation->gpu_flash_attention_nodes;
     const bool ip=tensor==observation->requested_ip && !observation->gpu_ip_math_nodes;
     const bool control=tensor==observation->requested_controlnet && !observation->gpu_controlnet_math_nodes;
-    if ((!dit && !vae && !flash && !ip && !control) || !is_gpu_math_tensor(tensor) ||
+    if ((!encoder && !dit && !vae && !flash && !ip && !control) || !is_gpu_math_tensor(tensor) ||
         ((dit || ip) && !dit_weight_name(tensor)) || (vae && !vae_weight_name(tensor)) ||
-        (control && !controlnet_weight_name(tensor))) return false;
+        (encoder && !vae_encoder_weight_name(tensor)) || (control && !controlnet_weight_name(tensor))) return false;
     ++observation->gpu_math_nodes;
     if (dit) ++observation->gpu_dit_math_nodes;
     if (vae) ++observation->gpu_vae_math_nodes;
+    if (encoder) ++observation->gpu_vae_encoder_math_nodes;
     if (flash) ++observation->gpu_flash_attention_nodes;
     if(ip){++observation->gpu_ip_math_nodes;observation->stats->gpu_ip_attention_verified=1;}
     if(control){++observation->gpu_controlnet_math_nodes;observation->stats->gpu_controlnet_verified=1;}
     try {
-        nlohmann::json event = {{"event", control ? "gpu_controlnet_math_completed" : ip ? "gpu_ip_attention_math_completed" : dit ? "gpu_dit_model_math_completed" : vae ? "gpu_vae_decoder_math_completed" : "gpu_flash_attention_math_completed"},
+        nlohmann::json event = {{"event", encoder ? "gpu_vae_encoder_math_completed" : control ? "gpu_controlnet_math_completed" : ip ? "gpu_ip_attention_math_completed" : dit ? "gpu_dit_model_math_completed" : vae ? "gpu_vae_decoder_math_completed" : "gpu_flash_attention_math_completed"},
             {"op", ggml_op_name(tensor->op)}, {"tensor", ggml_get_name(tensor)},
             {"device", ggml_backend_dev_name(gpu_device)},
             {"scope", "sampled completed witness after backend synchronization; not total GPU operation count"}};
         if (dit || ip) event["weight"] = dit_weight_name(tensor);
         if (vae) event["weight"] = vae_weight_name(tensor);
+        if (encoder) event["weight"] = vae_encoder_weight_name(tensor);
         if(control)event["weight"]=controlnet_weight_name(tensor);
         write_event(event);
     } catch (...) { fallback_log("ps5-ai: completed GPU witness structured log unavailable"); }
@@ -1132,6 +1150,10 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     InferenceObservation observation = {};
     observation.progress=progress;observation.user=user;observation.stats=stats;
     observation.requested_steps=request->steps;
+    observation.wants_init=request->init_image_id[0]!=0;
+    const int expected_dit_steps=observation.wants_init?ps5_ai_moss_img2img_steps(request->denoise_strength):request->steps;
+    struct OwnedInitRGB {unsigned char* data=nullptr;~OwnedInitRGB(){std::free(data);}} init_rgb;
+    uint32_t init_width=0,init_height=0;
     active_reference_observation=&observation;
     parameter_loading.store(false);
     precision_outputs.store(0);precision_values.store(0);precision_nonfinite.store(0);
@@ -1172,9 +1194,21 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
 #endif
         if (!std::isfinite(request->manga_strength) || request->manga_strength != 0 || request->manga_monochrome)
             throw std::runtime_error("MOSS-Image-SFT text2img does not support the WAI-specific manga LoRA or monochrome option");
-        if (request->init_image_id[0] || request->reference_image_id[0] || request->mask_image_id[0] ||
+        if ((!PS5_AI_MOSS_IMG2IMG_TRIAL && request->init_image_id[0]) || request->reference_image_id[0] || request->mask_image_id[0] ||
             request->controlnet[0] || request->control_image_id[0])
             throw std::runtime_error("MOSS-Image-SFT currently supports text2img only; SDXL IP-Adapter/ControlNet, img2img and inpainting were not run");
+        if(observation.wants_init){
+            if(!PS5_AI_MOSS_IMG2IMG_TRIAL || !expected_dit_steps || !request->init_image_path[0] || std::strlen(request->init_image_sha256)!=64)
+                throw std::runtime_error("MOSS img2img request/lease/strength is not admitted");
+            if(!ps5_ai_input_read(request->init_image_path,&init_rgb.data,&init_width,&init_height) || init_width>1024 || init_height>1024)
+                throw std::runtime_error("Cannot read bounded normalized MOSS source image");
+            unsigned char header[16]={};std::memcpy(header,"PS5RGB1",7);
+            for(unsigned j=0;j<4;++j){header[8+j]=(unsigned char)(init_width>>(8*j));header[12+j]=(unsigned char)(init_height>>(8*j));}
+            ai_sha256 ctx;unsigned char digest[32];char hex[65]={};ai_sha256_init(&ctx);ai_sha256_update(&ctx,header,16);ai_sha256_update(&ctx,init_rgb.data,size_t(init_width)*init_height*3);ai_sha256_final(&ctx,digest);
+            for(unsigned j=0;j<32;++j)std::snprintf(hex+2*j,3,"%02x",digest[j]);
+            if(std::strcmp(hex,request->init_image_sha256))throw std::runtime_error("Normalized source differs from authenticated pinned input hash");
+            write_event({{"event","moss_img2img_source_verified"},{"input_sha256",hex},{"input_width",init_width},{"input_height",init_height},{"output_width",request->width},{"output_height",request->height},{"strength",request->denoise_strength},{"expected_DiT_forwards",expected_dit_steps},{"initial_sigma",ps5_ai_moss_img2img_sigma(request->denoise_strength)},{"reference_coefficient",1.0f-ps5_ai_moss_img2img_sigma(request->denoise_strength)},{"source_resampling","existing PS5 CPU image preprocessing; learned VAE encoding on Vulkan"}});
+        }
 #if PS5_AI_MOSS_TURBO_TRIAL
         if(!moss_turbo_lora_gate_admitted())
             throw std::runtime_error("Turbo model loading requires all rank144 F32 GPU numerical gates first");
@@ -1230,6 +1264,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         params.height = request->height;
         params.seed = request->seed;
         params.batch_count = 1;
+        if(observation.wants_init){params.init_image.width=init_width;params.init_image.height=init_height;params.init_image.channel=3;params.init_image.data=init_rgb.data;params.strength=static_cast<float>(request->denoise_strength);}
         params.sample_params.sample_steps = request->steps;
         params.sample_params.guidance.txt_cfg = static_cast<float>(request->cfg_scale);
         params.sample_params.sample_method = str_to_sample_method(request->sampler);
@@ -1315,6 +1350,8 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if (!observation.gpu_vae_math_nodes || !precision_dit_outputs.load() ||
             !precision_vae_outputs.load() || precision_nonfinite.load())
             throw std::runtime_error("Image rejected: completed GPU DiT/VAE and finite readback evidence is required");
+        if(observation.wants_init && (!observation.init_encoded || !observation.gpu_vae_encoder_math_nodes || precision_vae_outputs.load()<2 || stats->actual_steps!=expected_dit_steps || observation.requested_steps!=expected_dit_steps))
+            throw std::runtime_error("Image rejected: pinned input, GPU VAE encoder, finite encode/decode and exact retained schedule required");
         if (cpu_clip_pool_live_bytes.load() != 0)
             throw std::runtime_error("CPU Qwen shared Direct weights were not returned after conditioning");
 #if PS5_AI_MOSS_F32_ACCUMULATION
@@ -1354,8 +1391,8 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
             {"expected_Q4_F32_recordings",ffn_proof.expected_q4},{"metadata_is_not_GPU_completion_proof",true}});
 #endif
 #if PS5_AI_MOSS_TURBO_TRIAL
-        if(request->steps!=4 || stats->actual_steps!=4 || request->cfg_scale!=1.0 ||
-           precision_dit_outputs.load()!=4 || quant_completed.q4_f32acc-quant_before.q4_f32acc!=moss_ffn_chunk_expected(observation) ||
+        if(request->steps!=4 || stats->actual_steps!=expected_dit_steps || request->cfg_scale!=1.0 ||
+           precision_dit_outputs.load()!=uint64_t(expected_dit_steps) || quant_completed.q4_f32acc-quant_before.q4_f32acc!=moss_ffn_chunk_expected(observation) ||
            !moss_turbo_lora_gate_admitted())
             throw std::runtime_error("Image rejected: Turbo requires actual4 positive DiT outputs and exact compiled/observed FFN F32 Q4 count");
 #endif
@@ -1393,7 +1430,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         nlohmann::json fused_receipts=nlohmann::json::array();
         for(unsigned k=1;k<=8;++k)fused_receipts.push_back(moss_dit_opt::GPU_recordings[k].load());
         const unsigned dit_mask=PS5_AI_MOSS_DIT_OPT_MASK;
-        if((dit_mask&1)&&(!moss_dit_opt::cache_hits.load()||!moss_dit_opt::cache_misses.load()))throw std::runtime_error("DiT invariant cache not used");
+        if((dit_mask&1)&&(moss_dit_opt::cache_hits.load()!=uint64_t(expected_dit_steps-1)||moss_dit_opt::cache_misses.load()!=1))throw std::runtime_error("DiT invariant cache not used");
         if((dit_mask&2)&&!moss_dit_opt::GPU_recordings[moss_dit_opt::SITU].load())throw std::runtime_error("SiTU GPU fusion not used");
         if(dit_mask&4)for(unsigned k=2;k<=5;++k){
             const unsigned actual=moss_kernel::enabled(8)?(k==2?9:k==3?10:k==5?11:k):k;
@@ -1470,7 +1507,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_flex_snapshot(&pool);
     ps5_ai_moss_quant_receipt quant_after{};ps5_ai_moss_quant_snapshot(&quant_after);
     ps5_ai_moss_q4_bk64_report candidate_after{};ps5_ai_moss_q4_bk64_snapshot(&candidate_after);
-    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", "text2img"},
+    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", observation.wants_init?"img2img":"text2img"}, {"moss_img2img_trial",bool(PS5_AI_MOSS_IMG2IMG_TRIAL)}, {"gpu_vae_encoder_math_nodes",observation.gpu_vae_encoder_math_nodes}, {"init_image_sha256",request->init_image_sha256}, {"denoise_strength",observation.wants_init?request->denoise_strength:0.0}, {"initial_sigma",observation.wants_init?ps5_ai_moss_img2img_sigma(request->denoise_strength):1.0f},
                  {"gpu_operator_profile",moss_gpu_profile_json(gpu_profile)},
                  {"width",request->width},{"height",request->height},
                  {"moss_q4_bk64_B",moss_q4_bk64_generation_json(candidate_before,candidate_after)},
@@ -1499,7 +1536,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
                  {"negative_cfg_skip_layers",{22}},
                  {"negative_cfg_skip_scope",PS5_AI_MOSS_TURBO_TRIAL?"no_negative_forward_CFG1":"all_negative_forwards_existing_MOSS_policy"},
                  {"negative_cfg_skip_applied",!bool(PS5_AI_MOSS_TURBO_TRIAL)},
-                 {"expected_dit_forwards",PS5_AI_MOSS_TURBO_TRIAL?uint64_t(4):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(60):uint64_t(request->steps)*2},
+                 {"expected_dit_forwards",PS5_AI_MOSS_TURBO_TRIAL?uint64_t(expected_dit_steps):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(60):uint64_t(request->steps)*2},
                  {"expected_q4_f32acc_recordings",PS5_AI_MOSS_TURBO_TRIAL?moss_ffn_chunk_expected(observation):PS5_AI_MOSS_SPECTRUM_TRIAL?uint64_t(9960):uint64_t(request->steps)*(42+41)*4},
                  {"requested_steps",request->steps},{"actual_steps",stats->actual_steps},
                  {"mask_prepared",stats->mask_prepared!=0},{"mask_denoise_evaluations",stats->mask_denoise_evaluations},

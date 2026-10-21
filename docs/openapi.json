@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PS5 AI MOSS Image API",
-    "version": "0.2.0-turbo4-verification",
-    "description": "MOSS-only OpenAI Images generation subset for the tested Turbo4 plus bounded-upload performance profile. The CPU gateway on8193 forwards one job to the same-console native GPU API on8192. This is a bounded verification build, not an unrestricted operating server: at most4 valid attempts per native process; failures consume attempts; generic production admission is disabled. The published recipe fixes the documented canonical text,seed20261020,256x256 or1024x1024,4Euler steps,CFG1,flow_shift5,rank144 F32 composed adapter and10GiB owned pool. Compiled author sigmas are[1,.910,.717,.024,0], without a second shift. Text-to-image PNG only,n=1,Bearer and same private IPv4/24. Reference images,edits,masks,inpainting,ControlNet and IP-Adapter are unsupported. Optional FFN/F16 experiments are separate; no operating8/10 or unlimited arbitrary-prompt success is claimed. A source schema update does not redeploy an existing process."
+    "version": "0.3.0-img2img-trial",
+    "description": "MOSS-only OpenAI Images generation and explicitly compiled img2img trial. Same-console CPU gateway8193/native Vulkan engine8192. Bearer and private IPv4/24; n=1, PNG, no streaming. Maximum4 generation attempts per native process; failures consume attempts. Production admission remains OFF. Turbo4 text-to-image retains author sigmas [1,.910,.717,.024,0], CFG1 and fixed seed20261020. Img2img retains a suffix of that schedule, uses the PS5 VAE encoder and reports actual1-3 steps; denoise_strength is step-fraction, finite float >=.01 and <.75. No mask, inpainting, IP-Adapter or ControlNet. --moss-img2img-trial is required in both builds; default builds reject image input. This schema describes the implementation; see verification records for actual tested scope."
   },
   "servers": [
     {
@@ -243,6 +243,18 @@
             ],
             "default": 5,
             "description": "Fixed flow_shift5 contract. The authored custom sigmas are already shifted and are not shifted again. Null uses5."
+          },
+          "init_image_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$",
+            "description": "Native authenticated input-store ID; normally created internally by multipart /v1/images/edits. No filesystem paths or URLs."
+          },
+          "denoise_strength": {
+            "type": "number",
+            "minimum": 0.01,
+            "exclusiveMaximum": 0.75,
+            "default": 0.5,
+            "description": "Requires init_image_id. Existing SD.cpp step-fraction semantics: float<.25 retains [.024,0] (1 forward); .25<=float<.5 retains [.717,.024,0] (2); .5<=float<.75 retains [.910,.717,.024,0] (3). The actual float value must remain below.75; no extra flow shift. A sigma1 start would discard the reference and is rejected."
           }
         }
       }
@@ -792,9 +804,219 @@
     },
     "/v1/images/edits": {
       "post": {
-        "operationId": "unsupportedImageEdit",
-        "description": "Unsupported for the MOSS Image text-to-image backend. Authenticated POSTs return400 without uploading an image or submitting inference.",
+        "operationId": "createImageEdit",
+        "description": "Explicit MOSS img2img trial, one raster source. Multipart OpenAI-style subset; masks and other reference modes rejected before upload. Upload and inference stay on PS5. Source need not match output dimensions; existing PS5 preprocessing resizes it. Default builds return400 without uploading.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image",
+                  "prompt"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Nonempty text up to4096 UTF-8 bytes. The published verified recipe fixes the example canonical prompt; parser acceptance alone does not validate arbitrary-prompt or ordinary operation."
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "moss-image-sft",
+                      null
+                    ],
+                    "description": " Null uses the default."
+                  },
+                  "n": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "enum": [
+                      1,
+                      null
+                    ],
+                    "default": 1,
+                    "description": " Null uses the default."
+                  },
+                  "size": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "default": "1024x1024",
+                    "description": "The bounded performance build accepts square256 or1024. auto, omission or null selects1024x1024. The verified sequence starts with256, then1024 after success and image review.",
+                    "enum": [
+                      "auto",
+                      "256x256",
+                      "1024x1024",
+                      null
+                    ]
+                  },
+                  "response_format": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "b64_json",
+                      "url",
+                      null
+                    ],
+                    "default": "b64_json",
+                    "description": " Null uses the default."
+                  },
+                  "steps": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "enum": [
+                      4,
+                      null
+                    ],
+                    "default": 4,
+                    "description": "Fixed4 by the compiled Turbo performance profile. Null uses4."
+                  },
+                  "cfg_scale": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "enum": [
+                      1,
+                      null
+                    ],
+                    "default": 1,
+                    "description": "Fixed CFG1. No negative CFG DiT forward is run. Null uses1."
+                  },
+                  "flow_shift": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "enum": [
+                      5,
+                      null
+                    ],
+                    "default": 5,
+                    "description": "Fixed flow_shift5 contract. The authored custom sigmas are already shifted and are not shifted again. Null uses5."
+                  },
+                  "seed": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "enum": [
+                      20261020,
+                      null
+                    ],
+                    "default": 20261020,
+                    "description": "Fixed verification seed20261020. Omission/null uses20261020; other values, including-1, are rejected by the selected profile."
+                  },
+                  "sampler": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "euler",
+                      null
+                    ],
+                    "default": "euler",
+                    "description": "Fixed Euler for the compiled author sigma grid. Null uses Euler."
+                  },
+                  "denoise_strength": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "exclusiveMaximum": 0.75,
+                    "default": 0.5,
+                    "description": "Requires init_image_id. Existing SD.cpp step-fraction semantics: float<.25 retains [.024,0] (1 forward); .25<=float<.5 retains [.717,.024,0] (2); .5<=float<.75 retains [.910,.717,.024,0] (3). The actual float value must remain below.75; no extra flow shift. A sigma1 start would discard the reference and is rejected."
+                  },
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "One PNG/JPEG source, maximum8MiB and each dimension <=1024 for this inference trial; normalized and decoded on PS5. The common upload store can decode larger images but the trial engine refuses them. No URL input."
+                  },
+                  "reference_mode": {
+                    "type": "string",
+                    "enum": [
+                      "img2img"
+                    ],
+                    "default": "img2img"
+                  },
+                  "negative_prompt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Compatibility text up to4096 UTF-8 bytes; omitted/null is empty. The verified canonical request uses low quality, blurry. CFG1 does not execute a negative CFG DiT forward."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
+          "200": {
+            "description": "One PNG as base64 or signed URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "created",
+                    "data"
+                  ],
+                  "properties": {
+                    "created": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "b64_json": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "description": "Gateway job ID.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{32}$"
+                }
+              },
+              "X-PS5-Native-Job-ID": {
+                "description": "Native GPU job ID for authenticated/api/jobs and/api/images verification.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{32}$"
+                }
+              }
+            }
+          },
           "400": {
             "description": "OpenAI-shaped error",
             "content": {
@@ -842,6 +1064,174 @@
                 }
               }
             }
+          },
+          "405": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The synchronous response worker or queue is busy. Wait for the existing job and inspect health; do not blindly resend an ambiguous POST.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "OpenAI-shaped error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "message",
+                        "type",
+                        "param",
+                        "code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -865,6 +1255,13 @@
     "owned_direct_pool_gib": 10,
     "inference_budget_gib": 9.5,
     "generic_operation_verified": false,
-    "verification_scope": "Canonical requests only; see docs/moss-turbo-memory-options-20261020.md. Separate optional precision/chunk trials do not change this selected speed baseline."
+    "verification_scope": "Existing text-to-image and new explicitly compiled image-input trial; consult docs/status.md for measurements. No unlimited or arbitrary-prompt stability claim.",
+    "moss_img2img_trial": true,
+    "img2img_actual_forwards": [
+      1,
+      2,
+      3
+    ],
+    "img2img_reference_mode": "VAE-encoded initial latent; not IP-Adapter identity conditioning"
   }
 }

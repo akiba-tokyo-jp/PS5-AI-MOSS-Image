@@ -149,6 +149,10 @@ chat context. Prompt enhancement is excluded from the SD.cpp path. Layout JSON
 is text input and does not establish raster img2img, inpainting, ControlNet,
 IP-Adapter, or compatibility with unrelated SDXL LoRAs.
 
+The explicit [img2img trial](moss-img2img-20261021.md) now uses the existing
+small VAE encoder as well as its decoder. This does not add a vision-language
+encoder, IP-Adapter or SDXL conditioning compatibility.
+
 ## Licenses
 
 MOSS weights/tokenizer and Qwen3.5 use Apache-2.0. The **FLUX.2 autoencoder** is

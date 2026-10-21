@@ -6,6 +6,8 @@
 
 ![PS5で生成した採用版1024出力](docs/images/moss-dit-kernels-1024-20261021.png)
 
+参照画像を使う **img2img** を追加し、PS5の256／1024で検証しました。1024はモデル読込済み・入力encode込み **40.83秒（実3 forward）**。OpenAI形式の`/v1/images/edits`でPNGを取得できます。実写化指定でも今回はアニメ調が強く残りました。[入力・出力・実測と制約](docs/moss-img2img-20261021.md)。
+
 ## 同条件での生成時間
 
 2026-10-21、PS5内のgeneration_secondsです。各構成は新しいプロセスで256→1024→1024を生成しました。1024単独coldではありません。
@@ -31,7 +33,7 @@
 - 非同期native engine：同じPS5の8192。gatewayはジョブを1件だけ渡します。
 - Qwen3.5-9B Q4_K_Mのtext encoding：PS5 CPU。
 - MOSS-Image-SFT Q4_KのDiTとFLUX.2 small VAE：PS5 Vulkan、RADV NAVI21。
-- text-to-image対応。ControlNet、IP-Adapter、img2img、マスク編集、inpaintingはこのMOSS APIでは未対応です。
+- text-to-imageと明示的img2img trialに対応。画像のVAE encodeもPS5 Vulkanです。ControlNet、IP-Adapter、マスク編集、inpaintingは未対応です。
 
 前段のGPU timestamp測定では、1024の採取区間でFFN約40%、Attention約25%、QKV約15%でした。この結果に基づいてkernel改善を進めました。[GPU時間の内訳](docs/moss-dit-gpu-profile-20261021.md)／[ComfyUI等の適用評価](docs/moss-dit-reference-evaluation-20261021.md)。
 

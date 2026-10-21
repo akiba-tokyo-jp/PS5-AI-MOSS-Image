@@ -111,7 +111,7 @@ static int multipart_json(edit_part *parts,unsigned count,const char *init,const
         char text[4097],encoded[24585];memcpy(text,p->data,p->size);text[p->size]=0;
         if(!valid_utf8((const unsigned char *)text)){snprintf(error,error_cap,"Invalid UTF-8 form field");return 0;}
         int numeric=!strcmp(p->name,"n") || !strcmp(p->name,"steps") || !strcmp(p->name,"cfg_scale") ||
-            !strcmp(p->name,"seed") || !strcmp(p->name,"manga_strength") || !strcmp(p->name,"denoise_strength") || !strcmp(p->name,"ip_adapter_strength") || !strcmp(p->name,"control_strength");
+            !strcmp(p->name,"seed") || !strcmp(p->name,"flow_shift") || !strcmp(p->name,"manga_strength") || !strcmp(p->name,"denoise_strength") || !strcmp(p->name,"ip_adapter_strength") || !strcmp(p->name,"control_strength");
         if(numeric){const char *q=text;char number[128];if(!parse_number(&q,number,sizeof(number)) || *q){snprintf(error,error_cap,"Invalid numeric form field");return 0;}strcpy(encoded,number);}
         else if(!strcmp(p->name,"stream")){
             if(strcmp(text,"false")){snprintf(error,error_cap,"Streaming is unsupported");return 0;}strcpy(encoded,"false");
@@ -131,14 +131,14 @@ static int multipart_json(edit_part *parts,unsigned count,const char *init,const
 static int openai_edit_submit(socket_t fd,const unsigned char *body,size_t size,const char *type) {
     /* Keep the inherited parser source for a future MOSS Image-compatible backend,
      * but never upload or enqueue an unsupported SDXL image-conditioning job. */
-    const int moss_image_edits_supported=0;
+    const int moss_image_edits_supported=PS5_AI_MOSS_IMG2IMG_TRIAL;
     if(!moss_image_edits_supported){openai_error(fd,400,"MOSS Image SFT currently supports text-to-image only; image edits, masks and IP-Adapter are unsupported","image");return 0;}
     edit_part parts[24];unsigned count;char error[768],param[64]={0},mode[32]="img2img";
     if(!multipart_parts(type,body,size,parts,&count,error,sizeof(error))){openai_error(fd,400,error,NULL);return 0;}
     edit_part *image=NULL,*reference_image=NULL,*mask=NULL;int grayscale=0,has_mask_mode=0;
     for(unsigned i=0;i<count;i++){
         edit_part *p=&parts[i];
-        if(!strcmp(p->name,"image") || !strcmp(p->name,"image[]")){if(!p->file){openai_error(fd,400,"image must be a file","image");return 0;}image=p;}
+        if(!strcmp(p->name,"image") || !strcmp(p->name,"image[]")){if(image || !p->file){openai_error(fd,400,"Exactly one image file is required","image");return 0;}image=p;}
         else if(!strcmp(p->name,"reference_image")){if(!p->file){openai_error(fd,400,"reference_image must be a file","reference_image");return 0;}reference_image=p;}
         else if(!strcmp(p->name,"mask")){if(!p->file){openai_error(fd,400,"mask must be a PNG file","mask");return 0;}mask=p;}
         else if(!strcmp(p->name,"mask_mode")){
@@ -151,6 +151,7 @@ static int openai_edit_submit(socket_t fd,const unsigned char *body,size_t size,
         }else if(p->file){openai_error(fd,400,"Unsupported image field",p->name);return 0;}
     }
     if(!image){openai_error(fd,400,"One image file is required","image");return 0;}
+    if(strcmp(mode,"img2img") || reference_image || mask || has_mask_mode){openai_error(fd,400,"MOSS supports img2img with one source image; masks and IP-Adapter remain unsupported","reference_mode");return 0;}
     int init=!strcmp(mode,"img2img") || !strcmp(mode,"combined") || !strcmp(mode,"inpaint"),ip=!strcmp(mode,"ip_adapter") || !strcmp(mode,"combined");
     if((mask && !init) || (has_mask_mode && !mask) || (!strcmp(mode,"inpaint") && !mask)){openai_error(fd,400,"Mask requires img2img/combined; inpaint requires a mask","mask");return 0;}
     if((!init && !ip) || (reference_image && strcmp(mode,"combined"))){openai_error(fd,400,"reference_mode must be img2img, ip_adapter or combined; separate reference_image requires combined","reference_mode");return 0;}

@@ -135,7 +135,7 @@ def check(root):
   lines=files['native/gateway/openapi_schema.inc'].decode('utf-8-sig').splitlines();embedded=json.loads(json.loads(lines[2].rstrip(';')))
  except (KeyError,ValueError,IndexError,UnicodeError):raise Refused('native/gateway/openapi_schema.inc')
  need(embedded==spec,'native/gateway/openapi_schema.inc')
- need(spec.get('info',{}).get('version')=='0.2.0-turbo4-verification'and spec.get('x-runtime-profile',{}).get('moss_operating_profile')is False and spec['x-runtime-profile'].get('max_generation_attempts_per_native_process')==4 and spec['x-runtime-profile'].get('production_runtime_admitted')is False,'docs/openapi.json')
+ need(spec.get('info',{}).get('version')=='0.3.0-img2img-trial'and spec.get('x-runtime-profile',{}).get('moss_operating_profile')is False and spec['x-runtime-profile'].get('max_generation_attempts_per_native_process')==4 and spec['x-runtime-profile'].get('production_runtime_admitted')is False,'docs/openapi.json')
  count=inventory(root,files);images=verification(files)
  return dict(staged_files_checked=len(files),MOSS_source_snapshot_files=count,MOSS_benchmark_images=images,public_file_policy='PASS',authored_markdown_links='PASS',embedded_schema='PASS',findings_reveal_paths_only=True,inference_performed=False)
 

@@ -368,7 +368,7 @@ def mapped(data):
     return [(p,hashlib.sha256(data[p[2]:p[2]+p[5]]).hexdigest()) for i in range(count)
             if (p:=struct.unpack_from('<IIQQQQQQ',data,offset+i*size))[0]==1]
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-dit-optimization-mask',type=int,choices=(0,1,3,7,15));p.add_argument('--moss-dit-gpu-profile',action='store_true');p.add_argument('--moss-dit-kernel-mask',type=int,choices=range(16));p.add_argument('--moss-fa-shmem-no-limit',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--precision',choices=['fp32','fp16'],default='fp32');p.add_argument('--core-manifest',type=Path,required=True);p.add_argument('--experimental-small-trial',action='store_true');p.add_argument('--trial-10g',action='store_true');p.add_argument('--quality-step-comparison-trial',action='store_true');p.add_argument('--benchmark-1024-cold-warm-trial',action='store_true');p.add_argument('--performance-trial-variant',type=int,choices=(0,1,2));p.add_argument('--moss-f32-accumulation',action='store_true');p.add_argument('--moss-gpu-profile',action='store_true');p.add_argument('--moss-q4-bk64-raw64',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-spectrum-trial',action='store_true');p.add_argument('--moss-bounded-weight-upload-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-ffn-token-chunk-trial',action='store_true');p.add_argument('--moss-ffn-chunk-tokens',type=int,choices=(0,2048),default=0);p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-dit-optimization-mask',type=int,choices=(0,1,3,7,15));p.add_argument('--moss-dit-gpu-profile',action='store_true');p.add_argument('--moss-dit-kernel-mask',type=int,choices=range(16));p.add_argument('--moss-fa-shmem-no-limit',action='store_true');p.add_argument('--moss-img2img-trial',action='store_true');a=p.parse_args()
     c=json.loads(a.config.read_text());out=a.out.resolve()
     if (out/'manifest.json').exists():raise RuntimeError('Completed output exists; choose a new directory.')
     c.update(ROOT=str(ROOT),OUT=str(out));profile=json.loads((ROOT/'build-profiles/native.json').read_text())
@@ -420,6 +420,8 @@ def main():
         if any('PS5_AI_MOSS_DIT_'in arg for arg in recipe):raise RuntimeError('Recipes cannot override DiT policy')
     trial_flags += dit_flags(dit_enabled)+['-DPS5_AI_MOSS_DIT_OPT_MASK='+str(a.moss_dit_optimization_mask or 0)]
     trial_flags += kernel_flags(kernel_enabled)+['-DPS5_AI_MOSS_DIT_KERNEL_MASK='+str(a.moss_dit_kernel_mask or 0)]+kernel_fa_flags(a.moss_fa_shmem_no_limit,a.moss_dit_kernel_mask)
+    if a.moss_img2img_trial and (not kernel_enabled or a.moss_dit_kernel_mask!=15 or not a.moss_fa_shmem_no_limit or a.moss_dit_gpu_profile or a.moss_lora_storage is not None):raise RuntimeError('Img2img requires the validated kernel15/FA/Turbo4/upload/F32 parent')
+    trial_flags += ['-DPS5_AI_MOSS_IMG2IMG_TRIAL='+str(int(a.moss_img2img_trial))]
     def expand(s):
         for k,v in c.items():s=s.replace('${'+k+'}',str(v).replace('\\','/'))
         if '${' in s:raise RuntimeError('Unresolved build parameter: '+s)
@@ -569,6 +571,7 @@ def main():
             **kernel_fields(kernel_enabled),
             'moss_dit_kernel_mask':a.moss_dit_kernel_mask,
             'moss_fa_shmem_no_limit':a.moss_fa_shmem_no_limit,
+            'moss_img2img_trial':a.moss_img2img_trial,
             'moss_fa_shmem_compile_flags':kernel_fa_flags(a.moss_fa_shmem_no_limit,a.moss_dit_kernel_mask),
             'moss_dit_optimization_mask':a.moss_dit_optimization_mask,
             'core_dit_policy_proof':validate_dit_core(core_manifest,dit_enabled),

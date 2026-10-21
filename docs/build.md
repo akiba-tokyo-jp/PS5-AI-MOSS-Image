@@ -1,5 +1,7 @@
 # MOSS Imageのビルド
 
+img2imgは後述のkernel15構成に加え、nativeとgatewayの両方へ`--moss-img2img-trial`を指定する明示的な試験機能です。[実機結果](moss-img2img-20261021.md)。未指定では画像入力を拒否します。nativeはkernel mask15、`--moss-fa-shmem-no-limit`、Turbo4／upload／F32累積を必須とし、GPU profilerやF16 LoRA storageとの混在を拒否します。coreの新しいimg2img専用flagはありません。source-freezeと新しい出力先を使い、gateway schema生成をcore／nativeのfreeze前に済ませてください。元の4forward text-to-image契約と、画像入力の実1〜3forward契約を区別します。
+
 Windows x64からPS5向けにcross compileします。ビルドツールはPS5へ接続・配備・推論しません。モデル、SDK、libc.prx、生成済みshader、依存libraryはGitに含めず、固定revisionとhashを別途揃えます。clone直後に依存を含めて完成するワンコマンド構築ではありません。
 
 ## 入力とABI

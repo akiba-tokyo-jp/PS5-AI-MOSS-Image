@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #define _POSIX_C_SOURCE 200809L
 #include "engine.h"
+#include "moss_img2img_trial.h"
 #include "moss_sampler_trial.h"
 #include "reference_image.h"
 #include "v3_shutdown.h"
@@ -82,7 +83,7 @@ static void pause_ms(unsigned ms) {
 #define MAX_JOB_FIELDS 64 /* Bounded internal saved-job metadata capacity. */
 #define MAX_JSON_STRING 8192
 #define JOB_JSON_SIZE 8192
-#define MOSS_IMAGE_INPUTS_SUPPORTED 0 /* No MOSS Image-compatible image-conditioning backend yet. */
+#define MOSS_IMAGE_INPUTS_SUPPORTED PS5_AI_MOSS_IMG2IMG_TRIAL
 
 typedef struct { char key[64]; char value[MAX_JSON_STRING + 1]; int type; } field;
 /* type: 1 string, 2 JSON number, 3 true, 4 false, 5 null */
@@ -333,14 +334,14 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
     int ok = 0; int64_t v;
     memset(r, 0, sizeof(*r));
     r->width = r->height = 1024; r->steps = PS5_AI_MOSS_DEFAULT_REQUEST_STEPS; r->cfg_scale = PS5_AI_MOSS_DEFAULT_REQUEST_CFG; r->flow_shift = 5; r->seed = PS5_AI_MOSS_DEFAULT_REQUEST_SEED;
-    r->manga_strength = 0;
+    r->manga_strength = 0;r->denoise_strength=0.5;
     r->control_strength=1;
     strcpy(r->sampler, PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER);
     if (!parse_object(body, obj)) { snprintf(error, cap, "Malformed, duplicate, nested, or oversized JSON field"); goto done; }
     for (size_t i = 0; i < obj->count; ++i) {
         field *f = &obj->values[i];
-        if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
-           !strcmp(f->key,"denoise_strength") || !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
+        if((!PS5_AI_MOSS_IMG2IMG_TRIAL && (!strcmp(f->key,"init_image_id") || !strcmp(f->key,"denoise_strength"))) || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
+           !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
            !strcmp(f->key,"control_image_id") || !strcmp(f->key,"control_strength")){
             snprintf(error,cap,"MOSS Image SFT currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
         }
@@ -390,6 +391,7 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else { snprintf(error, cap, "Unknown request field: %.63s", f->key); goto done; }
     }
     if (!r->prompt[0]) { snprintf(error, cap, "prompt is required and cannot be empty"); goto done; }
+    if(r->init_image_id[0] && (!PS5_AI_MOSS_IMG2IMG_TRIAL || !ps5_ai_moss_img2img_steps(r->denoise_strength))){snprintf(error,cap,"MOSS img2img strength must retain the reference: finite0.01 <= float(strength) <0.75");goto done;}
     if((find_field(obj,"denoise_strength") && !r->init_image_id[0]) ||
        (find_field(obj,"ip_adapter_strength") && !r->reference_image_id[0])){
         snprintf(error,cap,"Image strength requires its matching input image ID");goto done;
@@ -742,11 +744,11 @@ static void health(socket_t fd) {
     lifecycle_json(lifetime_json,sizeof(lifetime_json));
 #endif
     snprintf(body, sizeof(body),
-        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-image\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":false,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false,\"selected_moss_lora\":true},\"selected_moss_lora\":%s,\"backend\":%s,\"engine_available\":%s,"
+        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-image\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":%s,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false,\"selected_moss_lora\":true},\"selected_moss_lora\":%s,\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
         "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"tv_display\":%s,\"lifecycle\":%s,\"model_initialization\":%s,\"moss_sampler_trial\":%s,\"moss_sampler_policy\":\"%s\",\"trial_sampler\":\"%s\",\"trial_scheduler\":\"%s\",\"trial_steps\":%d,\"trial_cfg_scale\":%.1f,\"moss_turbo_trial\":%s,\"moss_turbo_policy\":\"%s\",\"moss_turbo_adapter\":\"%s\",\"moss_turbo_rank\":%d,\"moss_turbo_runtime_multiplier\":%.1f,\"moss_turbo_bounded_upload_trial\":%s,\"moss_turbo_bounded_upload_policy\":\"%s\",\"moss_lora_fp32_shared_trial\":%s,\"moss_lora_f16_storage_trial\":%s,\"moss_lora_precision_policy\":\"%s\",\"moss_lora_precision_scope\":\"%s\"}",
-        s.available && s.gpu_available ? "ready" : "degraded", lora_json, backend,
+        s.available && s.gpu_available ? "ready" : "degraded", PS5_AI_MOSS_IMG2IMG_TRIAL?"true":"false", lora_json, backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
         model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation, screen_json,lifetime_json,s.model_initialization[0] ? s.model_initialization : "null",
@@ -1001,7 +1003,7 @@ static void handle_client(socket_t fd, uint64_t deadline) {
         else admin_shutdown(fd);
     } else if (!strcmp(path,"/api/inputs") || !strcmp(path,"/api/masks") || !strcmp(path,"/api/masks/grayscale")) {
         if(strcmp(method,"POST"))send_error(fd,405,"Use POST");
-        else if(!MOSS_IMAGE_INPUTS_SUPPORTED)send_error(fd,400,"MOSS Image SFT currently supports text-to-image only; image inputs and masks are unsupported");
+        else if(!MOSS_IMAGE_INPUTS_SUPPORTED || strcmp(path,"/api/inputs"))send_error(fd,400,"MOSS Image SFT currently supports text-to-image only; image inputs and masks are unsupported");
         else upload_input(fd,(const unsigned char *)body,content_length,content_type,!strcmp(path,"/api/masks")?1:!strcmp(path,"/api/masks/grayscale")?2:0);
     } else if (!strncmp(path,"/api/inputs/",12)) {
         if(strcmp(method,"GET") && strcmp(method,"DELETE"))send_error(fd,405,"Use GET or DELETE");

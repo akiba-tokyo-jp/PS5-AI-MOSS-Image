@@ -25,8 +25,10 @@ def moss_gateway_trial_flags(sampler=False,turbo=False):
         '-DPS5_AI_MOSS_Q4_BK64_RAW64=0','-DPS5_AI_MOSS_SAMPLER_TRIAL=0','-DPS5_AI_MOSS_TURBO_TRIAL=1']
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-lora-storage',choices=('f32','f16'));a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--moss-sampler-trial',action='store_true');p.add_argument('--moss-turbo-trial',action='store_true');p.add_argument('--moss-lora-storage',choices=('f32','f16'));p.add_argument('--moss-img2img-trial',action='store_true');a=p.parse_args()
     sampler_flags=moss_gateway_trial_flags(a.moss_sampler_trial,a.moss_turbo_trial)
+    if a.moss_img2img_trial and (not a.moss_turbo_trial or a.moss_lora_storage is not None):raise RuntimeError('Img2img gateway requires the F32 Turbo parent')
+    sampler_flags+=['-DPS5_AI_MOSS_IMG2IMG_TRIAL='+str(int(a.moss_img2img_trial))]
     inference_feature_flags=moss_gateway_inference_feature_flags()
     validate_lora_precision(a.moss_lora_storage,turbo=a.moss_turbo_trial,upload=False,accumulation=a.moss_turbo_trial,
         sampler=a.moss_sampler_trial,variant=1,precision='fp16',experimental=True,trial_10g=True,transport=True)
@@ -75,7 +77,7 @@ def main():
         (out/'dynamic-audit.txt').write_text(dynamic,encoding='utf-8',newline='\n')
         needed=re.findall(r'Shared library: \[([^\]]+)\]',dynamic)
         native_libraries=[record(sdk/('target/lib/'+name)) for name in ['libc.a','libkernel_web.so','libSceLibcInternal.so','libSceNet.so']]
-    inputs=[record(p) for p in [Path(__file__),ROOT/'docs/openapi.json',ROOT/'native/app/moss_sampler_trial.h',ROOT/'native/app/moss_turbo_trial.h',ROOT/'native/app/moss_lora_f16_storage_trial.h',ROOT/'tools/moss_lora_precision_policy.py',ROOT/'native/payload_crt/credential_preserving_patch.c',*sources,*sorted(src.glob('*.h')),*sorted(src.glob('*.inc'))]]
+    inputs=[record(p) for p in [Path(__file__),ROOT/'docs/openapi.json',ROOT/'native/app/moss_img2img_trial.h',ROOT/'native/app/moss_sampler_trial.h',ROOT/'native/app/moss_turbo_trial.h',ROOT/'native/app/moss_lora_f16_storage_trial.h',ROOT/'tools/moss_lora_precision_policy.py',ROOT/'native/payload_crt/credential_preserving_patch.c',*sources,*sorted(src.glob('*.h')),*sorted(src.glob('*.inc'))]]
     manifest=dict(schema='moss-image-gateway-build-v1',state='crossbuilt_not_PS5_executed' if a.native else 'host_fixture_built_no_inference',
                   model_id='moss-image-sft',native_port=8192,gateway_port=8193,gateway_root='/data/ai/moss-openai-gateway',
                   artifact=record(elf) if a.native else None,inputs=inputs,commands=commands,warnings=warnings,
@@ -87,6 +89,7 @@ def main():
                   generation_contract_policy='euler_custom1000_910_717_24_cfg1_nsfw07_turbo1_rank144_v1' if a.moss_turbo_trial else 'res_multistep_simple_30_cfg4_v1' if a.moss_sampler_trial else 'baseline_euler_discrete_50_cfg3_v1',
                   moss_sampler_trial=a.moss_sampler_trial,moss_sampler_policy='res_multistep_simple_30_cfg4_v1' if a.moss_sampler_trial else 'disabled',
                   moss_sampler_compile_flags=sampler_flags,production_runtime_admitted=False,
+                  moss_img2img_trial=a.moss_img2img_trial,
                   moss_turbo_trial=a.moss_turbo_trial,moss_turbo_policy='euler_custom1000_910_717_24_cfg1_nsfw07_turbo1_rank144_v1' if a.moss_turbo_trial else 'disabled',
                   **lora_precision_fields(a.moss_lora_storage,transport=True),
                   moss_gateway_trial_compile_flags=sampler_flags+inference_feature_flags+ffn_flags+lora_flags,

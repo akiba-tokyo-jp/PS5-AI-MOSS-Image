@@ -50,15 +50,15 @@ static size_t base64_block(const unsigned char *in,size_t n,char *out) {
 static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,char *err,size_t cap,char param[64]) {
     object *o=malloc(sizeof(*o));if(!o){snprintf(err,cap,"Unable to parse request");return 0;}
     memset(r,0,sizeof(*r));r->width=r->height=1024;r->steps=PS5_AI_MOSS_DEFAULT_REQUEST_STEPS;r->cfg_scale=PS5_AI_MOSS_DEFAULT_REQUEST_CFG;r->flow_shift=5;r->seed=PS5_AI_MOSS_DEFAULT_REQUEST_SEED;strcpy(r->sampler,PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER);r->manga_strength=0;*url_format=0;param[0]=0;int ok=0;int64_t v;
-    r->control_strength=1;
+    r->control_strength=1;r->denoise_strength=0.5;
     if(!parse_object(body,o)){snprintf(err,cap,"Malformed, duplicate, nested, or oversized JSON field");goto done;}
     for(size_t i=0;i<o->count;i++){
         field *f=&o->values[i];snprintf(param,64,"%s",f->key);
         const char *keys[]={"prompt","negative_prompt","model","n","size","response_format","quality","background","output_format","stream","user","safety_identifier","steps","cfg_scale","flow_shift","seed","sampler","manga_strength","manga_monochrome","init_image_id","reference_image_id","mask_image_id","denoise_strength","ip_adapter_strength","controlnet","control_image_id","control_strength"};
         int known=0;for(size_t k=0;k<sizeof(keys)/sizeof(keys[0]);k++)known|=!strcmp(f->key,keys[k]);
         if(!known){snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
-        if(!strcmp(f->key,"init_image_id") || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
-           !strcmp(f->key,"denoise_strength") || !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
+        if((!PS5_AI_MOSS_IMG2IMG_TRIAL && (!strcmp(f->key,"init_image_id") || !strcmp(f->key,"denoise_strength"))) || !strcmp(f->key,"reference_image_id") || !strcmp(f->key,"mask_image_id") ||
+           !strcmp(f->key,"ip_adapter_strength") || !strcmp(f->key,"controlnet") ||
            !strcmp(f->key,"control_image_id") || !strcmp(f->key,"control_strength")){
             snprintf(err,cap,"MOSS Image SFT currently supports text-to-image only; %.63s is unsupported",f->key);goto done;
         }
@@ -119,6 +119,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         }else{snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
     }
     if(!r->prompt[0]){strcpy(param,"prompt");snprintf(err,cap,"prompt is required and cannot be empty");goto done;}
+    if(r->init_image_id[0] && (!PS5_AI_MOSS_IMG2IMG_TRIAL || !ps5_ai_moss_img2img_steps(r->denoise_strength))){snprintf(err,cap,"MOSS img2img strength must retain the reference: finite0.01 <= float(strength) <0.75");goto done;}
     if((find_field(o,"denoise_strength") && find_field(o,"denoise_strength")->type!=5 && !r->init_image_id[0]) ||
        (find_field(o,"ip_adapter_strength") && find_field(o,"ip_adapter_strength")->type!=5 && !r->reference_image_id[0])){
         snprintf(err,cap,"Image strength requires its matching input image");goto done;

@@ -4,6 +4,8 @@
 
 前段のGPU timestamp測定で、1024はFFN40.15%、Attention25.41%、QKV15.01%を確認しました。その結果を今回のkernel改善に反映しています。[計測範囲](moss-dit-gpu-profile-20261021.md)。
 
+img2imgを明示的default-OFF trialとして追加しました。native非同期とOpenAI形式editsでPS5出力を確認し、1024は40.833333秒（入力encode4.425秒・実3 forward）でした。256の1／2 forwardも検証済みです。元絵のアニメ調が残り、実写化や人物固定を保証しません。[詳細](moss-img2img-20261021.md)。
+
 ## 採用判断と任意実験
 
 | 経路 | 現在の扱い | 実機で確認した範囲 |
@@ -24,7 +26,7 @@
 - Turbo4はNSFW0.7＋Turbo1.0をrank144 F32へ合成し、runtime倍率1.0、4 Euler steps／CFG1、author sigmas `[1.0,0.910,0.717,0.024,0.0]` を使用します。flow shiftを二重適用しません。
 - production admissionは既定0。明示的なTurbo4 trialは固定prompt・seed20261020、256／1024、1プロセス最大4試行です。失敗した要求も試行数に含め、自動再送しません。任意promptの連続運用は未対応です。
 - 数値ゲート、全出力有限値、実scratch／容量、GPU完了、所有権、通常終了を弱めません。不確かなGPU資源を手動で解放しません。
-- APIは認証・private /24・n=1・PNG・非streaming。未対応の画像編集等は拒否します。モデルpathや秘密をクライアント指定で置換しません。
+- APIは認証・private /24・n=1・PNG・非streaming。明示img2img trial以外のmask/IP/ControlNet等は拒否します。モデルpathや秘密をクライアント指定で置換しません。
 
 ## メモリと容量
 
