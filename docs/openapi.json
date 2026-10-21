@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PS5 AI MOSS Image API",
-    "version": "0.3.0-img2img-trial",
-    "description": "MOSS-only OpenAI Images generation and explicitly compiled img2img trial. Same-console CPU gateway8193/native Vulkan engine8192. Bearer and private IPv4/24; n=1, PNG, no streaming. Maximum4 generation attempts per native process; failures consume attempts. Production admission remains OFF. Turbo4 text-to-image retains author sigmas [1,.910,.717,.024,0], CFG1 and fixed seed20261020. Img2img retains a suffix of that schedule, uses the PS5 VAE encoder and reports actual1-3 steps; denoise_strength is step-fraction, finite float >=.01 and <.75. No mask, inpainting, IP-Adapter or ControlNet. --moss-img2img-trial is required in both builds; default builds reject image input. This schema describes the implementation; see verification records for actual tested scope."
+    "version": "0.4.0-service",
+    "description": "PS5 MOSS Turbo4 serial image service. No prerequisite256 generation, fixed prompt/seed, or lifetime attempt cap. Same-console native8192 and OpenAI-style gateway8193; bearer and private IPv4 /24. Output64..1024 on16-pixel grid, arbitrary aspect ratio; PNG,n=1, no streaming. Turbo adapter authored4 Euler steps/CFG1/sigmas [1,.910,.717,.024,0] form the model profile. Img2img uses PS5 VAE encode and actual1..4 authored suffix forwards. Service mode preserves numeric/capacity/GPU/ownership admission. Older diagnostic builds expose their own runtime health and retain their former limits."
   },
   "servers": [
     {
@@ -39,7 +39,7 @@
           "prompt": {
             "type": "string",
             "minLength": 1,
-            "description": "Nonempty text up to4096 UTF-8 bytes. The published verified recipe fixes the example canonical prompt; parser acceptance alone does not validate arbitrary-prompt or ordinary operation."
+            "description": "Caller text, nonempty and <=4096 UTF-8 bytes. No canonical prompt or hidden subject/style additions."
           },
           "model": {
             "type": [
@@ -70,13 +70,8 @@
               "null"
             ],
             "default": "1024x1024",
-            "description": "The bounded performance build accepts square256 or1024. auto, omission or null selects1024x1024. The verified sequence starts with256, then1024 after success and image review.",
-            "enum": [
-              "auto",
-              "256x256",
-              "1024x1024",
-              null
-            ]
+            "description": "auto/null/omission selects1024x1024. Each dimension64..1024 divisible16; rectangular output is allowed. Cold1024 is accepted without a256 job.",
+            "pattern": "^(auto|[0-9]{2,4}x[0-9]{2,4})$"
           },
           "response_format": {
             "type": [
@@ -158,7 +153,7 @@
               "string",
               "null"
             ],
-            "description": "Compatibility text up to4096 UTF-8 bytes; omitted/null is empty. The verified canonical request uses low quality, blurry. CFG1 does not execute a negative CFG DiT forward."
+            "description": "Caller text <=4096 UTF-8 bytes; omitted/null is empty. CFG1 does not execute a negative CFG forward."
           },
           "steps": {
             "type": [
@@ -170,7 +165,7 @@
               null
             ],
             "default": 4,
-            "description": "Fixed4 by the compiled Turbo performance profile. Null uses4."
+            "description": "The selected Turbo4 adapter profile uses4 Euler steps. Other step counts need a different sampling/model profile; not an attempt or startup restriction."
           },
           "cfg_scale": {
             "type": [
@@ -189,12 +184,10 @@
               "integer",
               "null"
             ],
-            "enum": [
-              20261020,
-              null
-            ],
-            "default": 20261020,
-            "description": "Fixed verification seed20261020. Omission/null uses20261020; other values, including-1, are rejected by the selected profile."
+            "default": -1,
+            "description": "Any integer -1..INT64_MAX. -1/null/omission resolves a varying seed on PS5 before job persistence; actual value is returned in native job.seed and X-PS5-Seed.",
+            "minimum": -1,
+            "maximum": 9223372036854775807
           },
           "sampler": {
             "type": [
@@ -252,9 +245,9 @@
           "denoise_strength": {
             "type": "number",
             "minimum": 0.01,
-            "exclusiveMaximum": 0.75,
             "default": 0.5,
-            "description": "Requires init_image_id. Existing SD.cpp step-fraction semantics: float<.25 retains [.024,0] (1 forward); .25<=float<.5 retains [.717,.024,0] (2); .5<=float<.75 retains [.910,.717,.024,0] (3). The actual float value must remain below.75; no extra flow shift. A sigma1 start would discard the reference and is rejected."
+            "description": "Step-fraction strength0.01..1. Floats <.25/<.5/<.75/otherwise select actual1/2/3/4 forwards. >=.75 starts at sigma1 and fully resamples, so source latent contribution is zero. This is not an identity adapter.",
+            "maximum": 1
           }
         }
       }
@@ -336,6 +329,13 @@
                 "schema": {
                   "type": "string",
                   "pattern": "^[0-9a-f]{32}$"
+                }
+              },
+              "X-PS5-Seed": {
+                "description": "Resolved native seed, including random/default requests.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               }
             }
@@ -555,9 +555,12 @@
                 }
               }
             }
+          },
+          "507": {
+            "description": "Configured output/job storage quota is exhausted or its metadata cannot be checked. Existing files are preserved. Archive output before submitting another request."
           }
         },
-        "description": "One native job per accepted gateway request, no client-side inference or automatic POST retries. The selected native performance build allows4 valid attempts per process including failed attempts; ordinary runtime admission is disabled. Inspect health and existing jobs after a timeout."
+        "description": "One image from caller text using the selected Turbo4 profile. No fixed verification seed, startup image or lifetime count. Exactly one native POST; uncertain requests are not automatically retried."
       }
     },
     "/v1/models": {
@@ -805,7 +808,7 @@
     "/v1/images/edits": {
       "post": {
         "operationId": "createImageEdit",
-        "description": "Explicit MOSS img2img trial, one raster source. Multipart OpenAI-style subset; masks and other reference modes rejected before upload. Upload and inference stay on PS5. Source need not match output dimensions; existing PS5 preprocessing resizes it. Default builds return400 without uploading.",
+        "description": "One PNG/JPEG source as multipart, encoded by the PS5 VAE; arbitrary caller prompt. No masks, IP-Adapter or ControlNet. With service-mode built into both processes, cold1024 edits are accepted. Transient uploaded source is cleaned up after the native job finishes.",
         "requestBody": {
           "required": true,
           "content": {
@@ -821,7 +824,7 @@
                   "prompt": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Nonempty text up to4096 UTF-8 bytes. The published verified recipe fixes the example canonical prompt; parser acceptance alone does not validate arbitrary-prompt or ordinary operation."
+                    "description": "Caller text, nonempty and <=4096 UTF-8 bytes. No canonical prompt or hidden subject/style additions."
                   },
                   "model": {
                     "type": [
@@ -852,13 +855,8 @@
                       "null"
                     ],
                     "default": "1024x1024",
-                    "description": "The bounded performance build accepts square256 or1024. auto, omission or null selects1024x1024. The verified sequence starts with256, then1024 after success and image review.",
-                    "enum": [
-                      "auto",
-                      "256x256",
-                      "1024x1024",
-                      null
-                    ]
+                    "description": "auto/null/omission selects1024x1024. Each dimension64..1024 divisible16; rectangular output is allowed. Cold1024 is accepted without a256 job.",
+                    "pattern": "^(auto|[0-9]{2,4}x[0-9]{2,4})$"
                   },
                   "response_format": {
                     "type": [
@@ -883,7 +881,7 @@
                       null
                     ],
                     "default": 4,
-                    "description": "Fixed4 by the compiled Turbo performance profile. Null uses4."
+                    "description": "The selected Turbo4 adapter profile uses4 Euler steps. Other step counts need a different sampling/model profile; not an attempt or startup restriction."
                   },
                   "cfg_scale": {
                     "type": [
@@ -914,12 +912,10 @@
                       "integer",
                       "null"
                     ],
-                    "enum": [
-                      20261020,
-                      null
-                    ],
-                    "default": 20261020,
-                    "description": "Fixed verification seed20261020. Omission/null uses20261020; other values, including-1, are rejected by the selected profile."
+                    "default": -1,
+                    "description": "Any integer -1..INT64_MAX. -1/null/omission resolves a varying seed on PS5 before job persistence; actual value is returned in native job.seed and X-PS5-Seed.",
+                    "minimum": -1,
+                    "maximum": 9223372036854775807
                   },
                   "sampler": {
                     "type": [
@@ -936,14 +932,14 @@
                   "denoise_strength": {
                     "type": "number",
                     "minimum": 0.01,
-                    "exclusiveMaximum": 0.75,
                     "default": 0.5,
-                    "description": "Requires init_image_id. Existing SD.cpp step-fraction semantics: float<.25 retains [.024,0] (1 forward); .25<=float<.5 retains [.717,.024,0] (2); .5<=float<.75 retains [.910,.717,.024,0] (3). The actual float value must remain below.75; no extra flow shift. A sigma1 start would discard the reference and is rejected."
+                    "description": "Step-fraction strength0.01..1. Floats <.25/<.5/<.75/otherwise select actual1/2/3/4 forwards. >=.75 starts at sigma1 and fully resamples, so source latent contribution is zero. This is not an identity adapter.",
+                    "maximum": 1
                   },
                   "image": {
                     "type": "string",
                     "format": "binary",
-                    "description": "One PNG/JPEG source, maximum8MiB and each dimension <=1024 for this inference trial; normalized and decoded on PS5. The common upload store can decode larger images but the trial engine refuses them. No URL input."
+                    "description": "One PNG/JPEG source, at most8MiB, each dimension<=2048. Normalized/resized on PS5 to requested output size. No file paths or URLs."
                   },
                   "reference_mode": {
                     "type": "string",
@@ -957,7 +953,7 @@
                       "string",
                       "null"
                     ],
-                    "description": "Compatibility text up to4096 UTF-8 bytes; omitted/null is empty. The verified canonical request uses low quality, blurry. CFG1 does not execute a negative CFG DiT forward."
+                    "description": "Caller text <=4096 UTF-8 bytes; omitted/null is empty. CFG1 does not execute a negative CFG forward."
                   }
                 }
               }
@@ -1013,6 +1009,13 @@
                 "schema": {
                   "type": "string",
                   "pattern": "^[0-9a-f]{32}$"
+                }
+              },
+              "X-PS5-Seed": {
+                "description": "Resolved native seed, including random/default requests.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               }
             }
@@ -1232,17 +1235,25 @@
                 }
               }
             }
+          },
+          "507": {
+            "description": "Configured output/job storage quota is exhausted or its metadata cannot be checked. Existing files are preserved. Archive output before submitting another request."
           }
         }
       }
     }
   },
   "x-runtime-profile": {
-    "profile": "turbo4_bounded_upload_F32_10GiB_performance_verification",
+    "profile": "moss_turbo4_serial_service",
+    "service_mode": true,
     "moss_operating_profile": false,
     "production_runtime_admitted": false,
-    "max_generation_attempts_per_native_process": 4,
-    "failed_attempts_consume_claims": true,
+    "legacy_production_admission_macro": 0,
+    "max_generation_attempts_per_native_process": null,
+    "requires_256_first": false,
+    "fixed_prompt": false,
+    "fixed_seed": false,
+    "dimensions": "64..1024 each, divisible16",
     "moss_turbo_policy": "euler_custom1000_910_717_24_cfg1_nsfw07_turbo1_rank144_v1",
     "custom_sigmas": [
       1,
@@ -1254,14 +1265,15 @@
     "custom_sigmas_second_flow_shift": false,
     "owned_direct_pool_gib": 10,
     "inference_budget_gib": 9.5,
-    "generic_operation_verified": false,
-    "verification_scope": "Existing text-to-image and new explicitly compiled image-input trial; consult docs/status.md for measurements. No unlimited or arbitrary-prompt stability claim.",
+    "default_output_job_quota_mib_per_process": 8192,
+    "quota_cli": "--storage-limit-mib",
     "moss_img2img_trial": true,
     "img2img_actual_forwards": [
       1,
       2,
-      3
+      3,
+      4
     ],
-    "img2img_reference_mode": "VAE-encoded initial latent; not IP-Adapter identity conditioning"
+    "verification_scope": "Normal service implementation; actual hardware validation is recorded separately in docs/status.md. No claim of unlimited hardware resources or long-run stress validation."
   }
 }

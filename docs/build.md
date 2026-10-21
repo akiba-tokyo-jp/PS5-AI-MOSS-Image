@@ -1,64 +1,35 @@
-# MOSS Imageのビルド
+# MOSS Imageをソースからビルドする
 
-img2imgは後述のkernel15構成に加え、nativeとgatewayの両方へ`--moss-img2img-trial`を指定する明示的な試験機能です。[実機結果](moss-img2img-20261021.md)。未指定では画像入力を拒否します。nativeはkernel mask15、`--moss-fa-shmem-no-limit`、Turbo4／upload／F32累積を必須とし、GPU profilerやF16 LoRA storageとの混在を拒否します。coreの新しいimg2img専用flagはありません。source-freezeと新しい出力先を使い、gateway schema生成をcore／nativeのfreeze前に済ませてください。元の4forward text-to-image契約と、画像入力の実1〜3forward契約を区別します。
+通常API版の入口は`tools/build_service.py`です。固定prompt・seed・256先行・最大4試行を撤去したservice profileをnativeとgatewayの両方へ適用します。[実機検証](moss-service-20261021.md)。過去の資料にある低水準trial用コマンドは診断buildの記録です。
 
-Windows x64からPS5向けにcross compileします。ビルドツールはPS5へ接続・配備・推論しません。モデル、SDK、libc.prx、生成済みshader、依存libraryはGitに含めず、固定revisionとhashを別途揃えます。clone直後に依存を含めて完成するワンコマンド構築ではありません。
+## 依存と設定
 
-## 入力とABI
+Windows x64でcross compileします。[dependencies.lock.json](../dependencies.lock.json)、[native profile](../build-profiles/native.json)、[core profile](../build-profiles/moss-core.json)の固定revisionを揃え、[build設定例](../config/build.json.example)をprivate作業ディレクトリへコピーします。SDK、LLVM、PS5 Mesa/RADV、Vulkan-Headers、SD.cpp、shader toolchain、dependency archives、native packagerの実際の場所を指定します。
 
-[dependencies.lock.json](../dependencies.lock.json)、[native依存profile](../build-profiles/native.json)、[core profile](../build-profiles/moss-core.json)が固定入力です。[build設定例](../config/build.json.example)を自分用の非公開JSONへコピーし、SDK／LLVM／Vulkan-Headers／依存archive／upstream checkout／native packagerを指定します。新しいbuild、vendor、一時ファイルは十分な容量のある作業ドライブへ置きます。
+SDK・library・weights・生成済みshaderはGitに含みません。clone直後にそれらまで自動取得するinstallerではありません。nativeとCPU gatewayのSDK ABIを混在させず、16KiB page、emulated TLS、`GGML_MAX_NAME=160`、constructor/importを一致させます。公開overlayと固定baseを使用し、既存core archiveの名前だけを流用しません。[モデル準備](moss-models.md)、[adapter再現](moss-turbo4-reproduction.md)、[第三者通知](../THIRD_PARTY_NOTICES.md)。
 
-| 入力 | 役割と境界 |
-|---|---|
-| native SDK／PS5_PayloadSDK | 固定headers、platform、thread／TLS／memory ABI。CPU gateway用SDKと混在させない |
-| PS5_Mesa／RADV | PS5 winsys、NIR／ACO、Vulkan runtime。host shader compilerとPS5 target libraryを分離 |
-| SD.cpp／GGML | 固定baseと限定MOSS backport、[公開overlay](../patches/stable-diffusion/overlay/src/model/diffusion/moss_image.hpp)。75 core objectsをfresh compile |
-| Native CRT／SELF tools | 固定native tooling。loaded bytes、SELF integrity、initializer／runtime providerを確認 |
-| GLSL／SPIR-V header | reviewed shader metadata／hashと一致させる |
-| licenses | アプリ、SDK、driver、font、モデルの条件を分離して保持 |
+## 通常版
 
-PS5 targetはx86-64、16KiB page、emulated TLSです。`GGML_MAX_NAME=160`、tensor layout、exceptions／RTTI、constructor／importのABIを一致させます。設定だけの変更で物理quotaは増えません。
-
-[source-freeze例](../config/moss-source-freeze.json.example)を基に、実際に消費する全source、header、profile、helperのsize／SHAを記録します。例はfrozen:falseの未設定テンプレートです。完全な入力一覧を生成して固定した後にfrozen:trueを設定してください。公開用source inventoryと、compile時に消費した依存closureの証拠は別です。core manifestには全75 compile、depfile、archive対応と前後hashが必要です。
-
-## 選択した速度基準のビルド
-
-以下はTurbo4＋bounded upload、rank144 F32の**限定performance trial**です。Direct予約10GiB、推論予算9.5GiB、pool外reserve1GiBに一致する設定を使います。新しい出力先を指定し、既存の成功版を上書きしません。
+新しい出力先を指定します。依存configとbuild生成物をソースcheckout外の容量に余裕があるドライブへ置いてください。
 
 ```powershell
-python -B tools/build_moss_core.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-core-turbo-upload --source-freeze D:/ps5-dev/moss-source-freeze.json --jobs 2 --moss-f32-accumulation --moss-turbo-trial --moss-bounded-weight-upload-trial
-python -B tools/build.py --config D:/ps5-dev/moss-build.json --core-manifest D:/ps5-dev/build/moss-core-turbo-upload/manifest.private.json --out D:/ps5-dev/build/moss-native-turbo-upload --experimental-small-trial --trial-10g --performance-trial-variant 1 --precision fp16 --moss-f32-accumulation --moss-turbo-trial --moss-bounded-weight-upload-trial
-python -B tools/build_gateway.py --config D:/ps5-dev/moss-build.json --out D:/ps5-dev/build/moss-gateway-turbo --native --moss-turbo-trial
+python -B tools/build_service.py --config D:/ps5-dev/build.json --out D:/ps5-dev/build/moss-service --jobs 2
 ```
 
-これらのCLIは、公開基準へ戻した検証済みソースの引数です。nativeにpool sizeを任意指定する引数や、無制限の通常運用flagを追加しません。`--trial-10g`が選ぶcompiled placement、VA、設定、実機の確保結果を一致させます。12GiBの旧設定例をそのまま10GiB trialへ使わないでください。
+wrapperはgatewayをbuildしてschemaを生成した後、checkout内のGit管理対象・非ignoredファイルの入力一覧をprivate freezeへ記録し、75 core objectsをfresh compileしてnativeをbuildします。低水準のprofile名にtrialという語が残っていても、`--service-mode`で生成回数制限・256条件は無効です。
 
-nativeは`title/PPSA99190/eboot.bin`、gatewayはCPU用ELFを作ります。モデルやruntime全体を自動インストールするコマンドではありません。gatewayはHTTP転送だけを行い、GPU uploadの推論flagを有効にしません。core／nativeのTurbo、upload、F32累積のpolicyと入力hashを一致させます。
+選択する構成はF32 accumulation、Turbo4、bounded weight upload、DiT optimization mask15、kernel mask15、FA shared-KV occupancy調整、img2img、10GiB Direct pool／9.5GiB推論予算です。FFN chunk2048、F16 LoRA storage、GPU profiler、別sampling候補は混ぜません。モデルはrank144 F32 adapter、runtime multiplier1です。数値・容量・GPU完了・owner guardは維持します。
 
-## 試行上限と任意実験の区別
+生成物は`native/title/PPSA99190/eboot.bin`、gateway build directory内のCPU ELF、各manifest、`moss-service.json.example`です。exact ELF pathはgateway manifestの`artifact.path`を参照します。これはビルドであり、PS5へは接続・配備・起動しません。
 
-このperformance buildは1native process最大4回の有効な試行に制限します。失敗も回数を消費し、5回目を拒否します。公開する成功条件は[APIのcanonical request](api.md)の固定prompt／negative prompt、seed20261020、4 Euler steps、CFG1、shift5、256または1024の正方形です。256成功・画像確認・空queue確認後に1024へ進みます。production runtime admissionは無効です。
+既存の完全な[freeze形式](../config/moss-source-freeze.json.example)を自分で管理する場合は`--source-freeze PRIVATE_JSON`を指定できます。build中にsourceを変更しないでください。public source snapshotと実際に消費したdependency closureの記録は別です。
 
-FFN2048分割とF16 LoRA storage／専用F32 shared演算は別の明示実験で、速度基準ではOFFです。比較結果は[最新資料](moss-turbo-memory-options-20261020.md)へ分けています。8GiBや任意prompt／seedの無制限operating版は、この公開版の成功機能として含めません。
+`--prepare-only`はgatewayをbuildし、freezeと75-object core planを検査して終了します。nativeやcoreのcompile成功・実機成功を意味しません。今回の実機artifactはwrapperの下位build commandsで構築し、75 compile、native24 constructors／6 runtime providers、全量SELF readbackを確認しました。後から追加したwrapper自動freeze経路はprepare-onlyまで確認しています。
 
-ホストpolicy／HTTP／graph／fixture検査はモデル推論を行いません。fresh75 core、native recipes、strong provider、SELFと依存検査が通っても、PS5の数値ゲート、実pool確保、生成画像、正常終了を代替しません。[配置手順](deployment.md)、[モデル再現](moss-turbo4-reproduction.md)、[第三者通知](../THIRD_PARTY_NOTICES.md)も確認してください。
+## 配備と検証
 
-## 追加DiT最適化の限定trial
+通常版設定は[config/moss-service.json.example](../config/moss-service.json.example)です。旧`moss-native.json.example`は過去の12GiB／rank16構成であり、通常版へそのまま使わないでください。設定JSONのみでcompiled pool/VAを変えることはできません。
 
-[実機比較](moss-dit-fusion-20261020.md)の4項目を有効にする場合、上のcoreコマンドに --moss-dit-optimizations、nativeコマンドに --moss-dit-optimization-mask 15 を追加します。新しいoutを使い、source-freezeにも tools/moss_dit_policy.py のfields(True)に対応するpolicy・compile flag・全sourceの実hashを固定します。coreは全75コマンドでcapability1、nativeも同じcapabilityを必要とします。mask0は同じcoreの対照版で、1／3／7は累積した限定比較用です。flags未指定はOFFです。
+[配置・起動手順](deployment.md)に従い、native Homebrewタイトルとして起動します。数値読み戻し後にAPI ready、最初の生成時にモデルをlazy loadします。初回1024をそのまま指定できます。host policy/HTTP試験やcompile成功はPS5 GPU実行の代わりにはなりません。[今回のPNGと計測](moss-service-20261021.md)を参照してください。
 
-F32積算・Turbo4・bounded uploadを必須とし、FFN分割・private LoRA precision・Spectrum・別のsampling／GPU profile候補との混在を拒否します。一般fusion、試行上限、production admission、容量・数値・完了・所有権の条件は維持します。gatewayのAPIと設定は変更しません。生成ソースを更新するgateway build等はsource-freeze前に済ませ、core／native build中にソースを変更しないでください。
-
-## 現行Turbo4のGPU時間を測る限定診断
-
-Turbo4＋bounded upload＋F32と同じparentを使い、coreに --moss-dit-optimizations、nativeに --moss-dit-optimization-mask 15 と --moss-dit-gpu-profile を明示します。旧rank16/50-step用 --moss-gpu-profile は併用しません。新しいflagはdefault-OFFで、同一deviceの既存完了後に最初の完全DiT graph2回を読み戻します。固定256→1024、最大4試行、production admission0を保持します。[実測と範囲](moss-dit-gpu-profile-20261021.md)。
-
-ホストのmetadata／policy試験は tests/moss_dit_gpu_profile.py --config CONFIG --out FRESH_D_OUTPUT です。モデル推論やGPU実行は行いません。
-
-## 採用したDiT kernel改善版
-
-2026-10-21の[実機比較](moss-dit-kernels-20261021.md)では4項目＋Attention occupancy調整が1024平均45.127473秒でした。Turbo4＋upload＋F32 parentに、coreの --moss-dit-optimizations --moss-dit-kernels、nativeの --moss-dit-optimization-mask 15 --moss-dit-kernel-mask 15 --moss-fa-shmem-no-limit を明示します。新しいoutとsource-freezeを使用し、tools/moss_kernel_policy.py の実byte・fields(True)・全75 compile flagを固定します。
-
-既存optimization maskと新kernel maskは別です。kernel bitsはFFN=1、Attention shared KV=2、QKV/O predecode＋LoRA vec4=4、RMS fusion=8。occupancy調整にはbit2が必要で、未指定は元の制限を保持します。元のAttention案は今回遅くなったため、採用構成と混同しないでください。default-OFF、F32累積、rank144 F32、Direct10GiB、最大4試行・固定要求を維持します。
-
-ホストpolicyは tests/moss_kernel_policy.py --out FRESH_OUTPUT で94検査。tests/moss_kernel_selection.cpp はC++17、-DPS5_AI_MOSS_DIT_KERNEL_TRIAL=1、overlay/src/model/diffusionをinclude pathにしてホストbuildすると239検査です。モデルやPS5へ接続しません。実機は選択したbitの追加GPUゲートを実行し、採用mask15は20ケースです。数値・容量・GPU完了・所有権の条件を弱めません。
+過去のdefault-OFF診断は独立して保持しています。[DiT kernel比較](moss-dit-kernels-20261021.md)、[GPU時間測定](moss-dit-gpu-profile-20261021.md)、[メモリ案の比較](moss-turbo-memory-options-20261020.md)の固定要求と試行上限を、通常版へ持ち込まないでください。

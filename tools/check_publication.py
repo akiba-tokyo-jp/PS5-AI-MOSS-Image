@@ -108,10 +108,10 @@ def verification(files):
   need(type(test)is dict and type(test.get('id'))is str and test['id']not in ids and test.get('model_id')=='moss-image-sft',VERIFICATION);ids.add(test['id'])
   name=test.get('image');need(type(name)is str and safe_name(name)and name.startswith('docs/images/moss-')and name.endswith('.png')and name in files,VERIFICATION)
   need(type(test.get('PNG_bytes'))is int and test['PNG_bytes']==len(files[name])and test.get('PNG_sha256')==sha(files[name]),name)
-  need(test.get('size')in('256x256','1024x1024')and type(test.get('native_generation_seconds'))in(int,float)and 0<test['native_generation_seconds']<86400 and type(test.get('profile'))is str and bool(test['profile']),VERIFICATION)
+  need(type(test.get('size'))is str and re.fullmatch(r'[0-9]{2,4}x[0-9]{2,4}',test['size'])is not None and type(test.get('native_generation_seconds'))in(int,float)and 0<test['native_generation_seconds']<86400 and type(test.get('profile'))is str and bool(test['profile']),VERIFICATION)
   raw=files[name];need(len(raw)>=24 and raw[:8]==b'\x89PNG\r\n\x1a\n'and raw[12:16]==b'IHDR',name)
-  w=int.from_bytes(raw[16:20],'big');h=int.from_bytes(raw[20:24],'big');need(f'{w}x{h}'==test['size'],name);sizes.add(test['size'])
- need(sizes=={'256x256','1024x1024'},VERIFICATION)
+  w=int.from_bytes(raw[16:20],'big');h=int.from_bytes(raw[20:24],'big');need(f'{w}x{h}'==test['size']and 64<=w<=1024 and 64<=h<=1024 and w%16==h%16==0,name);sizes.add(test['size'])
+ need({'256x256','1024x1024'}<=sizes,VERIFICATION)
  links=re.findall(r'!?\[[^\]]*\]\(([^)\s]+)\)',files[latest].decode('utf-8-sig'))
  linked={posixpath.normpath(str(PurePosixPath(latest).parent/target.split('#')[0]))for target in links if '://'not in target and not target.startswith('#')}
  need(all(test['image']in linked for test in v['tests']),latest)
@@ -135,7 +135,7 @@ def check(root):
   lines=files['native/gateway/openapi_schema.inc'].decode('utf-8-sig').splitlines();embedded=json.loads(json.loads(lines[2].rstrip(';')))
  except (KeyError,ValueError,IndexError,UnicodeError):raise Refused('native/gateway/openapi_schema.inc')
  need(embedded==spec,'native/gateway/openapi_schema.inc')
- need(spec.get('info',{}).get('version')=='0.3.0-img2img-trial'and spec.get('x-runtime-profile',{}).get('moss_operating_profile')is False and spec['x-runtime-profile'].get('max_generation_attempts_per_native_process')==4 and spec['x-runtime-profile'].get('production_runtime_admitted')is False,'docs/openapi.json')
+ need(spec.get('info',{}).get('version')=='0.4.0-service'and spec.get('x-runtime-profile',{}).get('moss_operating_profile')is False and spec['x-runtime-profile'].get('max_generation_attempts_per_native_process')is None and spec['x-runtime-profile'].get('service_mode')is True and spec['x-runtime-profile'].get('requires_256_first')is False and spec['x-runtime-profile'].get('production_runtime_admitted')is False,'docs/openapi.json')
  count=inventory(root,files);images=verification(files)
  return dict(staged_files_checked=len(files),MOSS_source_snapshot_files=count,MOSS_benchmark_images=images,public_file_policy='PASS',authored_markdown_links='PASS',embedded_schema='PASS',findings_reveal_paths_only=True,inference_performed=False)
 

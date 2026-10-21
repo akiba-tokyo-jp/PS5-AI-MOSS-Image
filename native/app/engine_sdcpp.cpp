@@ -89,7 +89,9 @@ static std::atomic<unsigned> moss_lora_loaded{0}, moss_lora_matched{0}, moss_lor
 static std::atomic<uint32_t> moss_lora_scale_bits{0};
 static std::atomic<bool> moss_lora_configured{false}, moss_lora_verified{false}, moss_lora_invalid{false};
 #if PS5_AI_MOSS_TURBO_TRIAL
+#if !PS5_AI_MOSS_SERVICE_MODE
 static std::atomic<bool> moss_turbo_small_image_completed{false};
+#endif
 #endif
 static nlohmann::json moss_effective_lora_identity() {
 #if PS5_AI_MOSS_TURBO_TRIAL
@@ -778,7 +780,9 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
         gpu_device = nullptr;
         partial_taesd_gpu_decode = false;
         std::snprintf(current_status.backend, sizeof(current_status.backend), "stable-diffusion.cpp/Vulkan");
-#if PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
+#if PS5_AI_MOSS_SERVICE_MODE
+        ps5_ai_ggml_report("MOSS_SERVICE_MODE enabled=1 requires_256_first=0 lifetime_attempt_cap=none model_profile=Turbo4 capacity_readback_verification_pending=1");
+#elif PS5_AI_MOSS_EXPERIMENTAL_SMALL_TRIAL
         ps5_ai_ggml_report("MOSS_EXPERIMENTAL_SMALL_TRIAL enabled=1 production_runtime_admitted=0 capacity_readback_verification_pending=1 image_size=256x256 image_attempt_limit=1 prior_GPU_or_model_success_claimed=0");
 #endif
         if (!config_path) {
@@ -832,7 +836,7 @@ static int engine_init_impl(const char* config_path, char* error, size_t error_s
             "SD.cpp CPU Qwen3.5; Vulkan MOSS DiT/FLUX2 VAE");
         current_status.gpu_available = 1;
         current_status.available = 1;
-        write_event({{"event", "engine_configured"}, {"model", engine_config.model},
+        write_event({{"event", "engine_configured"}, {"model", engine_config.model}, {"service_mode",bool(PS5_AI_MOSS_SERVICE_MODE)}, {"requires_256_first",bool(PS5_AI_MOSS_TURBO_TRIAL && !PS5_AI_MOSS_SERVICE_MODE)},
                      {"moss_spectrum_trial",PS5_AI_MOSS_SPECTRUM_TRIAL!=0},
                      {"moss_spectrum_policy",PS5_AI_MOSS_SPECTRUM_POLICY},
                      {"moss_sampler_trial",bool(PS5_AI_MOSS_SAMPLER_TRIAL)},
@@ -1092,7 +1096,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     if (!ps5_ai_moss_trial_request_valid(request->width,request->height,request->steps,
                                         request->cfg_scale,request->flow_shift,request->sampler,request->seed)) {
         set_error(error,error_size,PS5_AI_MOSS_TURBO_TRIAL
-            ? "MOSS Turbo trial requires256/1024 square,4steps,CFG1,shift5,Euler/custom sigmas,seed20261020"
+            ? (PS5_AI_MOSS_SERVICE_MODE?"Turbo4 profile requires64..1024 dimensions on16 grid,4steps,CFG1,Euler,author sigmas; any seed>=-1":"MOSS Turbo trial requires256/1024 square,4steps,CFG1,shift5,Euler/custom sigmas,seed20261020")
             : PS5_AI_MOSS_SAMPLER_TRIAL
             ? "MOSS sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep/simple,seed20261020; production admission is not asserted"
             : PS5_AI_MOSS_PERFORMANCE_TRIAL
@@ -1113,7 +1117,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     }
 #endif
 #if PS5_AI_MOSS_PERFORMANCE_TRIAL
-#if PS5_AI_MOSS_TURBO_TRIAL
+#if PS5_AI_MOSS_TURBO_TRIAL && !PS5_AI_MOSS_SERVICE_MODE
     if(request->width==1024 && !moss_turbo_small_image_completed.load(std::memory_order_acquire)) {
         set_error(error,error_size,"Turbo1024 requires one completed native256 image first; manual quality review is additionally required by the client");
         return -1;
@@ -1200,7 +1204,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if(observation.wants_init){
             if(!PS5_AI_MOSS_IMG2IMG_TRIAL || !expected_dit_steps || !request->init_image_path[0] || std::strlen(request->init_image_sha256)!=64)
                 throw std::runtime_error("MOSS img2img request/lease/strength is not admitted");
-            if(!ps5_ai_input_read(request->init_image_path,&init_rgb.data,&init_width,&init_height) || init_width>1024 || init_height>1024)
+            if(!ps5_ai_input_read(request->init_image_path,&init_rgb.data,&init_width,&init_height) || init_width>(PS5_AI_MOSS_SERVICE_MODE?PS5_AI_INPUT_MAX_DIMENSION:1024) || init_height>(PS5_AI_MOSS_SERVICE_MODE?PS5_AI_INPUT_MAX_DIMENSION:1024))
                 throw std::runtime_error("Cannot read bounded normalized MOSS source image");
             unsigned char header[16]={};std::memcpy(header,"PS5RGB1",7);
             for(unsigned j=0;j<4;++j){header[8+j]=(unsigned char)(init_width>>(8*j));header[12+j]=(unsigned char)(init_height>>(8*j));}
@@ -1394,7 +1398,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
         if(request->steps!=4 || stats->actual_steps!=expected_dit_steps || request->cfg_scale!=1.0 ||
            precision_dit_outputs.load()!=uint64_t(expected_dit_steps) || quant_completed.q4_f32acc-quant_before.q4_f32acc!=moss_ffn_chunk_expected(observation) ||
            !moss_turbo_lora_gate_admitted())
-            throw std::runtime_error("Image rejected: Turbo requires actual4 positive DiT outputs and exact compiled/observed FFN F32 Q4 count");
+            throw std::runtime_error("Image rejected: Turbo requires the exact retained DiT forward count and compiled/observed FFN F32 Q4 evidence");
 #endif
 #if PS5_AI_MOSS_TURBO_BOUNDED_UPLOAD_TRIAL
         if(!ps5_ai_moss_bounded_weight_upload_enabled())
@@ -1507,7 +1511,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     ps5_ai_flex_snapshot(&pool);
     ps5_ai_moss_quant_receipt quant_after{};ps5_ai_moss_quant_snapshot(&quant_after);
     ps5_ai_moss_q4_bk64_report candidate_after{};ps5_ai_moss_q4_bk64_snapshot(&candidate_after);
-    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", observation.wants_init?"img2img":"text2img"}, {"moss_img2img_trial",bool(PS5_AI_MOSS_IMG2IMG_TRIAL)}, {"gpu_vae_encoder_math_nodes",observation.gpu_vae_encoder_math_nodes}, {"init_image_sha256",request->init_image_sha256}, {"denoise_strength",observation.wants_init?request->denoise_strength:0.0}, {"initial_sigma",observation.wants_init?ps5_ai_moss_img2img_sigma(request->denoise_strength):1.0f},
+    write_event({{"event", "generation_result"}, {"success", result == 0}, {"model_family", "MOSS-Image"}, {"mode", observation.wants_init?"img2img":"text2img"}, {"moss_img2img_trial",bool(PS5_AI_MOSS_IMG2IMG_TRIAL)}, {"service_mode",bool(PS5_AI_MOSS_SERVICE_MODE)}, {"seed",request->seed}, {"gpu_vae_encoder_math_nodes",observation.gpu_vae_encoder_math_nodes}, {"init_image_sha256",request->init_image_sha256}, {"denoise_strength",observation.wants_init?request->denoise_strength:0.0}, {"initial_sigma",observation.wants_init?ps5_ai_moss_img2img_sigma(request->denoise_strength):1.0f},
                  {"gpu_operator_profile",moss_gpu_profile_json(gpu_profile)},
                  {"width",request->width},{"height",request->height},
                  {"moss_q4_bk64_B",moss_q4_bk64_generation_json(candidate_before,candidate_after)},
@@ -1583,7 +1587,7 @@ static int engine_generate_impl(const ps5_ai_request* request, const char* outpu
     if (result == 0 && progress) {
         progress(1.0, user);
     }
-#if PS5_AI_MOSS_TURBO_TRIAL
+#if PS5_AI_MOSS_TURBO_TRIAL && !PS5_AI_MOSS_SERVICE_MODE
     if(result==0 && request->width==256 && request->height==256) {
         if(!ps5_ai_ggml_log_healthy() || pool.fault_retained)
             throw std::runtime_error("Turbo small-result durable completion proof failed;1024 remains closed");

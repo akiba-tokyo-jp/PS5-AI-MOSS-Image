@@ -1,5 +1,7 @@
 # 公開前の確認（2026-10-20）
 
+2026-10-21通常版への更新：[service modeの実機5件](moss-service-20261021.md)で初回1024、任意文章・seed・長方形、img2img、5件目を確認しました。以下の固定要求・最大4試行は過去のdiagnostic buildの説明です。通常版は[API](api.md)と[build](build.md)を参照してください。新たな公開検査は389 staged files、388 source inventory files、19画像記録がPASSしました。
+
 2026-10-21追記：[DiT kernel4項目](moss-dit-kernels-20261021.md)を実装・実機検証し、READMEと検証JSONを更新しました。公開checkerはstaged368 files、source inventory367 files、画像の検証記録11件を確認し、公開file policy・Markdownリンク・埋込OpenAPI一致がPASSでした。tokenやそのhash、モデルweights、rawログ、SELFは公開treeに含めません。新policy94、公開C++ selector239、SPIR-V validationもPASSです。実機の生成・GPU数値・メモリ・正常終了／採用版の待機復帰はリンク先の範囲を参照してください。以下は前段時点の検査です。
 
 公開するソースと資料の整合性を確認しました。以下はWindowsでのホスト検査で、モデル推論や新しいPS5生成テストではありません。PS5の生成時間・画像・メモリは[実測比較](moss-turbo-memory-options-20261020.md)と[検証記録](verification.json)を参照してください。

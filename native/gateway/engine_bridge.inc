@@ -250,7 +250,8 @@ int ps5_ai_engine_generate(const ps5_ai_request *r,const char *output,ps5_ai_sta
     /* Exactly one upstream POST. Never retry inference automatically. */
     if(!backend_json("POST","/api/generate",body,o,&code) || code!=202){snprintf(error,cap,"Native generation request unconfirmed or rejected (HTTP%d); no automatic retry",code);goto done;}
     char native_id[33];const char *id=backend_text(o,"job_id");if(!valid_id(id)){snprintf(error,cap,"Native job identity invalid; no retry");goto done;}strcpy(native_id,id);
-    lock_state();snprintf(((job *)user)->native_job_id,33,"%s",native_id);unlock_state();
+    int64_t resolved_seed=r->seed;if(PS5_AI_MOSS_SERVICE_MODE && !get_int(find_field(o,"seed"),0,INT64_MAX,&resolved_seed)){snprintf(error,cap,"Native resolved seed is unavailable; inspect existing native job; no retry");goto done;}
+    lock_state();snprintf(((job *)user)->native_job_id,33,"%s",native_id);((job *)user)->request.seed=resolved_seed;unlock_state();
     log_line("Gateway job %s -> native job %s",((job *)user)->id,native_id);
     char path[100];snprintf(path,sizeof(path),"/api/jobs/%s",native_id);uint64_t deadline=0;if(!monotonic_ms(&deadline)){snprintf(error,cap,"Monotonic clock unavailable; native job may continue");goto done;}deadline+=OPENAI_WAIT_MS;
     for(;;){uint64_t now=0;if(!monotonic_ms(&now) || now>=deadline || stopping){snprintf(error,cap,"Native job wait stopped; native job may continue; no retry");goto done;}

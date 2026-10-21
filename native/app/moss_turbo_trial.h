@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: MIT -- explicit default-off Turbo trial contract. */
 #ifndef PS5_AI_MOSS_TURBO_TRIAL_H
 #define PS5_AI_MOSS_TURBO_TRIAL_H
+#include "moss_service_mode.h"
 #include <stdint.h>
 #include <string.h>
 #ifndef PS5_AI_MOSS_TURBO_TRIAL
@@ -61,8 +62,8 @@ static inline void ps5_ai_moss_turbo_sigmas(float out[PS5_AI_MOSS_TURBO_SIGMA_CO
 static inline int ps5_ai_moss_turbo_request_allowed(int width,int height,int steps,
         double cfg,double flow,const char *sampler,int64_t seed) {
 #if PS5_AI_MOSS_TURBO_TRIAL
-    return ((width==256&&height==256)||(width==1024&&height==1024)) && steps==4 &&
-        cfg==1.0 && flow==5.0 && seed==INT64_C(20261020) && sampler && !strcmp(sampler,"euler");
+    return (PS5_AI_MOSS_SERVICE_MODE ? ps5_ai_moss_service_geometry(width,height) : ((width==256&&height==256)||(width==1024&&height==1024))) && steps==4 &&
+        cfg==1.0 && flow==5.0 && (PS5_AI_MOSS_SERVICE_MODE ? seed>=-1 : seed==INT64_C(20261020)) && sampler && !strcmp(sampler,"euler");
 #else
     (void)width;(void)height;(void)steps;(void)cfg;(void)flow;(void)sampler;(void)seed;
     return 0;

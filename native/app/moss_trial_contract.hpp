@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT -- bounded explicit verification attempts. */
+/* SPDX-License-Identifier: MIT -- service policy and legacy diagnostic claims. */
 #pragma once
 #include "moss_runtime_admission.h"
 #include <atomic>
@@ -47,7 +47,9 @@
 static inline bool ps5_ai_moss_trial_request_valid(int width,int height,int steps,
                                                   double cfg,double flow_shift,
                                                   const char* sampler,int64_t seed=20261019) noexcept {
-#if PS5_AI_MOSS_PERFORMANCE_TRIAL
+#if PS5_AI_MOSS_SERVICE_MODE
+    return ps5_ai_moss_turbo_request_allowed(width,height,steps,cfg,flow_shift,sampler,seed);
+#elif PS5_AI_MOSS_PERFORMANCE_TRIAL
     return ((width==256 && height==256) || (width==1024 && height==1024)) &&
            steps==PS5_AI_MOSS_DEFAULT_REQUEST_STEPS && cfg==PS5_AI_MOSS_DEFAULT_REQUEST_CFG && flow_shift==5.0 && seed==20261020 &&
            sampler && !std::strcmp(sampler,PS5_AI_MOSS_DEFAULT_REQUEST_SAMPLER);
@@ -106,7 +108,9 @@ static inline bool ps5_ai_moss_trial_claim(std::atomic<bool>& claimed,int width,
 static inline bool ps5_ai_moss_performance_trial_claim(std::atomic<unsigned>& attempts,
     int width,int height,int steps,double cfg,double flow_shift,
     const char* sampler,int64_t seed) noexcept {
-#if PS5_AI_MOSS_PERFORMANCE_TRIAL
+#if PS5_AI_MOSS_SERVICE_MODE
+    (void)attempts;return ps5_ai_moss_trial_request_valid(width,height,steps,cfg,flow_shift,sampler,seed);
+#elif PS5_AI_MOSS_PERFORMANCE_TRIAL
     if(!ps5_ai_moss_trial_request_valid(width,height,steps,cfg,flow_shift,sampler,seed))return false;
     unsigned observed=attempts.load(std::memory_order_acquire);
     while(observed<4) {

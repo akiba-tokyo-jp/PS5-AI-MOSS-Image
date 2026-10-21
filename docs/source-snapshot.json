@@ -15,8 +15,8 @@
     },
     {
       "file": "AGENTS.md",
-      "published_bytes": 5159,
-      "published_sha256": "7907fdf435a383d160397246290fcdb420b85074bd4d63e068ae633f46e20ba8"
+      "published_bytes": 6645,
+      "published_sha256": "2ae2e13bf346747b248eb1cde445a63624b62dc768a56173f8ea89094d4998f2"
     },
     {
       "file": "LICENSE",
@@ -25,8 +25,8 @@
     },
     {
       "file": "README.md",
-      "published_bytes": 6268,
-      "published_sha256": "d4607fc6f2ac7aaabca5751b7b35f2d3c5993b168c4a4f63dfd5595bbb37c789"
+      "published_bytes": 5289,
+      "published_sha256": "5c763a7df1bc67eb37a071f2e78ef0735b39ae7c9f7b296e2aaf10d7876a52a8"
     },
     {
       "file": "THIRD_PARTY_NOTICES.md",
@@ -174,6 +174,11 @@
       "published_sha256": "25bbd949d07dbce33a1b2f5e471beb005731288ec6acec0f18cd965aa372afca"
     },
     {
+      "file": "config/moss-service.json.example",
+      "published_bytes": 1033,
+      "published_sha256": "905ed812e8cfa68a5c3bba137e4a15680fc7224683afdc52a3475ef69e351546"
+    },
+    {
       "file": "config/moss-source-freeze.json.example",
       "published_bytes": 620,
       "published_sha256": "4cf044daed4cace1c88af271a1acf8db030f06a87da5298a2935bc45e6b59cdc"
@@ -195,13 +200,13 @@
     },
     {
       "file": "docs/api.md",
-      "published_bytes": 11944,
-      "published_sha256": "dcfb839f2eaf5caf8603c232caff061688b9587a350031ee02290906ab63ddad"
+      "published_bytes": 7085,
+      "published_sha256": "0c4fc6df4c4b6a21d6fc9231425d7ff3c510dbb445a09c31b25732abd842bd28"
     },
     {
       "file": "docs/build.md",
-      "published_bytes": 9244,
-      "published_sha256": "c247ecdcec8f8ae3efb0e0b9dc8339793e89ff7da1bee6dbdd19a1a7e1d5b776"
+      "published_bytes": 4534,
+      "published_sha256": "809d20dd2bfe4b627918cebd5c52fef1237eaca97ad05fc096a1d8ba87433b0c"
     },
     {
       "file": "docs/dashboard.md",
@@ -210,8 +215,8 @@
     },
     {
       "file": "docs/deployment.md",
-      "published_bytes": 4519,
-      "published_sha256": "05764ab299eb6a34184cd867b1d3241e95e54c00e0cf954d99935345ccbc48a2"
+      "published_bytes": 6670,
+      "published_sha256": "e34496605c8425e1e1214246654d30b295613a0217f6be5db75148c2f2b8315c"
     },
     {
       "file": "docs/images/architecture.svg",
@@ -259,6 +264,26 @@
       "published_sha256": "97ff9462ebd81b772bb313a8d8bbc71212b83b0c4d34b655ba8393b81f7b9aab"
     },
     {
+      "file": "docs/images/moss-service-aspect-512x768-20261021.png",
+      "published_bytes": 734647,
+      "published_sha256": "a47509e07c4a0e295e817bdcb845877ddc82abbd0e723b20fe2a7fdc48219d23"
+    },
+    {
+      "file": "docs/images/moss-service-edit-512-20261021.png",
+      "published_bytes": 563697,
+      "published_sha256": "d6cb389dfff7a5fc82b21d9e2f5fdce5f15436123c36c790064592d568df23ae"
+    },
+    {
+      "file": "docs/images/moss-service-edit-full-256-20261021.png",
+      "published_bytes": 192167,
+      "published_sha256": "c22f3c25347feb048936f70178208d78c3f08302e6e142de9313fd17b8157cb8"
+    },
+    {
+      "file": "docs/images/moss-service-fifth-256-20261021.png",
+      "published_bytes": 187415,
+      "published_sha256": "d9954f0a7b975b7f5e905be7d2c7e327edf801e168f8f7f729a581a213289198"
+    },
+    {
       "file": "docs/images/moss-turbo4-upload-1024-20261020.png",
       "published_bytes": 2133928,
       "published_sha256": "9b9f359d8ab249a2b6ece206a6b4a0fe1bd8df0ce8cbe000d39fe8e1d515c31a"
@@ -270,8 +295,8 @@
     },
     {
       "file": "docs/logging.md",
-      "published_bytes": 2281,
-      "published_sha256": "2dc9501d58e712b1d09c7351adf2dc70c7a1cc34ed403d4b6b85d7dcf2e19e05"
+      "published_bytes": 2308,
+      "published_sha256": "8c5eaae024e25566a5882da2e6bad4e8657b8d823d9000d10c9a5f1dc313905b"
     },
     {
       "file": "docs/moss-1024-cold-warm-20261020.md",
@@ -340,8 +365,8 @@
     },
     {
       "file": "docs/moss-models.md",
-      "published_bytes": 9812,
-      "published_sha256": "2b88628539265a185637048d31c56845a08b78af645fe2d87700fd124ad71b89"
+      "published_bytes": 9942,
+      "published_sha256": "11d9da91fea103ca2d01c998f25013e38d4902d20e182a48eeb0ecfc85dfc282"
     },
     {
       "file": "docs/moss-native-small-trial-20261019.md",
@@ -369,6 +394,16 @@
       "published_sha256": "c3410e67d43b011d7125585c8f1db93b856289a308d48507ac2caae3aa41d8e2"
     },
     {
+      "file": "docs/moss-service-20261021.json",
+      "published_bytes": 8471,
+      "published_sha256": "f0333cb6a3efd42d25e0003049769e530329071bd7e89d3a4befdf01699621f9"
+    },
+    {
+      "file": "docs/moss-service-20261021.md",
+      "published_bytes": 7214,
+      "published_sha256": "81b4e81e912cd46c1277ecba46a71dbb7dd262df6611d519d6404d1e4a192c65"
+    },
+    {
       "file": "docs/moss-turbo-memory-options-20261020.md",
       "published_bytes": 7675,
       "published_sha256": "533f812f7281d7651180f31c6199fec10f4c5d4a94bf852ae3cdc059ec0c500a"
@@ -390,23 +425,23 @@
     },
     {
       "file": "docs/openapi.json",
-      "published_bytes": 39949,
-      "published_sha256": "9a3af1be9bd01640335baaa956a07a6270adb537d347215a2a97455d8206602c"
+      "published_bytes": 40022,
+      "published_sha256": "3cde96b008a10c8d4a2f6fc354ab732db626d064e93b76a8d4d08305af6d45a4"
     },
     {
       "file": "docs/publication-checks-20261020.md",
-      "published_bytes": 2896,
-      "published_sha256": "893b3847f0406962b70aefc0fc095d5d71604f33c39777008a05bf6148230fee"
+      "published_bytes": 3342,
+      "published_sha256": "6f08d31d195b029513457055287ec5611d6a64f21aa6196b48aa538078459c0d"
     },
     {
       "file": "docs/status.md",
-      "published_bytes": 6473,
-      "published_sha256": "25e24c25e78bd5f556069578e1bcc19f33bac49854a06118d777922fe8d0909c"
+      "published_bytes": 2983,
+      "published_sha256": "7c2cfaccecbce477d3b4231186a70a4eaf8a994dbe1196a4aa4c9d65edcd7834"
     },
     {
       "file": "docs/verification.json",
-      "published_bytes": 48553,
-      "published_sha256": "e5714a7c853bf37ab7afec816880f7b371ee04f68eb7b9d0d737941fcd207ad5"
+      "published_bytes": 55878,
+      "published_sha256": "e859d34b498e10055323064fa6c6b6f7b71694225b6737c8fdc626ae5ceb0801"
     },
     {
       "file": "licenses/Artwork-NOTE.txt",
@@ -605,8 +640,8 @@
     },
     {
       "file": "native/app/engine_sdcpp.cpp",
-      "published_bytes": 106161,
-      "published_sha256": "edb3d90448d1900e770473cc349ddf990bc2bd44705c7ee5a7006c1f811b1608"
+      "published_bytes": 106901,
+      "published_sha256": "e6a7c04abd8015074b4b05901f06c8a564565d021993fe1536630645808d6707"
     },
     {
       "file": "native/app/host_shim.h",
@@ -715,8 +750,8 @@
     },
     {
       "file": "native/app/moss_img2img_trial.h",
-      "published_bytes": 1243,
-      "published_sha256": "c4134ca1ed1fdc29f4b62e1a2840ca3ef96632aafcae00810040c148d8be711f"
+      "published_bytes": 1348,
+      "published_sha256": "fda4836cc307c47d61493ee8596d097c452e4fe005d0408b5ee695276cc9f08f"
     },
     {
       "file": "native/app/moss_kernel_gate.inc",
@@ -779,6 +814,11 @@
       "published_sha256": "fca681a742c5fa9a3581d39975774f04e1fb5f514be8a439feed0213715730d8"
     },
     {
+      "file": "native/app/moss_network_bind.inc",
+      "published_bytes": 1194,
+      "published_sha256": "97afd73365574974393121a0de53907c202bad95d01b3b486607d7215c1a8fe1"
+    },
+    {
       "file": "native/app/moss_perf_gate.inc",
       "published_bytes": 6845,
       "published_sha256": "5683489cf214cc63a479c06b1415423ac86a083e4f2cb53b207e2e7a48171203"
@@ -815,8 +855,13 @@
     },
     {
       "file": "native/app/moss_sampler_trial.h",
-      "published_bytes": 2952,
-      "published_sha256": "98194e875b7637b4b9c47a915b21ffd608ad62cfdec8bea4743ca06414162d9f"
+      "published_bytes": 3030,
+      "published_sha256": "248b862b5f75f441e96814615ad3404abccd20f9aaf3d1b352c1166335746d17"
+    },
+    {
+      "file": "native/app/moss_service_mode.h",
+      "published_bytes": 1604,
+      "published_sha256": "9e45e7c275039ea0b2e74c1cf28a34f636b80de205a3990b962d1cc78d8f4752"
     },
     {
       "file": "native/app/moss_spectrum_trial.h",
@@ -824,9 +869,14 @@
       "published_sha256": "0a5d4a088aea4615671d9a4e2a1ed08ae60eb4f2d910d36fa926346515602be5"
     },
     {
+      "file": "native/app/moss_storage_quota.inc",
+      "published_bytes": 2288,
+      "published_sha256": "5853fefa2eb6f2716c7abd261912160f42d67d0b94d1440622baabe09e72a37b"
+    },
+    {
       "file": "native/app/moss_trial_contract.hpp",
-      "published_bytes": 5794,
-      "published_sha256": "808639b0e172110d0dc7e7d57a9ee8b8ae8f1e3125e7a4ba13d4a88defb825f5"
+      "published_bytes": 6062,
+      "published_sha256": "d9e6fcf91a91f32852e20536e013525482f34760fb5c7cf9afd9439c360c83cd"
     },
     {
       "file": "native/app/moss_turbo_lora_contract.hpp",
@@ -845,8 +895,8 @@
     },
     {
       "file": "native/app/moss_turbo_trial.h",
-      "published_bytes": 3880,
-      "published_sha256": "5ef4ca1d084889661d1e676ba21e9b713cbf3d88d590cd758c2b8fcf50e723fc"
+      "published_bytes": 4025,
+      "published_sha256": "2e5db2a7e6b543c2bca76c57270bf4622ed9847c454ba5accd7e45abe0a62312"
     },
     {
       "file": "native/app/native_constructor_expect.h",
@@ -935,8 +985,8 @@
     },
     {
       "file": "native/app/server.c",
-      "published_bytes": 66826,
-      "published_sha256": "2f2cc6786c66bfbec1d7005038f71a7e65888dc6505a42577fa11fb82bafa0f8"
+      "published_bytes": 68549,
+      "published_sha256": "48b93775a3550cff8e70056bdd9488212bf2743d583bb79cdda0f0be8bb4652c"
     },
     {
       "file": "native/app/shutdown_policy.h",
@@ -995,8 +1045,8 @@
     },
     {
       "file": "native/gateway/engine_bridge.inc",
-      "published_bytes": 20148,
-      "published_sha256": "32142bf5563ca0b8f573d0edf43312d7a31ecdad2025d8982bdae1938073b21c"
+      "published_bytes": 20423,
+      "published_sha256": "3f954ebe058e83d21e577b69c136852fae64cbc1868d3219a54979a7fcc3df1d"
     },
     {
       "file": "native/gateway/multipart.inc",
@@ -1005,18 +1055,18 @@
     },
     {
       "file": "native/gateway/openai.inc",
-      "published_bytes": 17949,
-      "published_sha256": "bba94611ba319d7f78005d02269fd4c5dbfb0da06081c24ecf5dbcdfd171ee61"
+      "published_bytes": 18430,
+      "published_sha256": "da6dbd578093618276c96f9bfa2f85c27de7250bb01589d00714aa629f2b906c"
     },
     {
       "file": "native/gateway/openapi_schema.inc",
-      "published_bytes": 20505,
-      "published_sha256": "bf31f5dbb0cd9d39fd7c936efec42f42d1bb275194bdfcb19e046ce2cb0b3bdb"
+      "published_bytes": 20527,
+      "published_sha256": "e985cb54a2b3ba69590687e17a033ad70a9ce3b5dfee3c4f701674f8890104e7"
     },
     {
       "file": "native/gateway/server.c",
-      "published_bytes": 59580,
-      "published_sha256": "21a18e942ab3c6de8874e1250571b47cc3932c6b5db4246c930221d3d78d8bcc"
+      "published_bytes": 60882,
+      "published_sha256": "c3f3de8c58f0bab24d8d8c941d6c360c5e56fb86353a838dc36ef1cb3d654c1e"
     },
     {
       "file": "native/gateway/status.h",
@@ -1430,8 +1480,8 @@
     },
     {
       "file": "scripts/Invoke-MossOpenAI.ps1",
-      "published_bytes": 7859,
-      "published_sha256": "17afd4602ffc51d7f0073b21319a513312913d1ff8cef974b3631e9da13710df"
+      "published_bytes": 8259,
+      "published_sha256": "1788323be51c9701c634c877b051d8504f38c96da1be387f4e59a0c4394f76fc"
     },
     {
       "file": "tests/backend_health.c",
@@ -1729,6 +1779,16 @@
       "published_sha256": "549b95a7850bb0000689f455a0c62d90589d55336c09c47e2865a790c7c5393f"
     },
     {
+      "file": "tests/moss_service_contract.cpp",
+      "published_bytes": 1987,
+      "published_sha256": "e3b7685a47367c8e9f784a25ec5d49da3cc9da4d3790197fa43c4f990c5306a1"
+    },
+    {
+      "file": "tests/moss_service_http.py",
+      "published_bytes": 5571,
+      "published_sha256": "66325f251c8a43daeff12e513a9b3ef5b62840020e5d2600bd2ccc09adfd493b"
+    },
+    {
       "file": "tests/moss_submission_fusion.cpp",
       "published_bytes": 7299,
       "published_sha256": "aa37aae9d827ee4650236d3472d06421a4b98e5a52d0ab48cf983cf2d8c1758f"
@@ -1800,13 +1860,13 @@
     },
     {
       "file": "tools/build.py",
-      "published_bytes": 55458,
-      "published_sha256": "c0b332b2051f1d83e76a23e3059a79b4477a829d48fe8f5cd171a3554d8f64b6"
+      "published_bytes": 56309,
+      "published_sha256": "81de4ef84369de67924439441f316d5f5fb2b18e7d7ee769bbfa309f45079161"
     },
     {
       "file": "tools/build_gateway.py",
-      "published_bytes": 10019,
-      "published_sha256": "00f3f0f9cc2de4ff9e9251731bb7f898f1867748ffe8df858eafb8c0c36ec873"
+      "published_bytes": 10417,
+      "published_sha256": "35ae19dce4073ac0a4d0237f5e1a5e205bcd0de8ec0ee4b13e20bcacb22e5eb7"
     },
     {
       "file": "tools/build_input_snapshot.py",
@@ -1819,9 +1879,14 @@
       "published_sha256": "4e24fed3229de6fd1ed4b30b19349aaccda2da01dc298d878ba7a63a2e494604"
     },
     {
+      "file": "tools/build_service.py",
+      "published_bytes": 3788,
+      "published_sha256": "628a4b8b24cdd0adc281ccc25c04242eee47abcab2a930dc36e4ac9ac2d09304"
+    },
+    {
       "file": "tools/check_publication.py",
-      "published_bytes": 10047,
-      "published_sha256": "dafa9ba1617d817639a4f06711a4211d83073fbaa90c980eeb22755d5d549d79"
+      "published_bytes": 10270,
+      "published_sha256": "84f967ac92edb9aceb4927e89366602bd0f891627698a8dc3976cb39dfa5ce90"
     },
     {
       "file": "tools/download_moss.py",

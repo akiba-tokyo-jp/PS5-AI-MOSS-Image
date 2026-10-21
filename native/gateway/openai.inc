@@ -119,7 +119,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         }else{snprintf(err,cap,"Unsupported parameter: %.63s",f->key);goto done;}
     }
     if(!r->prompt[0]){strcpy(param,"prompt");snprintf(err,cap,"prompt is required and cannot be empty");goto done;}
-    if(r->init_image_id[0] && (!PS5_AI_MOSS_IMG2IMG_TRIAL || !ps5_ai_moss_img2img_steps(r->denoise_strength))){snprintf(err,cap,"MOSS img2img strength must retain the reference: finite0.01 <= float(strength) <0.75");goto done;}
+    if(r->init_image_id[0] && (!PS5_AI_MOSS_IMG2IMG_TRIAL || !ps5_ai_moss_img2img_steps(r->denoise_strength))){snprintf(err,cap,PS5_AI_MOSS_SERVICE_MODE?"Img2img denoise_strength must remain finite0.01..1 as float":"MOSS img2img strength must retain the reference: finite0.01 <= float(strength) <0.75");goto done;}
     if((find_field(o,"denoise_strength") && find_field(o,"denoise_strength")->type!=5 && !r->init_image_id[0]) ||
        (find_field(o,"ip_adapter_strength") && find_field(o,"ip_adapter_strength")->type!=5 && !r->reference_image_id[0])){
         snprintf(err,cap,"Image strength requires its matching input image");goto done;
@@ -130,7 +130,7 @@ static int openai_validate(const char *body,ps5_ai_request *r,int *url_format,ch
         snprintf(err,cap,"ControlNet requires both its model name and prepared control image ID");goto done;
     }
     if(!ps5_ai_moss_sampler_request_allowed(r->width,r->height,r->steps,r->cfg_scale,r->flow_shift,r->sampler,r->seed)){
-        snprintf(err,cap,"Sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep,seed20261020");goto done;
+        snprintf(err,cap,PS5_AI_MOSS_SERVICE_MODE?"Turbo4 model profile requires64..1024 dimensions on16 grid,4steps,CFG1,shift5,Euler; arbitrary seed>=-1":"Sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep,seed20261020");goto done;
     }
     ok=1;
 done:free(o);return ok;
@@ -150,6 +150,7 @@ static int openai_submit(socket_t fd,const char *body,int transient_inputs){
     lock_state();
     if(!openai_thread_ready){unlock_state();openai_error(fd,503,"Response worker is unavailable",NULL);return 0;}
     if(openai_busy || stopping){unlock_state();openai_error(fd,429,"One synchronous image request is already active; retry after completion",NULL);return 0;}
+    if(!moss_storage_admitted()){unlock_state();openai_error(fd,507,"Output/job storage quota reached or metadata unavailable; archive output before a new job",NULL);return 0;}
     job *j=NULL;for(int i=0;i<MAX_JOBS;i++)if(!jobs[i].occupied){j=&jobs[i];break;}else if(!jobs[i].response_refs && strcmp(jobs[i].status,"queued") && strcmp(jobs[i].status,"running") && (!j || jobs[i].updated<j->updated))j=&jobs[i];
     if(!j){unlock_state();openai_error(fd,429,"Job queue is full",NULL);return 0;}
     uint64_t now;if(!monotonic_ms(&now)){unlock_state();openai_error(fd,500,"Monotonic clock unavailable",NULL);return 0;}
@@ -166,13 +167,13 @@ static int openai_image_response(socket_t fd,const job *j,int url_format){
     struct stat st;if(path_metadata(path,&st,0) || !S_ISREG(st.st_mode) || st.st_size<24 || st.st_size>32*1024*1024){openai_error(fd,500,"Invalid completed PNG",NULL);return 0;}
     image_url(j->id,url,sizeof(url));
     if(url_format){char response[800];snprintf(response,sizeof(response),"{\"created\":%" PRId64 ",\"data\":[{\"url\":\"%s\"}]}",j->created,url);
-        int n=snprintf(headers,sizeof(headers),"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nx-request-id: %s\r\nX-PS5-Native-Job-ID: %s\r\n\r\n",strlen(response),j->id,j->native_job_id);
+        int n=snprintf(headers,sizeof(headers),"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nx-request-id: %s\r\nX-PS5-Native-Job-ID: %s\r\nX-PS5-Seed: %" PRId64 "\r\n\r\n",strlen(response),j->id,j->native_job_id,j->request.seed);
         return n>0 && (size_t)n<sizeof(headers) && send_all(fd,headers,(size_t)n) && send_all(fd,response,strlen(response));}
     FILE *f=fopen(path,"rb");if(!f){openai_error(fd,500,"Completed PNG is unavailable",NULL);return 0;}
     int p=snprintf(prefix,sizeof(prefix),"{\"created\":%" PRId64 ",\"data\":[{\"b64_json\":\"",j->created);const char suffix[]="\"}]}";
     /* Parentheses are essential: base64 length is 4*ceil(bytes/3). */
     uint64_t total=(uint64_t)p+4*(((uint64_t)st.st_size+2)/3)+sizeof(suffix)-1;
-    int h=snprintf(headers,sizeof(headers),"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %" PRIu64 "\r\nConnection: close\r\nCache-Control: no-store\r\nx-request-id: %s\r\nX-PS5-Native-Job-ID: %s\r\nX-PS5-Image-URL: %s\r\n\r\n",total,j->id,j->native_job_id,url);
+    int h=snprintf(headers,sizeof(headers),"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %" PRIu64 "\r\nConnection: close\r\nCache-Control: no-store\r\nx-request-id: %s\r\nX-PS5-Native-Job-ID: %s\r\nX-PS5-Image-URL: %s\r\nX-PS5-Seed: %" PRId64 "\r\n\r\n",total,j->id,j->native_job_id,url,j->request.seed);
     unsigned char *in=malloc(12288);char *out=malloc(16384);int ok=in && out && h>0 && (size_t)h<sizeof(headers);
     if(ok)ok=send_all(fd,headers,(size_t)h) && send_all(fd,prefix,(size_t)p);
     uint64_t remaining=(uint64_t)st.st_size,until=0;if(!monotonic_ms(&until))ok=0;until+=60000;

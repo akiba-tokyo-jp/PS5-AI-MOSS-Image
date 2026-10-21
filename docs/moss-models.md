@@ -4,8 +4,10 @@ PS5 model loading, CPU text encoding, Vulkan DiT/VAE generation and the selected
 derived F32 LoRA have now been confirmed in bounded256/1024 image trials.
 The latest measured recipe uses10GiB Direct, Turbo4 plus bounded upload and a
 composed rank144 F32 adapter. The requested12GiB reservation remains unmet;
-ordinary unlimited operation and long-run stability are not established.
-See [current status](status.md) and [latest measured results](moss-turbo-memory-options-20261020.md).
+ordinary service mode now removes fixed prompt/seed, prior256 and attempt caps.
+Five same-process requests including cold1024 and img2img were verified;
+long-run stability and all-prompt memory fit remain unproven.
+See [current status](status.md) and [ordinary service results](moss-service-20261021.md).
 
 The requested configuration is **MOSS-Image-SFT plus the user-selected LoRA**.
 See [adapter selection and memory assessment](moss-requested-lora.md). The LoRA

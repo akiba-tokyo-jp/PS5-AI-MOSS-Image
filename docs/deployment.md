@@ -1,8 +1,10 @@
-# MOSS Imageの配置と終了
+# MOSS Imageの配置・起動・終了
 
-PPSA99190、native8192、OpenAI Images互換gateway8193でPS5画像生成を検証しました。公開する速度基準はTurbo4＋bounded upload、rank144 F32、Direct10GiBの限定performance buildです。無制限の通常運用版ではありません。firmwareやsystem領域を書き換える一般インストーラー、無人jailbreak／復旧ツールは含めません。
+通常版はnativeタイトル`PPSA99190`、native API8192、CPU gateway8193です。native Homebrewを起動できる環境と、このタイトルの登録が必要です。FW12.40で検証しています。一般的なタイトル登録・jailbreak installerは含めません。SELFをWebSrvのELF loaderへ送ってもnativeタイトルの起動にはなりません。
 
-## 配置内容
+## ファイル配置
+
+タイトルの実体は`/data/ai/native-moss-image-sft/PPSA99190`に配置し、既存native launcherのmount/登録を使います。system領域や他タイトルを上書きしません。
 
 ```text
 PPSA99190/
@@ -17,35 +19,50 @@ PPSA99190/
     tokenizer_qwen3.5.json
     moss-nsfw07-turbo4-r144-f32.safetensors
   licenses/
-  ai-runtime/config.json
-  ai-runtime/config/api-token
-  ai-runtime/logs/
-  ai-runtime/jobs/
-  ai-runtime/output/
+  ai-runtime/
+    config.json
+    config/
+    logs/
+    jobs/
+    output/
 ```
 
-モデルは[lock](../config/models.lock.json)と[Turbo合成手順](moss-turbo4-reproduction.md)を使い、元weightsを保持した別ファイルとして作成します。転送前後に全量のsize／SHAを照合します。headerだけの一致は全ファイルidentityの代わりではありません。weightsやprivate receiptをGitへ置きません。
+[通常版config](../config/moss-service.json.example)を`ai-runtime/config.json`へ配置します。[モデルlock](../config/models.lock.json)と[adapter合成](moss-turbo4-reproduction.md)に従い、転送前後の全量size/SHAを確認します。runtime libraryの配布条件は別途確認してください。
 
-F16 storageは別ファイル・別profileの限定試験です。通常のF32速度基準へ自動置換しません。旧rank16／50-step比較も別設定です。
+物理Direct10GiB、内側予算9.5GiB、pool外reserve1GiB、F32 rank144 adapter/runtime1をcompiled配置と一致させます。旧12GiB/rank16設定を使い回さないでください。実行ファイルと設定をprivate backupへ保存し、転送済み完成ファイルを全量照合してから切り替えます。
 
-## 設定と所有権
+## 所有者確認とtokenの受け渡し
 
-native SELF、compiled Direct pool／VA、推論予算、対応する設定を一致させます。選択した10GiB版の関連値は`gpu_pool_bytes: 10737418240`、`max_vram_gib: "Vulkan0=9.5"`、`working_reserve_bytes: 1073741824`です。合成F32 LoRAのruntime multiplierは1です。これらは完全なconfigではなく、[モデル構成](moss-models.md)とビルドprofileの他の項目も必要です。JSONだけで予約容量を変えません。
+nativeはUID1のタイトルとして起動します。`ai-runtime`とそのconfig/logs/jobs/output等のdirectoryを実際のUID1所有・0700、config.jsonを0600にします。symlinkを使わず、既存launcher/管理shellで所有者と実体を確認します。native互換statのowner欄が取得できない場合、UID0という報告を実際のownerだと解釈しません。外部の信頼できる観測でUID1を確かめるbootstrapを保持します。
 
-runtime parentはアプリowner専用、config／tokenはownerだけが読める権限にします。既存設定と実行ファイルをprivate backupへ保存し、完成ファイルの全量readback後にatomic renameします。元モデルや他タイトルを上書きしません。native側で所有者フィールドが取得できない環境を、UID0なら安全という緩和で通しません。既存bootstrapの外部owner証拠とFD identity guardを保持します。
+1. Windows側のprivateファイルに十分な乱数tokenを作り、画面・ログ・URL・引数に出さず保持します。clientへ渡すtokenもこのファイルです。native/gatewayは同じ値を使用します。
+2. 他のGPUタイトルが終了済み、同じbootのownerと既存serviceが正常であることを確認します。**nativeの`ai-runtime/config/api-token`が存在しない状態で**登録済みnative launcherからタイトルを1回起動します。
+3. 新しく作られたPID/時刻付きbootstrap journalとowner witnessが今回のUID1/PPSA99190 processに属すること、runtime directoryのowner/mode、witnessの全byte identityを外部から照合します。token待機は最大5分で、まだGPU/APIを始めません。古いjournalやPIDだけで確認を省略しません。
+4. 確認できたprocess用に、同じtokenの一時ファイルを`ai-runtime/config/api-token`へUID1/0600で渡します。nativeが消費して削除し、memoryに保持します。起動前にtokenを置くとbootstrap条件に合いません。timeoutしたprocessへ繰り返し投入しないでください。
+5. 起動時のGPU readback、実pool確保、engine readyを確認します。初回のモデルlazy loadは画像要求時です。
 
-nativeとgatewayは同じ認証token値を各process専用の起動ファイルで受け取ります。tokenはGit、ログ、URL、コマンド表示へ出さず、起動後はファイルから削除してmemoryに保持します。APIはBearer認証と同じprivate IPv4 /24を維持します。
+この手順には既存Homebrew環境のprocess/UID/起動・mount管理機能が必要です。個人環境用のPIDやnonce、root controllerを公開installerとして使い回すことはしません。所有者を検証できる管理機能がない場合は、owner guardを外すのでなく、その起動環境に合うprovisionerが必要です。
 
-## 1回ずつ検証する手順
+## CPU gateway
 
-1. 他のGPUタイトルが動いていないことと、既存boot／service identityを確認します。
-2. nativeを1回だけ起動し、元の数値ゲート、rank144 readback、bounded upload gate、物理pool、backend、ownershipを確認します。readyとモデル読込・画像検証は別です。
-3. 同じnativeを指すCPU gatewayを起動します。[APIのcanonical request](api.md)をまず256で1回だけ送り、native GPU完了、PNG decode、native／gateway画像一致と目視を確認します。
-4. 空queueと同ownerを確認してから同processで1024を1回送ります。seed20261020、4 Euler steps、CFG1、shift5を維持します。有効な生成はprocess全体で最大4試行、失敗も消費します。
-5. queueが空でGPU処理が完了してから、認証付き`POST /api/admin/shutdown`をnative／gatewayへそれぞれ1回要求します。両PID不在を別観測で確認し、独立したidle観測で同boot、既存service、タイトル登録、モデルmetadataを確認します。
+`/data/ai/moss-openai-gateway`にowner専用のconfig/logs/jobs/output等を用意し、`config/api-token`へnativeと同じ値をgateway owner/0600で配置します。gatewayは起動時に読み取って削除します。gatewayはGPUタイトルではなくCPU ELFなので、既存WebSrvの`/elfldr`からこのELFを1回だけ起動できます。
 
-タイムアウト・結果不明でPOSTを自動再送しません。GPU completionやownerが不明な資源をforce freeしません。kill成功を正常なGPU終了と同義に扱いません。画面heartbeatは表示loopの生存確認であり、推論の進捗そのものではありません。
+```text
+<gateway.elf> --root /data/ai/moss-openai-gateway --bind auto --port 8193
+```
 
-## 保存量
+bindの既定はautoです。private IPv4を検出できなければ終了するので、`--bind <PS5_PRIVATE_IP>`を明示します。native/gatewayが同じLAN addressを使用する必要があります。gatewayはそのaddressの同じPS5 native8192へだけ転送し、生成POSTを再送しません。既存WebSrv8080は維持します。
 
-ログのbounded rotationは[ログ資料](logging.md)の範囲です。成功PNGやjob metadataを恒久的に無制限で保存できる保証、実ディスク空き容量を毎job強制するquota機能は、この公開版の実証済み機能ではありません。保存物を別の場所へ退避し、owner、認証、symlink制約を保って管理してください。長期連続・任意prompt運用の成功を本資料から推定しないでください。
+両`GET /health`をBearer認証で確認し、`service_mode:true`、`requires_256_first:false`、`max_generation_attempts:null`、ready・空queueを確認します。[client](../scripts/Invoke-MossOpenAI.ps1)から初回1024を直接生成できます。固定promptや先行256の操作はありません。
+
+## 保存量と運用
+
+通常版は各processのoutput＋jobsに既定8GiBの保存枠を設けます。`--storage-limit-mib`で起動時変更可。未完了jobと次jobごとに32MiBを予約計上し、収まらなければ生成前507です。物理空き容量の取得・保証ではありません。gateway側にもPNG copyとmetadataがあるため、両rootを管理してください。input storeと[bounded logs](logging.md)は別枠です。
+
+PNGを自動削除しません。保存枠に近づいたらclientから新規要求を止め、job完了・空queueを確認し、必要なPNG/metadataをPC等へ全量取得してから、停止中に対象rootの古いoutput/job組だけを管理します。rootそのもの、現用token/config、他タイトルのデータを再帰削除しないでください。上限を引き上げる前にストレージ空きを確認します。
+
+## 終了・復旧
+
+処理完了・空queue・GPU完了を確認し、認証付き`POST /api/admin/shutdown`をgateway、nativeへそれぞれ1回送ります。202は終了要求の受理であり、終了済みの証明ではありません。別のprocess観測で両owner不在と同bootのidle、既存serviceを確認します。次回は新しいowner検証と一時token受け渡しを行います。
+
+タイムアウトしても自動再送せず、healthと既存jobを確認します。GPU状態不明・fault retention・終了拒否のときは、force freeやkillを正常終了の代用にしません。既存の信頼できるOS close/復旧経路を使い、別GPUタイトルを重ねません。今回の5件後は正常終了、両owner不在の独立観測、同artifactの再起動と全GPUゲートを確認しました。

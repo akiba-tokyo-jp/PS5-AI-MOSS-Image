@@ -88,7 +88,7 @@ typedef struct {
 } job;
 
 static char root_path[MAX_PATH_SIZE] = "/data/ai/moss-openai-gateway";
-static char bind_ip[64] = "192.168.68.67";
+static char bind_ip[64] = "auto";
 static int listen_port = 8193;
 static char api_token[257];
 static size_t token_len;
@@ -357,14 +357,14 @@ static int validate_request(const char *body, ps5_ai_request *r, char *error, si
         } else { snprintf(error, cap, "Unknown request field: %.63s", f->key); goto done; }
     }
     if (!r->prompt[0]) { snprintf(error, cap, "prompt is required and cannot be empty"); goto done; }
-    if(r->init_image_id[0] && (!PS5_AI_MOSS_IMG2IMG_TRIAL || !ps5_ai_moss_img2img_steps(r->denoise_strength))){snprintf(error,cap,"MOSS img2img strength must retain the reference: finite0.01 <= float(strength) <0.75");goto done;}
+    if(r->init_image_id[0] && (!PS5_AI_MOSS_IMG2IMG_TRIAL || !ps5_ai_moss_img2img_steps(r->denoise_strength))){snprintf(error,cap,PS5_AI_MOSS_SERVICE_MODE?"Img2img denoise_strength must remain finite0.01..1 as float":"MOSS img2img strength must retain the reference: finite0.01 <= float(strength) <0.75");goto done;}
     if((find_field(obj,"denoise_strength") && !r->init_image_id[0]) ||
        (find_field(obj,"ip_adapter_strength") && !r->reference_image_id[0])){
         snprintf(error,cap,"Image strength requires its matching input image ID");goto done;
     }
     if(r->mask_image_id[0] && !r->init_image_id[0]){snprintf(error,cap,"Mask requires an init image");goto done;}
     if(!ps5_ai_moss_sampler_request_allowed(r->width,r->height,r->steps,r->cfg_scale,r->flow_shift,r->sampler,r->seed)){
-        snprintf(error,cap,"Sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep,seed20261020");goto done;
+        snprintf(error,cap,PS5_AI_MOSS_SERVICE_MODE?"Turbo4 model profile requires64..1024 dimensions on16 grid,4steps,CFG1,shift5,Euler; arbitrary seed>=-1":"Sampler trial requires256/1024 square,30steps,CFG4,shift5,res_multistep,seed20261020");goto done;
     }
     ok = 1;
 done:
@@ -399,9 +399,9 @@ static int serialize_job(const job *j, char *out, size_t cap) {
         "{\"job_id\":\"%s\",\"status\":\"%s\",\"progress\":%.4f,\"error\":%s,"
         "\"image_url\":%s,\"created_at\":%" PRId64 ",\"updated_at\":%" PRId64 ","
         "\"gpu_used\":%s,\"generation_seconds\":%.6f,\"peak_cpu_bytes\":%s,"
-        "\"peak_gpu_bytes\":%s,\"flow_shift\":%.17g}", j->id, j->status, j->progress,
+        "\"peak_gpu_bytes\":%s,\"seed\":%" PRId64 ",\"flow_shift\":%.17g}", j->id, j->status, j->progress,
         error, url, j->created, j->updated, j->stats.gpu_used ? "true" : "false",
-        j->stats.generation_seconds, cpu, gpu, j->request.flow_shift);
+        j->stats.generation_seconds, cpu, gpu, j->request.seed,j->request.flow_shift);
     return n >= 0 && (size_t)n < cap;
 }
 static int atomic_write(const char *folder, const char *name, const char *data, size_t len) {
@@ -486,6 +486,8 @@ static int path_metadata(const char *path,struct stat *out,int directory) {
     if(ok)*out=g.value;if(close(fd))ok=0;return ok?0:-1;
 #endif
 }
+#include "../app/moss_storage_quota.inc"
+
 static int load_job_json(const char *id, char *out, size_t cap) {
     char path[MAX_PATH_SIZE], name[64];
     if (!valid_id(id)) return 0;
@@ -625,7 +627,7 @@ static const char *status_text(int code) {
     case 405: return "Method Not Allowed"; case 408: return "Request Timeout";
     case 409: return "Conflict"; case 413: return "Content Too Large";
     case 415: return "Unsupported Media Type"; case 429: return "Too Many Requests";
-    case 500: return "Internal Server Error"; case 503: return "Service Unavailable"; case 504: return "Gateway Timeout";
+    case 507: return "Insufficient Storage"; case 500: return "Internal Server Error"; case 503: return "Service Unavailable"; case 504: return "Gateway Timeout";
     default: return "Error";
     }
 }
@@ -676,11 +678,11 @@ static void health(socket_t fd) {
     }
     unlock_state();
     snprintf(body, sizeof(body),
-        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-openai-gateway\",\"model_id\":\"moss-image-sft\",\"features\":{\"text_to_image\":true,\"img2img\":%s,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false},\"backend\":%s,\"engine_available\":%s,"
+        "{\"status\":\"%s\",\"server\":\"ps5-ai-moss-openai-gateway\",\"model_id\":\"moss-image-sft\",\"service_mode\":%s,\"requires_256_first\":%s,\"max_generation_attempts\":%s,\"model_profile\":\"turbo4\",\"storage_limit_mib\":%" PRIu64 ",\"bind_address\":\"%s\",\"features\":{\"text_to_image\":true,\"img2img\":%s,\"inpainting\":false,\"ip_adapter\":false,\"controlnet\":false,\"sdxl_manga_lora\":false},\"backend\":%s,\"engine_available\":%s,"
         "\"gpu_available\":%s,\"gpu_verified\":%s,\"gpu_device\":%s,\"gpu_driver\":%s,"
         "\"model_loaded\":%s,\"model\":%s,\"reason\":%s,\"running_jobs\":%d,\"queued_jobs\":%d,\"port\":%d,"
         "\"process_id\":%" PRId64 ",\"started_at\":%" PRId64 ",\"listener_generation\":%" PRIu32 ",\"moss_sampler_trial\":%s,\"moss_sampler_policy\":\"%s\",\"trial_sampler\":\"%s\",\"trial_scheduler\":\"%s\",\"trial_steps\":%d,\"trial_cfg_scale\":%.1f,\"moss_turbo_trial\":%s,\"moss_turbo_policy\":\"%s\",\"moss_turbo_adapter\":\"%s\",\"moss_turbo_rank\":%d,\"moss_turbo_runtime_multiplier\":%.1f,\"moss_lora_fp32_shared_trial\":%s,\"moss_lora_f16_storage_trial\":%s,\"moss_lora_precision_policy\":\"%s\",\"moss_lora_precision_scope\":\"%s\"}",
-        s.available && s.gpu_available ? "ready" : "degraded", PS5_AI_MOSS_IMG2IMG_TRIAL?"true":"false", backend,
+        s.available && s.gpu_available ? "ready" : "degraded", PS5_AI_MOSS_SERVICE_MODE?"true":"false", (PS5_AI_MOSS_TURBO_TRIAL && !PS5_AI_MOSS_SERVICE_MODE)?"true":"false", PS5_AI_MOSS_ATTEMPT_LIMIT_JSON, storage_limit_bytes>>20, bind_ip, PS5_AI_MOSS_IMG2IMG_TRIAL?"true":"false", backend,
         s.available ? "true" : "false", s.gpu_available ? "true" : "false",
         s.gpu_verified ? "true" : "false", device, driver, s.model_loaded ? "true" : "false",
         model, reason, active, queued, listen_port, (int64_t)get_pid(), server_started_at, listener_generation,
@@ -696,7 +698,7 @@ static void submit(socket_t fd, const char *body) {
         status.reason[sizeof(status.reason)-1] = 0;
         send_error(fd, 503, status.reason[0] ? status.reason : "GPU inference engine unavailable"); return;
     }
-    lock_state(); job *j = NULL;
+    lock_state();if(!moss_storage_admitted()){unlock_state();send_error(fd,507,"Output/job storage quota reached or metadata unavailable; download/archive existing output before submitting a new job");return;}job *j = NULL;
     for (int i = 0; i < MAX_JOBS; ++i) {
         if (!jobs[i].occupied) { j = &jobs[i]; break; }
         if (!jobs[i].response_refs && strcmp(jobs[i].status, "queued") && strcmp(jobs[i].status, "running") &&
@@ -1027,6 +1029,8 @@ static socket_t open_listener(void) {
     return fd;
 }
 
+#include "../app/moss_network_bind.inc"
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
     InitializeCriticalSection(&state_mutex); InitializeCriticalSection(&log_mutex);
@@ -1041,12 +1045,15 @@ int main(int argc, char **argv) {
         } else if (!strcmp(opt, "--bind")) {
             if (strlen(value) >= sizeof(bind_ip)) return 1;
             strcpy(bind_ip, value);
+        } else if(!strcmp(opt,"--storage-limit-mib")){
+            char *end;errno=0;unsigned long long n=strtoull(value,&end,10);if(errno||*end||value[0]=='-'||n<64||n>1048576)return 1;storage_limit_bytes=(uint64_t)n<<20;
         } else if (!strcmp(opt, "--port")) {
             char *end; long p = strtol(value, &end, 10);
             if (*end || p < 1024 || p > 65535) return 1;
             listen_port = (int)p;
         } else { fprintf(stderr, "Unknown option %s\n", opt); return 1; }
     }
+    if(!strcmp(bind_ip,"auto") && !moss_detect_private_bind(bind_ip,sizeof(bind_ip))){fprintf(stderr,"Cannot detect a private LAN address; use --bind PRIVATE_IP\n");return 1;}
     if (inet_pton(AF_INET, bind_ip, &bind_address) != 1 || !private_address(ntohl(bind_address.s_addr))) {
         fprintf(stderr, "Bind address must be a specific RFC1918 or loopback IPv4 address\n"); return 1;
     }
