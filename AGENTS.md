@@ -2,6 +2,22 @@
 
 The current objective is reliable, fast MOSS inference on PS5. The public repository documents only MOSS results. Keep third-party copyright, license and required font derivative identification intact; do not rename upstream model enums or legacy internal ABI identifiers through broad text replacement.
 
+Driver source preference (owner instruction, 2026-10-22): use
+https://github.com/akiba-tokyo-jp/PS5-Vulkan-Inference for future driver
+integration. Follow its integration contract and docs/driver-integration.md;
+select the profile explicitly and record exact source/relink provenance.
+Preserve application allocator/platform specializations within the compatible
+ABI; rebuild the matching adapter when the driver runtime ABI changes.
+Keep persistent shader/pipeline caches disabled until separately qualified.
+The matching 256 -> 1024 -> 1024 measurement at revision
+872cc1264ad8ba5d6b888b092968fa5858a38c58/cumulative-idle is recorded in
+docs/moss-cumulative-driver-20261022.md and .json. First 256: 70.786748s;
+warm 1024: 44.835497s/44.840077s, mean 44.837787s. All three PNGs match
+historical references. This single sequence versus historical controls does
+not establish causal acceleration or long-run stability. Source preference
+does not imply active deployment; the tested application was restored and
+subsequently closed normally at the owner's request.
+
 The latest validated speed baseline adds kernel mask15 plus shared-KV FA occupancy adjustment to existing DiT optimization15/Turbo4/upload/F32 rank144. First256 including lazy load69.449735s; subsequent1024 45.415880s/44.839066s, mean45.127473s versus remeasured old baseline47.481390s (4.96% reduction). Preserve original14+Turbo3+upload+16 gates plus20 kernel GPU readbacks. The initial shared-KV variant with the original LDS limiter regressed; use the explicit --moss-fa-shmem-no-limit only with bit2. Q4 weights/predecoded F16 scratch/F32 accumulation and independent q/k/v remain. Old/new PNGs differ; do not claim byte identity or general quality equivalence. Owned Direct peak/end rise96MiB, physical pool remains10GiB. See docs/moss-dit-kernels-20261021.md. Four Euler steps, CFG1, sigmas[1,.910,.717,.024,0], no double shift, NSFW0.7+Turbo1.0 F32 rank144/runtime1, finite4 DiT outputs,672 Q4 F32/F16acc0 and504 applied tensors remain mandatory. Do not relax tolerances or clamp NaNs.
 
 FFN chunk2048 lowered workspace highwater but the actual1024 took55.195208s, so it stays OFF for speed. F16 storage with dedicated F32-shared math took68.897951/51.884730s and reduced owned Direct usage637.875MiB; warm speed improvement was not shown. It remains a separate bounded-shape, default-OFF option, not arbitrary-prompt normal operation.

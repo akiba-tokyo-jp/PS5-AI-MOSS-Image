@@ -34,6 +34,14 @@ Request 5 also succeeded without restart. Prompts, resolutions, encoding, and co
 
 In an earlier identical-condition 1024 comparison, DiT kernel improvements reduced the mean from 47.481390 to 45.127473 seconds (4.96%). That measurement generated at 256 first and is distinct from the cold 1024 result above. [Speed comparison and image differences](docs/moss-dit-kernels-20261021.md).
 
+2026-10-22 driver-only measurement: the same 256 -> 1024 -> 1024 sequence with explicitly selected `cumulative-idle` from [PS5-Vulkan-Inference](https://github.com/akiba-tokyo-jp/PS5-Vulkan-Inference) took **70.79 / 44.84 / 44.84 seconds**, with a 1024 mean of **44.837787 seconds** versus the historical 45.127473 seconds. Persistent caches stayed disabled and all three PNGs matched previous references byte-for-byte. This is one new sequence with historical controls, not evidence of a reproducible speedup. [Full measurements, phases, memory and images](docs/moss-cumulative-driver-20261022.md), [JSON](docs/moss-cumulative-driver-20261022.json).
+
+## GPU driver source
+
+Future driver builds use [PS5-Vulkan-Inference](https://github.com/akiba-tokyo-jp/PS5-Vulkan-Inference), an unofficial downstream of the upstream PS5 Vulkan/Mesa port. The measured MOSS baseline explicitly selected `cumulative-idle` at `872cc1264ad8ba5d6b888b092968fa5858a38c58`; persistent shader/pipeline caches remain disabled. [Selection, source pins and integration requirements](docs/driver-integration.md).
+
+That driver repository is currently private; access is required to reproduce this profile. MOSS does not bundle its archives or native binaries, and its build wrapper does not automatically fetch or enable a profile. Newer source or runtime ABI changes require separate integration and verification; they are not covered by the recorded timings.
+
 ## Architecture on PS5
 
 ![Processing architecture](docs/images/architecture.svg)

@@ -1,5 +1,26 @@
 # Current status
 
+2026-10-22: [matching driver measurement sequence](moss-cumulative-driver-20261022.md)
+and [JSON](moss-cumulative-driver-20261022.json) preserve a fresh PS5 launch
+with explicit `cumulative-idle` from PS5-Vulkan-Inference at
+`872cc1264ad8ba5d6b888b092968fa5858a38c58`. First256 including lazy load:
+70.786748s; same-process1024: 44.835497s and 44.840077s, mean44.837787s.
+Historical corresponding mean:45.127473s. All three PNGs match their old
+references. Persistent caches remain disabled; application/model/precision
+settings are unchanged. The sequence is not an alternating A/B or a long-run
+qualification. [PS5-Vulkan-Inference is the selected source](driver-integration.md)
+for future driver builds. The restored native application and gateway were
+subsequently closed normally at the owner's request; their process absence
+was independently confirmed. Publishing this documentation does not relaunch
+the PS5 application.
+
+Planned next work: [driver-aware optimization and validation](optimization-validation-plan.md)
+covers CPU interference, VAE tiles, bounded weight-side LoRA reuse, text
+conditioning and real-kernel/compiler tuning at 512 and 1024. It is a plan,
+not an implemented or hardware-verified improvement. Application comparisons
+must use a frozen driver/profile. The completed driver-only sequence above
+does not implement these application candidates.
+
 2026-10-21: verified ordinary MOSS API on PS5 FW 12.40/RADV NAVI21. **Actual arbitrary prompts/seeds, rectangles, first 1024, and generation 5 succeeded.** Removed initial 256/fixed-prompt-seed/4-attempt restrictions. [Details/PNGs](moss-service-20261021.md), [machine-readable data](moss-service-20261021.json).
 
 | Feature | Status |

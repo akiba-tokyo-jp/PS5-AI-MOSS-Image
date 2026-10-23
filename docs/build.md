@@ -8,6 +8,8 @@ Cross-compile on Windows x64. Match pinned revisions in [dependencies.lock.json]
 
 SDKs, libraries, weights, and generated shaders are excluded from Git. This is not an installer that automatically downloads them after cloning. Do not mix native and CPU-gateway SDK ABIs; match 16KiB pages, emulated TLS, `GGML_MAX_NAME=160`, constructors, and imports. Use the public overlay and pinned base, not merely an existing core archive's filename. See [model preparation](moss-models.md), [adapter reproduction](moss-turbo4-reproduction.md), and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
+Future driver integration uses [PS5-Vulkan-Inference](https://github.com/akiba-tokyo-jp/PS5-Vulkan-Inference). Follow [the driver selection and integration record](driver-integration.md) for the measured `cumulative-idle` revision, disabled-cache policy, native allocator/ABI requirements and static relinking. The wrapper consumes configured dependency archives; it does not fetch that repository or apply a driver profile automatically. Historical dependency pins and measured artifacts remain identifiable; selecting a new source does not silently replace them.
+
 ## Ordinary service build
 
 Choose a new output directory. Store dependency configuration and build artifacts outside the source checkout on a drive with sufficient capacity.

@@ -1,0 +1,309 @@
+{
+  "schema": "moss-driver-sequence-comparison-v1",
+  "date": "2026-10-22 JST",
+  "all_learned_inference_on_PS5": true,
+  "firmware": "12.40",
+  "GPU": "RADV NAVI21",
+  "native_generation_seconds": true,
+  "observations_per_variant": {
+    "first256_lazy_load": 1,
+    "subsequent1024": 2
+  },
+  "historical_control": "moss-dit-kernels-20261021.json",
+  "historical_control_is_fresh_AB_arm": false,
+  "driver": {
+    "repository": "https://github.com/akiba-tokyo-jp/PS5-Vulkan-Inference",
+    "revision": "872cc1264ad8ba5d6b888b092968fa5858a38c58",
+    "profile": "cumulative-idle",
+    "selected_explicitly": true,
+    "mesa_revision": "1ba9874f478657ccf6da72ce55f0260164cc0bd0",
+    "persistent_caches_disabled": true,
+    "changed_archive_members": [
+      "radv_shader.c.o",
+      "winsys_ps5_radv_ps5_winsys.c.o"
+    ],
+    "untouched_archive_members": 702,
+    "application_objects_unchanged": true,
+    "original_SELF_reproduction_exact": true,
+    "source_preferred_for_future_builds": true
+  },
+  "recipe": {
+    "model": "MOSS-Image-SFT Q4_K",
+    "conditioning": "CPU Qwen3.5-9B Q4_K_M",
+    "DiT_and_small_VAE": "Vulkan",
+    "matrix_scratch": "F16",
+    "matrix_accumulation": "F32",
+    "LoRA": "NSFW0.7 + Turbo1.0, rank144 F32, runtime1.0",
+    "sampler": "Euler",
+    "steps": 4,
+    "cfg_scale": 1,
+    "seed": 20261020,
+    "sigmas": [
+      1,
+      0.91,
+      0.717,
+      0.024,
+      0
+    ],
+    "double_shift": false,
+    "same_prompt_in_all_requests": true,
+    "old_DiT_optimization_mask": 15,
+    "DiT_kernel_mask": 15,
+    "FA_no_occupancy_limiter": true,
+    "VAE_tile": 256,
+    "VAE_overlap": 0.5,
+    "P1_to_P5_application_changes_included": false
+  },
+  "variants": [
+    {
+      "variant": "Previous application/driver, historical measured sequence",
+      "first256_including_lazy_load_seconds": 69.449735,
+      "native1024_seconds": [
+        45.41588,
+        44.839066
+      ],
+      "mean1024_seconds": 45.127473
+    },
+    {
+      "variant": "Same application relinked with cumulative-idle driver, new measured sequence",
+      "first256_including_lazy_load_seconds": 70.786748,
+      "native1024_seconds": [
+        44.835497,
+        44.840077
+      ],
+      "mean1024_seconds": 44.837787
+    }
+  ],
+  "difference_new_minus_historical_seconds": [
+    1.337012999999999,
+    -0.5803830000000048,
+    0.0010109999999983188
+  ],
+  "mean1024_difference_seconds": -0.2896860000000032,
+  "mean1024_reduction_percent": 0.6419282551008412,
+  "physical_Direct_reserved_bytes": 10737418240,
+  "inference_budget_bytes": 10200547328,
+  "API_CPU_GPU_peaks_are_not_additive": true,
+  "image_POSTs": 3,
+  "automatic_POST_retries": 0,
+  "temperature_and_clock_controlled": false,
+  "pure_GPU_timestamps_collected": false,
+  "same_native_process_for_all_three": true,
+  "startup_numeric_readbacks_passed": true,
+  "startup_gates": {
+    "original": 14,
+    "Turbo": 3,
+    "fusion": 16,
+    "kernel": 20,
+    "upload": true,
+    "mismatches": 0,
+    "nonfinite_values": 0
+  },
+  "repeat1024_PNG_identical": true,
+  "all_PNGs_identical_to_previous_reference": true,
+  "results": [
+    {
+      "size": "256x256",
+      "native_generation_seconds": 70.786748,
+      "Windows_API_wall_seconds": 71.54700000002049,
+      "model_loaded_before": false,
+      "conditioning_cache_hit": false,
+      "stage_wall_seconds": {
+        "conditioning_seconds": 38.09,
+        "sampling_seconds": 26.16,
+        "decode_seconds": 0.78
+      },
+      "CPU_wall_metrics": {
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 26.064442461
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 1842,
+          "invalid_clock_samples": 0,
+          "seconds": 3.370729444
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 17.435091501
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 38.864378458
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 2,
+          "invalid_clock_samples": 0,
+          "seconds": 23.491172867
+        }
+      },
+      "owned_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 4958928896,
+      "owned_Direct_end_bytes": 4826660864,
+      "API_peak_cpu_bytes": 11593252864,
+      "API_peak_gpu_labelled_bytes": 4990287872,
+      "PNG_bytes": 178199,
+      "PNG_sha256": "9fbed3063ca16dbd159bf98af97112b8b67f10065f3860ee2eb1f548a13c4ef3",
+      "PNG_fully_decoded": true,
+      "native_gateway_PNG_identical": true,
+      "previous_reference_PNG_identical": true,
+      "actual_steps": 4,
+      "finite_checked_DiT_outputs": 4,
+      "Q4_F32_records": 672,
+      "Q4_F16_records": 0,
+      "applied_LoRA_tensors": 504,
+      "skipped_LoRA_tensors": 0,
+      "nonfinite_values": 0
+    },
+    {
+      "size": "1024x1024",
+      "native_generation_seconds": 44.835497,
+      "Windows_API_wall_seconds": 46.188000000081956,
+      "model_loaded_before": true,
+      "conditioning_cache_hit": true,
+      "stage_wall_seconds": {
+        "conditioning_seconds": 0.0,
+        "sampling_seconds": 38.54,
+        "decode_seconds": 5.91
+      },
+      "CPU_wall_metrics": {
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 38.458579977
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 1711,
+          "invalid_clock_samples": 0,
+          "seconds": 38.243196641
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.002332512
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 5.810214407
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.005039651
+        }
+      },
+      "owned_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 6208634880,
+      "owned_Direct_end_bytes": 4849729536,
+      "API_peak_cpu_bytes": 11626807296,
+      "API_peak_gpu_labelled_bytes": 6240026624,
+      "PNG_bytes": 2138392,
+      "PNG_sha256": "a7540f177b434d597f739efbe2ad6f67939357c219d29288696b299b38ea2f61",
+      "PNG_fully_decoded": true,
+      "native_gateway_PNG_identical": true,
+      "previous_reference_PNG_identical": true,
+      "actual_steps": 4,
+      "finite_checked_DiT_outputs": 4,
+      "Q4_F32_records": 672,
+      "Q4_F16_records": 0,
+      "applied_LoRA_tensors": 504,
+      "skipped_LoRA_tensors": 0,
+      "nonfinite_values": 0
+    },
+    {
+      "size": "1024x1024",
+      "native_generation_seconds": 44.840077,
+      "Windows_API_wall_seconds": 46.06200000003446,
+      "model_loaded_before": true,
+      "conditioning_cache_hit": true,
+      "stage_wall_seconds": {
+        "conditioning_seconds": 0.0,
+        "sampling_seconds": 38.54,
+        "decode_seconds": 5.91
+      },
+      "CPU_wall_metrics": {
+        "dit.graph_total": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 38.459726388
+        },
+        "dit.vulkan_fence_wait_driver_call": {
+          "bytes": 0,
+          "calls": 1709,
+          "invalid_clock_samples": 0,
+          "seconds": 38.259130109
+        },
+        "dit.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 4,
+          "invalid_clock_samples": 0,
+          "seconds": 0.0023354
+        },
+        "other_runners.graph_total": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 5.813540655
+        },
+        "other_runners.weight_prepare_including_capacity": {
+          "bytes": 0,
+          "calls": 49,
+          "invalid_clock_samples": 0,
+          "seconds": 0.005102361
+        }
+      },
+      "owned_Direct_reserved_bytes": 10737418240,
+      "owned_Direct_peak_bytes": 6208634880,
+      "owned_Direct_end_bytes": 4849729536,
+      "API_peak_cpu_bytes": 11626840064,
+      "API_peak_gpu_labelled_bytes": 6240059392,
+      "PNG_bytes": 2138392,
+      "PNG_sha256": "a7540f177b434d597f739efbe2ad6f67939357c219d29288696b299b38ea2f61",
+      "PNG_fully_decoded": true,
+      "native_gateway_PNG_identical": true,
+      "previous_reference_PNG_identical": true,
+      "actual_steps": 4,
+      "finite_checked_DiT_outputs": 4,
+      "Q4_F32_records": 672,
+      "Q4_F16_records": 0,
+      "applied_LoRA_tensors": 504,
+      "skipped_LoRA_tensors": 0,
+      "nonfinite_values": 0
+    }
+  ],
+  "restoration": {
+    "original_SELF_fully_restored": true,
+    "startup_numeric_admission_passed": true,
+    "native_gateway_ready_idle": true,
+    "running_jobs": 0,
+    "queued_jobs": 0,
+    "model_loaded": false,
+    "candidate_default_runtime_adopted": false
+  },
+  "scope": "One fresh three-request sequence compared with historical observations; not a controlled alternating A/B or a long-run stability qualification.",
+  "operational_follow_up": {
+    "date": "2026-10-22 JST",
+    "owner_requested_normal_shutdown": true,
+    "native_and_gateway_process_absence_confirmed": true,
+    "all_native_eboot_owners_absent": true,
+    "additional_image_POSTs": 0,
+    "force_kill": false,
+    "manual_GPU_release": false,
+    "restoration_above_is_a_historical_checkpoint": true
+  }
+}
